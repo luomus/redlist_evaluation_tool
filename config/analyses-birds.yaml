@@ -1,0 +1,38 @@
+# Configuration file for map generation analyses
+# Each entry defines an analysis to run with specific parameters
+
+analyses:
+
+# tringa-tly atlas
+  - name: "tringa-tly_chao1_10km"
+    input_file: "secret/HBF.114425-tringa-tly-atlas/occurrences.txt"
+    method: "chao1"
+    resolution_km: 10
+
+  - name: "tringa-tly_accumulation_10km"
+    input_file: "secret/HBF.114425-tringa-tly-atlas/occurrences.txt"
+    method: "accumulation_curve"
+    resolution_km: 10
+
+  - name: "tringa-tly_speciescount_10km"
+    input_file: "secret/HBF.114425-tringa-tly-atlas/occurrences.txt"
+    method: "speciescount"
+    resolution_km: 10
+
+
+# PHLY atlas
+  - name: "phly_chao1_10km"
+    input_file: "secret/HBF.114378-phly-atlas/occurrences.txt"
+    method: "chao1"
+    resolution_km: 10
+
+  - name: "phly_accumulation_10km"
+    input_file: "secret/HBF.114378-phly-atlas/occurrences.txt"
+    method: "accumulation_curve"
+    resolution_km: 10
+
+  - name: "phly_speciescount_10km"
+    input_file: "secret/HBF.114378-phly-atlas/occurrences.txt"
+    method: "speciescount"
+    resolution_km: 10
+

@@ -1,0 +1,53 @@
+# Configuration file for map generation analyses
+# Each entry defines an analysis to run with specific parameters
+
+analyses:
+
+# Luteet
+  - name: "luteet_chao1_50km"
+    input_file: "secret/HBF.114262-heteroptera/occurrences.txt"
+    method: "chao1"
+    resolution_km: 50
+
+  - name: "luteet_accumulation_50km"
+    input_file: "secret/HBF.114262-heteroptera/occurrences.txt"
+    method: "accumulation_curve"
+    resolution_km: 50
+
+  - name: "luteet_speciescount_50km"
+    input_file: "secret/HBF.114262-heteroptera/occurrences.txt"
+    method: "speciescount"
+    resolution_km: 50
+
+# Kaskaat
+  - name: "kaskaat_chao1_50km"
+    input_file: "secret/HBF.114297-kaskaat/occurrences.txt"
+    method: "chao1"
+    resolution_km: 50
+
+  - name: "kaskaat_accumulation_50km"
+    input_file: "secret/HBF.114297-kaskaat/occurrences.txt"
+    method: "accumulation_curve"
+    resolution_km: 50
+
+  - name: "kaskaat_speciescount_50km"
+    input_file: "secret/HBF.114297-kaskaat/occurrences.txt"
+    method: "speciescount"
+    resolution_km: 50
+
+# Kempit
+  - name: "kempit_chao1_100km"
+    input_file: "secret/HBF.114311-kempit/occurrences.txt"
+    method: "chao1"
+    resolution_km: 100
+
+  - name: "kempit_accumulation_100km"
+    input_file: "secret/HBF.114311-kempit/occurrences.txt"
+    method: "accumulation_curve"
+    resolution_km: 100
+
+  - name: "kempit_speciescount_100km"
+    input_file: "secret/HBF.114311-kempit/occurrences.txt"
+    method: "speciescount"
+    resolution_km: 100
+
