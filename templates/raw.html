@@ -161,6 +161,10 @@
             const datasetInfoDiv = document.getElementById('datasetInfo');
             const datasetDetailsDiv = document.getElementById('datasetDetails');
             
+            // Handle both features (GeoJSON) and results formats
+            const recordCount = dataset.data.features ? dataset.data.features.length : 
+                               (dataset.data.results ? dataset.data.results.length : 0);
+            
             datasetDetailsDiv.innerHTML = `
                 <div class="info-item">
                     <strong>Name:</strong> ${dataset.name || 'Unnamed Dataset'}
@@ -175,7 +179,7 @@
                     <strong>URL:</strong> <a href="${dataset.url}" target="_blank">${dataset.url}</a>
                 </div>
                 <div class="info-item">
-                    <strong>Total Records:</strong> ${dataset.data.total || 'N/A'}
+                    <strong>Total Records:</strong> ${dataset.data.total || recordCount || 'N/A'}
                 </div>
                 ${dataset.data.paginationInfo ? `
                 <div class="info-item">

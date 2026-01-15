@@ -169,7 +169,7 @@
         
         // Calculate statistics
         function calculateStatistics(dataset) {
-            const results = dataset.data.results || [];
+            const results = dataset.data.features || dataset.data.results || [];
             const stats = {
                 totalRecords: results.length,
                 uniqueSpecies: new Set(),
@@ -183,26 +183,32 @@
             
             results.forEach(record => {
                 // Species
-                if (record.unit?.linkings?.taxon?.scientificName) {
-                    stats.uniqueSpecies.add(record.unit.linkings.taxon.scientificName);
+                const scientificName = record.properties?.['unit.linkings.taxon.scientificName'];
+                if (scientificName) {
+                    stats.uniqueSpecies.add(scientificName);
                 }
                 
                 // Localities
-                if (record.gathering?.locality) {
-                    stats.uniqueLocalities.add(record.gathering.locality);
+                const locality = record.properties?.['gathering.locality'];
+                if (locality) {
+                    stats.uniqueLocalities.add(locality);
                 }
                 
-                // Observers
-                if (record.gathering?.team) {
-                    record.gathering.team.forEach(observer => {
-                        stats.uniqueObservers.add(observer);
-                        stats.observerCounts[observer] = (stats.observerCounts[observer] || 0) + 1;
+                // Observers - gathering.team is flattened as gathering.team[0], gathering.team[1], etc.
+                if (record.properties) {
+                    Object.keys(record.properties).forEach(key => {
+                        if (key.startsWith('gathering.team[') && record.properties[key]) {
+                            const observer = record.properties[key];
+                            stats.uniqueObservers.add(observer);
+                            stats.observerCounts[observer] = (stats.observerCounts[observer] || 0) + 1;
+                        }
                     });
                 }
                 
                 // Dates
-                if (record.gathering?.displayDateTime) {
-                    const dateStr = record.gathering.displayDateTime.split(' ')[0]; // Get date part
+                const displayDateTime = record.properties?.['gathering.displayDateTime'];
+                if (displayDateTime) {
+                    const dateStr = displayDateTime.split(' ')[0]; // Get date part
                     if (!stats.dateRange.earliest || dateStr < stats.dateRange.earliest) {
                         stats.dateRange.earliest = dateStr;
                     }
@@ -212,11 +218,11 @@
                 }
                 
                 // Record basis
-                const recordBasis = record.unit?.recordBasis || 'Unknown';
+                const recordBasis = record.properties?.['unit.recordBasis'] || 'Unknown';
                 stats.recordBasisCounts[recordBasis] = (stats.recordBasisCounts[recordBasis] || 0) + 1;
                 
                 // Individual count
-                const individualCount = record.unit?.interpretations?.individualCount;
+                const individualCount = record.properties?.['unit.interpretations.individualCount'];
                 if (individualCount !== undefined && individualCount !== null) {
                     stats.individualCounts.push(individualCount);
                 }
@@ -283,7 +289,7 @@
         }
         
         // Display statistics
-        function displayStatistics(stats) {
+        function displayStatistics(stats, dataset) {
             const statisticsDiv = document.getElementById('statistics');
             const statsContentDiv = document.getElementById('statsContent');
             
@@ -295,6 +301,10 @@
             const sortedObservers = Object.entries(stats.observerCounts)
                 .sort(([,a], [,b]) => b - a)
                 .slice(0, 10); // Top 10 observers
+            
+            // Get a sample record for debugging
+            const sampleRecord = (dataset.data.features || dataset.data.results || [])[0];
+            const sampleRecordJson = sampleRecord ? JSON.stringify(sampleRecord, null, 2) : 'No records available';
             
             statsContentDiv.innerHTML = `
                 <div class="stats-grid">
@@ -419,7 +429,7 @@
                 
                 displayDatasetInfo(dataset);
                 const stats = calculateStatistics(dataset);
-                displayStatistics(stats);
+                displayStatistics(stats, dataset);
                 
                 hideLoading();
                 

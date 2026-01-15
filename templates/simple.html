@@ -224,7 +224,7 @@
                     const pageStartTime = Date.now();
                     
                     // Build the base query string
-                    let apiQuery = `access_token=${encodeURIComponent(config.access_token)}&pageSize=${pageSize}&page=${currentPage}&cache=true&useIdentificationAnnotations=true&includeSubTaxa=true&includeNonValidTaxa=true&individualCountMin=1&includeNullLoadDates=false&qualityIssues=NO_ISSUES&selected=unit.interpretations.recordQuality,document.linkings.collectionQuality,unit.linkings.taxon.taxonomicOrder,unit.abundanceString,gathering.displayDateTime,gathering.interpretations.countryDisplayname,gathering.interpretations.biogeographicalProvinceDisplayname,gathering.locality,document.collectionId,document.documentId,gathering.team,unit.linkings.taxon.vernacularName,unit.linkings.taxon.scientificName,unit.linkings.taxon.cursiveName,unit.linkings.taxon.latestRedListStatusFinland,unit.linkings.taxon.primaryHabitat,gathering.conversions.dayOfYearBegin,gathering.conversions.dayOfYearEnd,unit.det,unit.abundanceUnit,unit.interpretations.individualCount,unit.lifeStage,unit.sex,unit.atlasCode,unit.atlasClass,gathering.conversions.wgs84CenterPoint.lat,gathering.conversions.wgs84CenterPoint.lon,gathering.conversions.eurefCenterPoint.lat,gathering.conversions.eurefCenterPoint.lon,gathering.interpretations.coordinateAccuracy,gathering.conversions.wgs84WKT,gathering.conversions.ykj10kmCenter,unit.recordBasis,unit.notes,unit.unitId,unit.linkings.taxon.occurrenceCountFinland,unit.unitId,document.documentId`;
+                    let apiQuery = `access_token=${encodeURIComponent(config.access_token)}&pageSize=${pageSize}&page=${currentPage}&cache=true&useIdentificationAnnotations=true&includeSubTaxa=true&individualCountMin=1&qualityIssues=NO_ISSUES&selected=unit.interpretations.recordQuality,document.linkings.collectionQuality,unit.linkings.taxon.taxonomicOrder,unit.abundanceString,gathering.displayDateTime,gathering.interpretations.countryDisplayname,gathering.interpretations.biogeographicalProvinceDisplayname,gathering.locality,document.collectionId,document.documentId,gathering.team,unit.linkings.taxon.vernacularName,unit.linkings.taxon.scientificName,unit.linkings.taxon.cursiveName,unit.linkings.taxon.latestRedListStatusFinland,unit.linkings.taxon.primaryHabitat,gathering.conversions.dayOfYearBegin,gathering.conversions.dayOfYearEnd,unit.det,unit.abundanceUnit,unit.interpretations.individualCount,unit.lifeStage,unit.sex,unit.atlasCode,unit.atlasClass,gathering.interpretations.coordinateAccuracy,gathering.conversions.wgs84WKT,unit.recordBasis,unit.notes,unit.unitId,unit.linkings.taxon.occurrenceCountFinland,unit.unitId,document.documentId&crs=EUREF&featureType=ORIGINAL_FEATURE&format=geojson`;
 
                     // Add original parameters from the input URL
                     const urlObj = new URL(baseUrl);
@@ -238,12 +238,23 @@
                     const apiUrl = `${config.base_url}?${apiQuery}`;
                     
                     addProgressLog(`Fetching page ${currentPage}...`);
-                    
+
+                    // Log the URL for debugging
+                    console.log('Fetching API URL:', apiUrl);
+
                     const response = await fetch(apiUrl);
                     if (!response.ok) {
-                        throw new Error(`HTTP error! status: ${response.status}`);
+                        // Try to read response body for more detailed error
+                        let respText = '';
+                        try {
+                            respText = await response.text();
+                        } catch (e) {
+                            respText = '<failed to read response body>';
+                        }
+                        console.error('API request failed', { url: apiUrl, status: response.status, body: respText });
+                        throw new Error(`HTTP error! status: ${response.status} body: ${respText}`);
                     }
-                    
+
                     const data = await response.json();
                     
                     const pageTime = (Date.now() - pageStartTime) / 1000;
@@ -253,22 +264,24 @@
                     if (currentPage === 1) {
                         lastPage = data.lastPage || 1;
                         pageSize = data.pageSize || 1000;
-                        addProgressLog(`Page ${currentPage}: ${data.results ? data.results.length : 0} records fetched in ${pageTime.toFixed(2)}s (Total available: ${data.total || 'unknown'})`);
+                        const recordCount = data.features ? data.features.length : 0;
+                        addProgressLog(`Page ${currentPage}: ${recordCount} records fetched in ${pageTime.toFixed(2)}s (Total available: ${data.total || 'unknown'})`);
                     } else {
-                        addProgressLog(`Page ${currentPage}: ${data.results ? data.results.length : 0} records fetched in ${pageTime.toFixed(2)}s`);
+                        const recordCount = data.features ? data.features.length : 0;
+                        addProgressLog(`Page ${currentPage}: ${recordCount} records fetched in ${pageTime.toFixed(2)}s`);
                     }
                     
-                    // Add results to our collection
-                    if (data.results && data.results.length > 0) {
-                        allResults.push(...data.results);
-                        totalRecords += data.results.length;
+                    // Add features to our collection
+                    if (data.features && data.features.length > 0) {
+                        allResults.push(...data.features);
+                        totalRecords += data.features.length;
                     }
                     
                     // Update progress summary
                     updateProgressSummary(currentPage, totalRecords, totalTime);
                     
                     // Check if we've reached the end
-                    if (currentPage >= lastPage || (data.results && data.results.length === 0)) {
+                    if (currentPage >= lastPage || (data.features && data.features.length === 0)) {
                         addProgressLog(`Reached end of data (page ${currentPage} of ${lastPage})`);
                         break;
                     }
@@ -279,14 +292,18 @@
                 const totalElapsedTime = (Date.now() - startTime) / 1000;
                 addProgressLog(`Fetching completed! Total time: ${totalElapsedTime.toFixed(2)}s`, 'success');
                 
-                // Create combined dataset
+                // Create combined GeoJSON dataset
+                // Note: API returns flattened GeoJSON where nested properties like
+                // unit.linkings.taxon.scientificName are stored as flat field names:
+                // e.g., properties['unit.linkings.taxon.scientificName']
                 const combinedData = {
+                    type: "FeatureCollection",
                     currentPage: 1,
                     nextPage: null,
                     lastPage: 1,
                     pageSize: totalRecords,
                     total: totalRecords,
-                    results: allResults,
+                    features: allResults,
                     paginationInfo: {
                         pagesFetched: currentPage - 1,
                         maxPages: 10,
@@ -401,11 +418,7 @@
                                 <option value="">Select a tool...</option>
                                 <option value="/stats">View Stats</option>
                                 <option value="/raw">View Raw</option>
-                                <option value="/heatmap_db">View Heatmap</option>
                                 <option value="/convex_hull">View Convex Hull</option>
-                                <option value="/2kmgrids">View 2km Grid</option>
-                                <option value="/export_gpkg">Export GeoPackage</option>
-                                <option value="/analyze">Analyze</option>
                             </select>
                             <button onclick="removeDataset('${dataset.id}')" class="remove-btn">Remove</button>
                         </div>

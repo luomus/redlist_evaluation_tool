@@ -7,15 +7,14 @@
     attribution: "&copy; OpenStreetMap contributors",
   }).addTo(map);
 
-  let pointsLayer = null;
+  let geometriesLayer = null;
   let hullLayer = null;
-  let currentPoints = [];
+  let currentGeometries = [];
   let db = null;
   let currentDataset = null;
 
   const els = {
     status: document.getElementById("status"),
-    pointCount: document.getElementById("pointCount"),
     areaValue: document.getElementById("areaValue"),
   };
 
@@ -69,29 +68,136 @@
     }
   }
 
-  // Extract coordinates from dataset results
-  function extractCoordinates(dataset) {
-    const points = [];
-    
-    if (!dataset || !dataset.data || !dataset.data.results) {
-      return points;
+  // Parse WKT (Well-Known Text) geometry and preserve original structure
+  function parseWKT(wkt) {
+    if (!wkt || typeof wkt !== 'string') {
+      return null;
     }
     
-    dataset.data.results.forEach(result => {
+    try {
+      const typeMatch = wkt.match(/^([A-Z]+)\s*\(/i);
+      if (!typeMatch) {
+        return null;
+      }
+      
+      const geometryType = typeMatch[1].toUpperCase();
+      const coordString = wkt.replace(/^[A-Z]+\s*\(/i, '').replace(/\)$/, '');
+      
+      // Parse based on geometry type
+      if (geometryType === 'POINT') {
+        const coords = coordString.trim().split(/\s+/);
+        if (coords.length >= 2) {
+          const lon = parseFloat(coords[0]);
+          const lat = parseFloat(coords[1]);
+          if (!isNaN(lat) && !isNaN(lon)) {
+            return { type: 'Point', coordinates: [lat, lon] };
+          }
+        }
+      } else if (geometryType === 'LINESTRING') {
+        const points = [];
+        const pairs = coordString.split(',');
+        pairs.forEach(pair => {
+          const coords = pair.trim().split(/\s+/);
+          if (coords.length >= 2) {
+            const lon = parseFloat(coords[0]);
+            const lat = parseFloat(coords[1]);
+            if (!isNaN(lat) && !isNaN(lon)) {
+              points.push([lat, lon]);
+            }
+          }
+        });
+        return { type: 'LineString', coordinates: points };
+      } else if (geometryType === 'POLYGON') {
+        const rings = [];
+        // Handle nested parentheses for polygon rings
+        let depth = 0;
+        let currentRing = '';
+        
+        for (let i = 0; i < coordString.length; i++) {
+          const char = coordString[i];
+          if (char === '(') {
+            depth++;
+            if (depth === 1) continue; // Skip outer parenthesis
+          } else if (char === ')') {
+            depth--;
+            if (depth === 0) {
+              // Parse the ring
+              const points = [];
+              const pairs = currentRing.split(',');
+              pairs.forEach(pair => {
+                const coords = pair.trim().split(/\s+/);
+                if (coords.length >= 2) {
+                  const lon = parseFloat(coords[0]);
+                  const lat = parseFloat(coords[1]);
+                  if (!isNaN(lat) && !isNaN(lon)) {
+                    points.push([lat, lon]);
+                  }
+                }
+              });
+              if (points.length > 0) {
+                rings.push(points);
+              }
+              currentRing = '';
+              continue;
+            }
+          } else if (depth > 0) {
+            currentRing += char;
+          }
+        }
+        return { type: 'Polygon', coordinates: rings };
+      }
+    } catch (error) {
+      console.warn('Error parsing WKT:', error);
+    }
+    
+    return null;
+  }
+
+  // Extract geometries from dataset results
+  function extractGeometries(dataset) {
+    const geometries = [];
+    
+    if (!dataset || !dataset.data) {
+      return geometries;
+    }
+    
+    // Support both features (GeoJSON) and results formats
+    const records = dataset.data.features || dataset.data.results || [];
+    
+    records.forEach(record => {
       try {
-        // Check if the result has coordinates in the expected format
-        const gathering = result.gathering;
-        if (gathering && gathering.conversions && gathering.conversions.wgs84CenterPoint) {
-          const lat = gathering.conversions.wgs84CenterPoint.lat;
-          const lon = gathering.conversions.wgs84CenterPoint.lon;
-          
-          if (lat && lon && !isNaN(lat) && !isNaN(lon)) {
-            points.push([lat, lon]);
+        const props = record.properties || {};
+        
+        // Get WKT geometry (supports points, polygons, lines)
+        const wkt = props['gathering.conversions.wgs84WKT'];
+        if (wkt) {
+          const geometry = parseWKT(wkt);
+          if (geometry) {
+            geometries.push(geometry);
           }
         }
       } catch (error) {
         // Skip problematic records
         console.warn('Skipping record due to error:', error);
+      }
+    });
+    
+    return geometries;
+  }
+  
+  // Extract all points from geometries for convex hull calculation
+  function extractAllPoints(geometries) {
+    const points = [];
+    
+    geometries.forEach(geom => {
+      if (geom.type === 'Point') {
+        points.push(geom.coordinates);
+      } else if (geom.type === 'LineString') {
+        points.push(...geom.coordinates);
+      } else if (geom.type === 'Polygon') {
+        geom.coordinates.forEach(ring => {
+          points.push(...ring);
+        });
       }
     });
     
@@ -169,23 +275,45 @@
     return area * kmPerDegreeLat * kmPerDegreeLon;
   }
 
-  function createPointsLayer(points) {
-    if (pointsLayer) {
-      map.removeLayer(pointsLayer);
+  function createGeometriesLayer(geometries) {
+    if (geometriesLayer) {
+      map.removeLayer(geometriesLayer);
     }
 
-    const markers = points.map(point => 
-      L.circleMarker([point[0], point[1]], {
-        radius: 4,
-        fillColor: '#3388ff',
-        color: '#ffffff',
-        weight: 1,
-        opacity: 1,
-        fillOpacity: 0.8
-      })
-    );
+    const layers = [];
+    
+    geometries.forEach(geom => {
+      if (geom.type === 'Point') {
+        layers.push(L.circleMarker([geom.coordinates[0], geom.coordinates[1]], {
+          radius: 5,
+          fillColor: '#3388ff',
+          color: '#ffffff',
+          weight: 1,
+          opacity: 1,
+          fillOpacity: 0.8
+        }));
+      } else if (geom.type === 'LineString') {
+        const latLngs = geom.coordinates.map(coord => [coord[0], coord[1]]);
+        layers.push(L.polyline(latLngs, {
+          color: '#3388ff',
+          weight: 3,
+          opacity: 0.8
+        }));
+      } else if (geom.type === 'Polygon') {
+        const rings = geom.coordinates.map(ring => 
+          ring.map(coord => [coord[0], coord[1]])
+        );
+        layers.push(L.polygon(rings, {
+          color: '#3388ff',
+          weight: 2,
+          opacity: 0.8,
+          fillColor: '#3388ff',
+          fillOpacity: 0.3
+        }));
+      }
+    });
 
-    pointsLayer = L.layerGroup(markers).addTo(map);
+    geometriesLayer = L.layerGroup(layers).addTo(map);
   }
 
   function createHullLayer(hullPoints) {
@@ -208,8 +336,6 @@
   }
 
   function updateDisplay(points, hullPoints) {
-    els.pointCount.textContent = points.length;
-    
     if (hullPoints.length >= 3) {
       const area = calculatePolygonArea(hullPoints);
       els.areaValue.textContent = `${area.toFixed(2)} km²`;
@@ -251,32 +377,24 @@
       }
 
       currentDataset = dataset;
-      currentPoints = extractCoordinates(dataset);
+      currentGeometries = extractGeometries(dataset);
       
-      if (currentPoints.length === 0) {
-        setStatus('No coordinates found in this dataset.', 'error');
+      if (currentGeometries.length === 0) {
+        setStatus('No geometries found in this dataset.', 'error');
         return;
       }
 
-      if (currentPoints.length < 3) {
-        setStatus(`Only ${currentPoints.length} points found. Need at least 3 points for convex hull.`, 'error');
-        return;
-      }
+      setStatus(`Loaded ${currentGeometries.length} geometries from dataset.`, 'ok');
 
-      setStatus(`Loaded ${currentPoints.length} points from dataset.`, 'ok');
-
-      // Create convex hull
-      const hullPoints = calculateConvexHull(currentPoints);
+      // Extract points for calculations
+      const points = extractAllPoints(currentGeometries);
+      const hullPoints = calculateConvexHull(points);
       
       // Create visualizations
-      createPointsLayer(currentPoints);
+      createGeometriesLayer(currentGeometries);
       createHullLayer(hullPoints);
-      
-      // Update display
-      updateDisplay(currentPoints, hullPoints);
-      
-      // Fit map to data
-      fitMapToData(currentPoints);
+      updateDisplay(points, hullPoints);
+      fitMapToData(points);
 
     } catch (error) {
       console.error('Error loading dataset:', error);
