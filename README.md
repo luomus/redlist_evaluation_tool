@@ -55,10 +55,24 @@ Run the container (Windows PowerShell):
 docker run --rm -p 5000:5000 biotools
 ```
 
-If you prefer docker-compose, use the provided file (named `docker-compose-yml` in this repo):
+### Docker with PostGIS (recommended)
+
+The app now uses PostgreSQL/PostGIS for data storage. Use docker-compose to run both the database and web app:
 
 ```bash
 docker-compose -f docker-compose-yml up --build
+```
+
+Access the app at http://localhost:5000/simple
+
+To stop:
+```bash
+docker-compose -f docker-compose-yml down
+```
+
+To remove all data (including database):
+```bash
+docker-compose -f docker-compose-yml down -v
 ```
 
 Tip: You can rename `docker-compose-yml` to `docker-compose.yml` to use `docker-compose up --build` directly.

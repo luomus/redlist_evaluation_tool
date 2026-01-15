@@ -1,67 +1,12 @@
-// IndexedDB setup
-let db;
+// App state
 let currentApiData = null;
 let currentApiUrl = null;
 let allPagesData = null;
 let isPaginationInProgress = false;
 
-// Initialize IndexedDB
-function initDB() {
-    return new Promise((resolve, reject) => {
-        const request = indexedDB.open('BioToolsDatasets', 1);
-        
-        request.onerror = () => reject(request.error);
-        request.onsuccess = () => {
-            db = request.result;
-            resolve();
-        };
-        
-        request.onupgradeneeded = (event) => {
-            const database = event.target.result;
-            if (!database.objectStoreNames.contains('datasets')) {
-                const store = database.createObjectStore('datasets', { keyPath: 'id' });
-                store.createIndex('timestamp', 'timestamp', { unique: false });
-                store.createIndex('url', 'url', { unique: false });
-                store.createIndex('hash', 'hash', { unique: false });
-            }
-        };
-    });
-}
-
 // Generate unique ID
 function generateId() {
     return Date.now().toString(36) + Math.random().toString(36).substr(2);
-}
-
-// Generate hash for duplicate detection
-async function generateDatasetHash(url, totalResults) {
-    const encoder = new TextEncoder();
-    const data = encoder.encode(url + '|' + (totalResults || 0));
-    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-}
-
-// Check if dataset is duplicate
-async function checkForDuplicate(url, totalResults) {
-    try {
-        const hash = await generateDatasetHash(url, totalResults);
-        const transaction = db.transaction(['datasets'], 'readonly');
-        const store = transaction.objectStore('datasets');
-        const request = store.getAll();
-        
-        return new Promise((resolve) => {
-            request.onsuccess = () => {
-                const datasets = request.result;
-                const duplicate = datasets.find(dataset => dataset.hash === hash);
-                resolve(duplicate || null);
-            };
-            request.onerror = () => resolve(null);
-        });
-    } catch (error) {
-        console.error('Error checking for duplicate:', error);
-        return null;
-    }
 }
 
 // Helper function to add progress log entry
@@ -210,7 +155,7 @@ async function fetchAllPages(baseUrl, config) {
     }
 }
 
-// Save dataset to IndexedDB
+// Save dataset to backend
 async function saveDataset() {
     if (!currentApiData) {
         showError('No data to save. Please fetch data first.');
@@ -220,53 +165,46 @@ async function saveDataset() {
     const datasetName = document.getElementById('datasetName').value.trim();
     
     try {
-        const hash = await generateDatasetHash(currentApiUrl, currentApiData.total);
-        const transaction = db.transaction(['datasets'], 'readwrite');
-        const store = transaction.objectStore('datasets');
+        const dataset_id = generateId();
+        const response = await fetch('/api/observations', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                dataset_id: dataset_id,
+                dataset_name: datasetName || `Dataset ${new Date().toLocaleString()}`,
+                dataset_url: currentApiUrl || '',
+                features: currentApiData.features
+            })
+        });
         
-        const dataset = {
-            id: generateId(),
-            hash: hash,
-            name: datasetName || `Dataset ${new Date().toLocaleString()}`,
-            url: currentApiUrl,
-            data: currentApiData,
-            timestamp: new Date().toISOString(),
-            created: new Date().toLocaleString()
-        };
-        
-        await store.add(dataset);
-        showSuccess('Dataset saved successfully!');
-        loadDatasets();
-        
-        // Clear the name input and hide save section
-        document.getElementById('datasetName').value = '';
-        document.getElementById('saveSection').style.display = 'none';
-        
-        // Clear the current data to prevent re-saving
-        currentApiData = null;
-        currentApiUrl = null;
-        allPagesData = null;
+        const result = await response.json();
+        if (result.success) {
+            showSuccess(`Dataset saved successfully! ${result.count} observations stored.`);
+            loadDatasets();
+            
+            // Clear the name input and hide save section
+            document.getElementById('datasetName').value = '';
+            document.getElementById('saveSection').style.display = 'none';
+            
+            // Clear the current data to prevent re-saving
+            currentApiData = null;
+            currentApiUrl = null;
+            allPagesData = null;
+        } else {
+            showError('Failed to save dataset: ' + result.error);
+        }
     } catch (error) {
         console.error('Error saving dataset:', error);
         showError('Failed to save dataset');
     }
 }
 
-// Load datasets from IndexedDB
+// Load datasets from backend
 async function loadDatasets() {
     try {
-        const transaction = db.transaction(['datasets'], 'readonly');
-        const store = transaction.objectStore('datasets');
-        const request = store.getAll();
-        
-        request.onsuccess = () => {
-            const datasets = request.result;
-            displayDatasets(datasets);
-        };
-        
-        request.onerror = () => {
-            console.error('Error loading datasets');
-        };
+        const response = await fetch('/api/datasets');
+        const result = await response.json();
+        displayDatasets(result.datasets || []);
     } catch (error) {
         console.error('Error loading datasets:', error);
     }
@@ -283,8 +221,8 @@ function displayDatasets(datasets) {
         return;
     }
     
-    // Sort by timestamp (newest first)
-    datasets.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    // Sort by created_at (newest first)
+    datasets.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
     
     let html = '<div class="dataset-list">';
     datasets.forEach(dataset => {
@@ -293,11 +231,9 @@ function displayDatasets(datasets) {
                 <div class="dataset-info">
                     <div class="dataset-name"><strong>Name:</strong> ${dataset.name || 'Unnamed Dataset'}</div>
                     <div class="dataset-id"><strong>ID:</strong> ${dataset.id}</div>
-                    <div class="dataset-url"><strong>URL:</strong> ${dataset.url}</div>
-                    <div class="dataset-time"><strong>Created:</strong> ${dataset.created}</div>
+                    <div class="dataset-time"><strong>Created:</strong> ${new Date(dataset.created_at).toLocaleString()}</div>
                     <div class="dataset-stats">
-                        <strong>Total Results:</strong> ${dataset.data.total || 'N/A'} | 
-                        <strong>Page Size:</strong> ${dataset.data.pageSize || 'N/A'}
+                        <strong>Total Records:</strong> ${dataset.count || 'N/A'}
                     </div>
                 </div>
                 <div class="dataset-actions">
@@ -322,23 +258,28 @@ function displayDatasets(datasets) {
 function handleToolSelection(selectElement, datasetId) {
     const selectedTool = selectElement.value;
     if (selectedTool) {
-        // Redirect to the selected tool with dataset ID
-        window.location.href = `${selectedTool}?id=${datasetId}`;
+        // Redirect to the selected tool with dataset ID (URL-encode id)
+        window.location.href = `${selectedTool}?id=${encodeURIComponent(datasetId)}`;
     }
 }
 
-// Remove dataset from IndexedDB
+// Remove dataset from backend
 async function removeDataset(id) {
     if (!confirm('Are you sure you want to remove this dataset?')) {
         return;
     }
     
     try {
-        const transaction = db.transaction(['datasets'], 'readwrite');
-        const store = transaction.objectStore('datasets');
-        await store.delete(id);
-        showSuccess('Dataset removed successfully!');
-        loadDatasets();
+        const response = await fetch(`/api/observations/${id}`, {
+            method: 'DELETE'
+        });
+        const result = await response.json();
+        if (result.success) {
+            showSuccess('Dataset removed successfully!');
+            loadDatasets();
+        } else {
+            showError('Failed to remove dataset');
+        }
     } catch (error) {
         console.error('Error removing dataset:', error);
         showError('Failed to remove dataset');
@@ -459,24 +400,9 @@ async function fetchAllPagesAndCall(baseUrl, config) {
             <div><strong>Records per Page:</strong> ${summary.pageSize}</div>
         `;
         
-        // Check for duplicates
-        const duplicate = await checkForDuplicate(baseUrl, combinedData.total);
-        if (duplicate) {
-            // Show duplicate message instead of save section
-            const duplicateMessage = document.createElement('div');
-            duplicateMessage.className = 'duplicate-message';
-            duplicateMessage.innerHTML = `
-                <div style="background-color: #fff3cd; border: 1px solid #ffeaa7; padding: 15px; border-radius: 4px; margin-top: 15px;">
-                    <strong>This is duplicate of "${duplicate.name}"</strong><br>
-                    <small>Same URL and result count already saved on ${duplicate.created}</small>
-                </div>
-            `;
-            responseData.appendChild(duplicateMessage);
-        } else {
-            // Show save section
-            document.getElementById('saveSection').style.display = 'block';
-            document.getElementById('saveDatasetBtn').disabled = false;
-        }
+        // Show save section
+        document.getElementById('saveSection').style.display = 'block';
+        document.getElementById('saveDatasetBtn').disabled = false;
         
     } catch (error) {
         console.error('API call error:', error);
@@ -530,10 +456,9 @@ document.getElementById('urlInput').addEventListener('input', function() {
 // Initialize the app
 document.addEventListener('DOMContentLoaded', async function() {
     try {
-        await initDB();
         await loadDatasets();
     } catch (error) {
         console.error('Failed to initialize app:', error);
-        showError('Failed to initialize database');
+        showError('Failed to load datasets');
     }
 });

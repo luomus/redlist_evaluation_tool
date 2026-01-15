@@ -18,50 +18,26 @@
     areaValue: document.getElementById("areaValue"),
   };
 
-  // Initialize IndexedDB
-  function initDB() {
-    return new Promise((resolve, reject) => {
-      const request = indexedDB.open('BioToolsDatasets', 1);
-      
-      request.onerror = () => reject(request.error);
-      request.onsuccess = () => {
-        db = request.result;
-        resolve();
-      };
-      
-      request.onupgradeneeded = (event) => {
-        const database = event.target.result;
-        if (!database.objectStoreNames.contains('datasets')) {
-          const store = database.createObjectStore('datasets', { keyPath: 'id' });
-          store.createIndex('timestamp', 'timestamp', { unique: false });
-          store.createIndex('url', 'url', { unique: false });
-          store.createIndex('hash', 'hash', { unique: false });
-        }
-      };
-    });
-  }
-
   // Get dataset ID from URL parameters
   function getDatasetId() {
     const urlParams = new URLSearchParams(window.location.search);
     return urlParams.get('id');
   }
 
-  // Load dataset from IndexedDB
+  // Load dataset from backend
   async function loadDataset(datasetId) {
     try {
-      const transaction = db.transaction(['datasets'], 'readonly');
-      const store = transaction.objectStore('datasets');
-      const request = store.get(datasetId);
+      const response = await fetch(`/api/observations/${datasetId}`);
+      if (!response.ok) return null;
       
-      return new Promise((resolve) => {
-        request.onsuccess = () => {
-          resolve(request.result || null);
-        };
-        request.onerror = () => {
-          resolve(null);
-        };
-      });
+      const data = await response.json();
+      return {
+        id: data.dataset_id,
+        name: data.dataset_name,
+        url: data.dataset_url,
+        created_at: data.created_at,
+        data: data
+      };
     } catch (error) {
       console.error('Error loading dataset:', error);
       return null;
@@ -405,11 +381,10 @@
   // Initialize the app
   document.addEventListener('DOMContentLoaded', async function() {
     try {
-      await initDB();
       await loadDatasetAndInitialize();
     } catch (error) {
       console.error('Failed to initialize app:', error);
-      setStatus('Failed to initialize database', 'error');
+      setStatus('Failed to load dataset', 'error');
     }
   });
 })();

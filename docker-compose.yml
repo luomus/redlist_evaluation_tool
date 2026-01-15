@@ -1,0 +1,27 @@
+version: "3.8"
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    environment:
+      - POSTGRES_DB=biotools
+      - POSTGRES_USER=biotools
+      - POSTGRES_PASSWORD=biotools
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  web:
+    build: .
+    ports:
+      - "5000:5000"
+    volumes:
+      - .:/app:rw
+    environment:
+      - PYTHONUNBUFFERED=1
+      - DATABASE_URL=postgresql://biotools:biotools@db:5432/biotools
+    depends_on:
+      - db
+
+volumes:
+  pgdata:

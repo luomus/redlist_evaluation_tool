@@ -1,29 +1,8 @@
-// IndexedDB setup
-let db;
+// App state
 let currentDataset = null;
-
-// Initialize IndexedDB
-function initDB() {
-    return new Promise((resolve, reject) => {
-        const request = indexedDB.open('BioToolsDatasets', 1);
-        
-        request.onerror = () => reject(request.error);
-        request.onsuccess = () => {
-            db = request.result;
-            resolve();
-        };
-        
-        request.onupgradeneeded = (event) => {
-            const database = event.target.result;
-            if (!database.objectStoreNames.contains('datasets')) {
-                const store = database.createObjectStore('datasets', { keyPath: 'id' });
-                store.createIndex('timestamp', 'timestamp', { unique: false });
-                store.createIndex('url', 'url', { unique: false });
-                store.createIndex('hash', 'hash', { unique: false });
-            }
-        };
-    });
-}
+let currentPage = 1;
+let totalPages = 1;
+let perPage = 100;
 
 // Get dataset ID from URL parameters
 function getDatasetId() {
@@ -31,21 +10,21 @@ function getDatasetId() {
     return urlParams.get('id');
 }
 
-// Load dataset from IndexedDB
-async function loadDataset(datasetId) {
+// Load dataset from backend with pagination
+async function loadDataset(datasetId, page = 1, recordsPerPage = 100) {
     try {
-        const transaction = db.transaction(['datasets'], 'readonly');
-        const store = transaction.objectStore('datasets');
-        const request = store.get(datasetId);
+        const response = await fetch(`/api/observations/${datasetId}?page=${page}&per_page=${recordsPerPage}`);
+        if (!response.ok) return null;
         
-        return new Promise((resolve) => {
-            request.onsuccess = () => {
-                resolve(request.result || null);
-            };
-            request.onerror = () => {
-                resolve(null);
-            };
-        });
+        const data = await response.json();
+        return {
+            id: data.dataset_id,
+            name: data.dataset_name,
+            url: data.dataset_url,
+            created_at: data.created_at,
+            data: data,
+            pagination: data.pagination
+        };
     } catch (error) {
         console.error('Error loading dataset:', error);
         return null;
@@ -57,9 +36,7 @@ function displayDatasetInfo(dataset) {
     const datasetInfoDiv = document.getElementById('datasetInfo');
     const datasetDetailsDiv = document.getElementById('datasetDetails');
     
-    // Handle both features (GeoJSON) and results formats
-    const recordCount = dataset.data.features ? dataset.data.features.length : 
-                        (dataset.data.results ? dataset.data.results.length : 0);
+    const pagination = dataset.pagination || {};
     
     datasetDetailsDiv.innerHTML = `
         <div class="info-item">
@@ -68,26 +45,79 @@ function displayDatasetInfo(dataset) {
         <div class="info-item">
             <strong>ID:</strong> <code>${dataset.id}</code>
         </div>
+        ${dataset.created_at ? `
         <div class="info-item">
-            <strong>Created:</strong> ${dataset.created}
-        </div>
-        <div class="info-item">
-            <strong>URL:</strong> <a href="${dataset.url}" target="_blank">${dataset.url}</a>
-        </div>
-        <div class="info-item">
-            <strong>Total Records:</strong> ${dataset.data.total || recordCount || 'N/A'}
-        </div>
-        ${dataset.data.paginationInfo ? `
-        <div class="info-item">
-            <strong>Pages Fetched:</strong> ${dataset.data.paginationInfo.pagesFetched}
-        </div>
-        <div class="info-item">
-            <strong>Records Fetched:</strong> ${dataset.data.paginationInfo.actualRecords}
+            <strong>Created:</strong> ${new Date(dataset.created_at).toLocaleString()}
         </div>
         ` : ''}
+        ${dataset.url ? `
+        <div class="info-item">
+            <strong>URL:</strong> <a href="${dataset.url}" target="_blank" style="word-break: break-all;">${dataset.url}</a>
+        </div>
+        ` : ''}
+        <div class="info-item">
+            <strong>Total Records:</strong> ${pagination.total ? pagination.total.toLocaleString() : 'N/A'}
+        </div>
+        <div class="info-item">
+            <strong>Showing:</strong> Page ${pagination.page || 1} of ${pagination.pages || 1} (${pagination.per_page || 0} per page)
+        </div>
     `;
     
     datasetInfoDiv.style.display = 'block';
+}
+
+// Display pagination controls
+function displayPaginationControls() {
+    const paginationDiv = document.getElementById('paginationControls');
+    
+    if (!paginationDiv) return;
+    
+    const prevDisabled = currentPage <= 1 ? 'disabled' : '';
+    const nextDisabled = currentPage >= totalPages ? 'disabled' : '';
+    
+    paginationDiv.innerHTML = `
+        <div class="pagination">
+            <button onclick="loadPage(1)" ${prevDisabled}>First</button>
+            <button onclick="loadPage(${currentPage - 1})" ${prevDisabled}>Previous</button>
+            <span class="page-info">Page ${currentPage} of ${totalPages}</span>
+            <button onclick="loadPage(${currentPage + 1})" ${nextDisabled}>Next</button>
+            <button onclick="loadPage(${totalPages})" ${nextDisabled}>Last</button>
+            <select id="perPageSelect" onchange="changePerPage(this.value)">
+                <option value="50" ${perPage === 50 ? 'selected' : ''}>50 per page</option>
+                <option value="100" ${perPage === 100 ? 'selected' : ''}>100 per page</option>
+                <option value="250" ${perPage === 250 ? 'selected' : ''}>250 per page</option>
+                <option value="500" ${perPage === 500 ? 'selected' : ''}>500 per page</option>
+                <option value="1000" ${perPage === 1000 ? 'selected' : ''}>1000 per page</option>
+            </select>
+        </div>
+    `;
+}
+
+// Load a specific page
+async function loadPage(page) {
+    if (page < 1 || page > totalPages) return;
+    
+    showLoading();
+    currentPage = page;
+    
+    const datasetId = getDatasetId();
+    const dataset = await loadDataset(datasetId, currentPage, perPage);
+    
+    if (dataset) {
+        currentDataset = dataset;
+        displayDatasetInfo(dataset);
+        displayJsonData(dataset);
+        displayPaginationControls();
+    }
+    
+    hideLoading();
+}
+
+// Change records per page
+async function changePerPage(newPerPage) {
+    perPage = parseInt(newPerPage);
+    currentPage = 1; // Reset to first page
+    await loadPage(1);
 }
 
 // Display JSON data
@@ -96,7 +126,7 @@ function displayJsonData(dataset) {
     const jsonContent = document.getElementById('jsonContent');
     
     // Pretty print the JSON
-    const jsonString = JSON.stringify(dataset, null, 2);
+    const jsonString = JSON.stringify(dataset.data, null, 2);
     jsonContent.textContent = jsonString;
     
     jsonContainer.style.display = 'block';
@@ -108,7 +138,7 @@ async function copyToClipboard() {
     const copySuccess = document.getElementById('copySuccess');
     
     try {
-        const jsonString = JSON.stringify(currentDataset, null, 2);
+        const jsonString = JSON.stringify(currentDataset.data, null, 2);
         await navigator.clipboard.writeText(jsonString);
         
         // Show success message
@@ -124,7 +154,7 @@ async function copyToClipboard() {
         console.error('Failed to copy to clipboard:', error);
         // Fallback for older browsers
         const textArea = document.createElement('textarea');
-        textArea.value = JSON.stringify(currentDataset, null, 2);
+        textArea.value = JSON.stringify(currentDataset.data, null, 2);
         document.body.appendChild(textArea);
         textArea.select();
         document.execCommand('copy');
@@ -160,8 +190,6 @@ function hideLoading() {
 // Initialize the page
 document.addEventListener('DOMContentLoaded', async function() {
     try {
-        await initDB();
-        
         const datasetId = getDatasetId();
         if (!datasetId) {
             showError('No dataset ID provided. Please select a dataset from the Simple Parser page.');
@@ -171,7 +199,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         
         showLoading();
         
-        const dataset = await loadDataset(datasetId);
+        const dataset = await loadDataset(datasetId, currentPage, perPage);
         if (!dataset) {
             document.getElementById('noData').style.display = 'block';
             hideLoading();
@@ -179,8 +207,11 @@ document.addEventListener('DOMContentLoaded', async function() {
         }
         
         currentDataset = dataset;
+        totalPages = dataset.pagination?.pages || 1;
+        
         displayDatasetInfo(dataset);
         displayJsonData(dataset);
+        displayPaginationControls();
         
         hideLoading();
         
