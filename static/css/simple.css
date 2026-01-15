@@ -1,0 +1,67 @@
+.fetch-progress {
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    padding: 15px;
+    margin: 15px 0;
+}
+
+.fetch-progress h4 {
+    margin-top: 0;
+    color: #495057;
+}
+
+#progressLog {
+    font-family: 'Courier New', monospace;
+    font-size: 14px;
+    line-height: 1.4;
+    max-height: 300px;
+    overflow-y: auto;
+    background-color: #ffffff;
+    border: 1px solid #ced4da;
+    border-radius: 3px;
+    padding: 10px;
+}
+
+.progress-entry {
+    margin-bottom: 5px;
+    padding: 2px 0;
+}
+
+.progress-entry.success {
+    color: #28a745;
+}
+
+.progress-entry.error {
+    color: #dc3545;
+}
+
+.progress-summary {
+    font-weight: bold;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid #dee2e6;
+    color: #495057;
+}
+
+.tool-select {
+    padding: 8px 12px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    background-color: #fff;
+    font-size: 14px;
+    color: #495057;
+    cursor: pointer;
+    margin-right: 10px;
+    min-width: 180px;
+}
+
+.tool-select:focus {
+    outline: none;
+    border-color: #80bdff;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
+.tool-select:hover {
+    border-color: #adb5bd;
+}

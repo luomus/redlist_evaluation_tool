@@ -1,0 +1,73 @@
+.chart-section {
+    margin-top: 30px;
+    padding: 20px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    border: 1px solid #e9ecef;
+}
+
+.chart-section h3 {
+    margin-top: 0;
+    margin-bottom: 20px;
+    color: #333;
+    font-size: 1.4em;
+}
+
+.bar-chart {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.bar-item {
+    display: grid;
+    grid-template-columns: 200px 1fr;
+    gap: 15px;
+    align-items: center;
+    min-height: 40px;
+}
+
+.bar-label {
+    font-weight: 500;
+    color: #555;
+    text-align: right;
+    font-size: 0.9em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.bar-container {
+    position: relative;
+    height: 30px;
+    background: #e9ecef;
+    border-radius: 15px;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+}
+
+.bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #007bff, #0056b3);
+    border-radius: 15px;
+    transition: width 0.3s ease;
+    position: relative;
+}
+
+.bar-value {
+    position: absolute;
+    right: 10px;
+    font-weight: bold;
+    color: #333;
+    font-size: 0.9em;
+    z-index: 1;
+}
+
+.bar-item:hover .bar-fill {
+    background: linear-gradient(90deg, #0056b3, #004085);
+}
+
+.bar-item:hover .bar-label {
+    color: #007bff;
+}
