@@ -47,3 +47,67 @@ header { padding: 12px 16px; border-bottom: 1px solid #eee; display: flex; gap: 
 .leaflet-popup-content {
     margin: 8px 12px;
 }
+/* Multi-feature popup styles */
+.multi-feature-popup {
+    max-height: 400px;
+    overflow-y: auto;
+    min-width: 300px;
+}
+.popup-header {
+    font-size: 14px;
+    margin-bottom: 10px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid #ddd;
+    color: #333;
+}
+.feature-item {
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+    margin-bottom: 8px;
+    overflow: hidden;
+    background: #fff;
+}
+.feature-item.excluded-feature {
+    background: #ffebee;
+    border-color: #ffcdd2;
+}
+.feature-summary {
+    padding: 8px 10px;
+    cursor: pointer;
+    background: #f8f9fa;
+    transition: background 0.2s;
+    display: flex;
+    align-items: center;
+}
+.feature-summary:hover {
+    background: #e9ecef;
+}
+.feature-number {
+    font-weight: 600;
+    color: #666;
+    margin-right: 4px;
+}
+.feature-name {
+    font-weight: 500;
+    color: #333;
+    flex: 1;
+}
+.feature-date {
+    color: #666;
+    font-size: 12px;
+}
+.expand-icon {
+    margin-left: 8px;
+    color: #666;
+    font-size: 10px;
+}
+.feature-details {
+    padding: 10px;
+    border-top: 1px solid #e0e0e0;
+    background: #fff;
+    font-size: 13px;
+    line-height: 1.6;
+}
+.feature-details strong {
+    color: #333;
+}

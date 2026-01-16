@@ -28,7 +28,112 @@ window.createSharedMap = function(containerId = 'map', center = [60.1699, 24.938
         if (el) el.textContent = msg;
     }
 
+    // Setup multi-feature click handler
+    setupMultiFeatureHandler(map, geometryLayer);
+
     return { map, geometryLayer, stats, updateStatus };
+};
+
+// Setup handler for detecting and displaying multiple overlapping features
+function setupMultiFeatureHandler(map, geometryLayer) {
+    // Handle clicks on the geometry layer - only for CircleMarkers (points)
+    geometryLayer.on('click', function(e) {
+        const clickedLayer = e.layer;
+        
+        // Only handle CircleMarkers (points) - let polygons/lines use default popup
+        if (!(clickedLayer instanceof L.CircleMarker)) {
+            return; // Let default popup handling work for non-point features
+        }
+        
+        const clickLatLng = e.latlng;
+        
+        // Find all point features at or very near the click location
+        const nearbyFeatures = [];
+        const pixelRadius = 10; // pixels
+        const point = map.latLngToContainerPoint(clickLatLng);
+        
+        geometryLayer.eachLayer(function(layer) {
+            // Only check CircleMarkers (points)
+            if (!(layer instanceof L.CircleMarker)) {
+                return;
+            }
+            
+            const layerPoint = map.latLngToContainerPoint(layer.getLatLng());
+            const distance = point.distanceTo(layerPoint);
+            
+            if (distance < pixelRadius) {
+                nearbyFeatures.push(layer);
+            }
+        });
+        
+        // Create and show appropriate popup
+        if (nearbyFeatures.length > 1) {
+            const popupContent = createMultiFeaturePopup(nearbyFeatures);
+            L.popup()
+                .setLatLng(clickLatLng)
+                .setContent(popupContent)
+                .openOn(map);
+        } else if (nearbyFeatures.length === 1) {
+            const popupContent = createPopupContent(nearbyFeatures[0].feature.properties || {});
+            L.popup()
+                .setLatLng(clickLatLng)
+                .setContent(popupContent)
+                .openOn(map);
+        }
+        
+        L.DomEvent.stopPropagation(e);
+    });
+}
+
+// Create popup content for multiple overlapping features
+function createMultiFeaturePopup(features) {
+    let content = '<div class="multi-feature-popup">';
+    content += `<div class="popup-header"><strong>${features.length} observations at this location</strong></div>`;
+    
+    features.forEach((layer, index) => {
+        const props = layer.feature.properties || {};
+        const scientificName = props['unit.linkings.taxon.scientificName'] || 'Unknown species';
+        const date = props['gathering.displayDateTime'] || 'No date';
+        const dbId = props['_db_id'] || props['db_id'];
+        const isExcluded = props['excluded'];
+        
+        const excludedClass = isExcluded ? 'excluded-feature' : '';
+        
+        content += `<div class="feature-item ${excludedClass}" data-feature-index="${index}">`;
+        content += `<div class="feature-summary" onclick="window.toggleFeatureDetails(${index}, this)">`;
+        content += `<span class="feature-number">${index + 1}.</span> `;
+        content += `<span class="feature-name">${scientificName}</span>`;
+        content += `<span class="feature-date"> - ${date}</span>`;
+        content += `<span class="expand-icon">▼</span>`;
+        content += `</div>`;
+        
+        content += `<div class="feature-details" id="feature-details-${index}" style="display:none;">`;
+        content += createPopupContent(props).replace('<div class="popup-content">', '').replace('</div>', '');
+        content += `</div>`;
+        
+        content += `</div>`;
+    });
+    
+    content += '</div>';
+    
+    // Store features globally for detail toggle
+    window._currentMultiFeatures = features;
+    
+    return content;
+}
+
+// Toggle feature details in multi-feature popup
+window.toggleFeatureDetails = function(index, element) {
+    const detailsDiv = document.getElementById(`feature-details-${index}`);
+    const expandIcon = element.querySelector('.expand-icon');
+    
+    if (detailsDiv.style.display === 'none') {
+        detailsDiv.style.display = 'block';
+        expandIcon.textContent = '▲';
+    } else {
+        detailsDiv.style.display = 'none';
+        expandIcon.textContent = '▼';
+    }
 };
 
 
@@ -177,10 +282,12 @@ function addGeometryToLayer(geometry, properties, targetLayer) {
                 opacity: 1,
                 fillOpacity: 0.8
             });
-            marker.bindPopup(popupContent);
+            // Disable default popup binding - will be handled by multi-feature handler
+            // marker.bindPopup(popupContent);
             // store properties for later lookup
             marker.feature = marker.feature || {};
             marker.feature.properties = properties || {};
+            marker.feature.geometry = geom;
             targetLayer.addLayer(marker);
         } else if (geom.type === 'LineString') {
             const latLngs = geom.coordinates.map(coord => [coord[1], coord[0]]);
@@ -192,6 +299,7 @@ function addGeometryToLayer(geometry, properties, targetLayer) {
             line.bindPopup(popupContent);
             line.feature = line.feature || {};
             line.feature.properties = properties || {};
+            line.feature.geometry = geom;
             targetLayer.addLayer(line);
         } else if (geom.type === 'Polygon') {
             const rings = geom.coordinates.map(ring => 
@@ -207,6 +315,7 @@ function addGeometryToLayer(geometry, properties, targetLayer) {
             polygon.bindPopup(popupContent);
             polygon.feature = polygon.feature || {};
             polygon.feature.properties = properties || {};
+            polygon.feature.geometry = geom;
             targetLayer.addLayer(polygon);
         } else if (geom.type === 'MultiPoint') {
             geom.coordinates.forEach(coord => {
@@ -218,9 +327,11 @@ function addGeometryToLayer(geometry, properties, targetLayer) {
                     opacity: 1,
                     fillOpacity: 0.8
                 });
-                marker.bindPopup(popupContent);
+                // Disable default popup binding - will be handled by multi-feature handler
+                // marker.bindPopup(popupContent);
                 marker.feature = marker.feature || {};
                 marker.feature.properties = properties || {};
+                marker.feature.geometry = { type: 'Point', coordinates: [coord[0], coord[1]] };
                 targetLayer.addLayer(marker);
             });
         } else if (geom.type === 'MultiLineString') {
