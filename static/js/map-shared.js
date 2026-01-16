@@ -84,7 +84,25 @@ function createPopupContent(properties) {
     const locality = properties['gathering.locality'];
     const date = properties['gathering.displayDateTime'];
     const individualCount = properties['unit.interpretations.individualCount'];
-    
+    const recordQuality = properties['unit.interpretations.recordQuality'];
+    const recordBasis = properties['unit.recordBasis'];
+    const unitID = properties['unit.unitId'];
+    const coordinateAccuracy = properties['gathering.interpretations.coordinateAccuracy'];
+    const collectionID = properties['document.collectionId']
+    const team = (() => {
+        const props = properties || {};
+        // Collect keys like 'gathering.team[0]', 'gathering.team[1]', ...
+        const keys = Object.keys(props).filter(k => /^gathering\.team\[\d+\]$/.test(k));
+        if (keys.length) {
+            return keys
+                .map(k => props[k])
+                .filter(v => v !== undefined && v !== null && String(v).trim() !== '')
+                .join(', ');
+        }
+        // Fallbacks: single indexed key, or plain 'gathering.team'
+        return props['gathering.team[0]'] || props['gathering.team'] || null;
+    })();
+
     if (scientificName) {
         content += `<strong>Species:</strong> ${scientificName}<br>`;
     }
@@ -96,6 +114,26 @@ function createPopupContent(properties) {
     }
     if (individualCount) {
         content += `<strong>Count:</strong> ${individualCount}<br>`;
+    }
+    if (recordQuality) {
+        content += `<strong>recordQuality:</strong> ${recordQuality}<br>`;
+    }
+    if (recordBasis) {
+        content += `<strong>Basis:</strong> ${recordBasis}<br>`;
+    }
+    if (unitID) {
+        // Make Unit ID a link to a unit page (opens in a new tab)
+        content += `<strong>Unit ID:</strong> <a href="${unitID}" target="_blank" rel="noopener noreferrer">${unitID}</a><br>`;
+    }
+    if (team) {
+        content += `<strong>Team:</strong> ${team}<br>`;
+    }
+    if (coordinateAccuracy) {
+        content += `<strong>Coordinate Accuracy:</strong> ${coordinateAccuracy} meters<br>`;
+    }
+    if (collectionID) {
+        // Make Collection ID a link to a collection page (opens in a new tab)
+        content += `<strong>Collection ID:</strong> <a href="${collectionID}" target="_blank" rel="noopener noreferrer">${collectionID}</a><br>`;
     }
     
     content += '</div>';

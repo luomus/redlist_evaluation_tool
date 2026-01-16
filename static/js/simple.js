@@ -123,6 +123,7 @@ function displayDatasets(datasets) {
                         <option value="/raw">View Raw</option>
                         <option value="/convex_hull">View Convex Hull</option>
                         <option value="/map">View on Map</option>
+                        <option value="/edit">Edit on Map</option>
                         <option value="/grids">View 2km Grids</option>
 
                     </select>

@@ -38,6 +38,10 @@ def map():
 def grids():
     return render_template("grids.html")
 
+@app.route("/edit")
+def edit():
+    return render_template("edit.html")
+
 @app.route("/api/config")
 def get_config():
     return jsonify({
