@@ -122,6 +122,7 @@ function displayDatasets(datasets) {
                         <option value="/stats">View Stats</option>
                         <option value="/raw">View Raw</option>
                         <option value="/convex_hull">View Convex Hull</option>
+                        <option value="/map">View on Map</option>
                     </select>
                     <button onclick="removeDataset('${dataset.id}')" class="remove-btn">Remove</button>
                 </div>

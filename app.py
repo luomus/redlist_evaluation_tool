@@ -2,7 +2,7 @@ from flask import Flask, render_template, jsonify, request
 from livereload import Server
 from config import LAJI_API_ACCESS_TOKEN, LAJI_API_BASE_URL
 from models import init_db, Session, Observation, engine
-from sqlalchemy import Integer
+from sqlalchemy import Integer, text
 import json
 from shapely.geometry import shape
 
@@ -29,6 +29,10 @@ def raw():
 @app.route("/convex_hull")
 def convex_hull():
     return render_template("convex_hull.html")
+
+@app.route("/map")
+def map():
+    return render_template("map.html")
 
 @app.route("/api/config")
 def get_config():
@@ -313,36 +317,30 @@ def get_dataset_stats(dataset_id):
             for row in top_species_results
         ]
         
-        # Top 10 observers (handle array of observers)
-        # Note: gathering.team is typically an array, need to unnest it
+        # Top 10 observers (flattened keys only)
         observer_query = """
-            SELECT 
-                jsonb_array_elements_text(properties->'gathering.team') as observer,
-                COUNT(*) as count
-            FROM observations
+            SELECT kv.value as observer, COUNT(*) as count
+            FROM observations, jsonb_each_text(properties) AS kv(key, value)
             WHERE dataset_id = :dataset_id
-                AND properties->'gathering.team' IS NOT NULL
-                AND jsonb_typeof(properties->'gathering.team') = 'array'
-            GROUP BY observer
+              AND kv.key LIKE 'gathering.team%'
+              AND kv.value IS NOT NULL
+            GROUP BY kv.value
             ORDER BY count DESC
             LIMIT 10
         """
-        
+
         top_observers_results = session.execute(text(observer_query), {'dataset_id': dataset_id}).fetchall()
         top_observers = [
             {"observer": row[0], "count": row[1]}
             for row in top_observers_results
         ]
-        
-        # Count unique observers
+
+        # Count unique observers (flattened keys only)
         unique_observers_query = """
-            SELECT COUNT(DISTINCT observer) FROM (
-                SELECT jsonb_array_elements_text(properties->'gathering.team') as observer
-                FROM observations
-                WHERE dataset_id = :dataset_id
-                    AND properties->'gathering.team' IS NOT NULL
-                    AND jsonb_typeof(properties->'gathering.team') = 'array'
-            ) as observers
+            SELECT COUNT(DISTINCT kv.value) FROM observations, jsonb_each_text(properties) AS kv(key, value)
+            WHERE dataset_id = :dataset_id
+              AND kv.key LIKE 'gathering.team%'
+              AND kv.value IS NOT NULL
         """
         unique_observers = session.execute(text(unique_observers_query), {'dataset_id': dataset_id}).scalar() or 0
         

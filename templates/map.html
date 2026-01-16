@@ -3,26 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Dataset Convex Hull</title>
+    <title>Dataset Map View</title>
     <link
         rel="stylesheet"
         href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
         integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
         crossorigin=""
     />
-    <link rel="stylesheet" href="/static/css/convex_hull.css">
+    <link rel="stylesheet" href="/static/css/map.css">
 </head>
 <body>
     <header>
         <a href="/simple" class="back-btn">← Back to Datasets</a>
-
-        <div class="info-panel">
-            <h3>Dataset Info</h3>
-            <div class="info-item">
-                <span class="info-label">Area:</span>
-                <span class="info-value" id="areaValue">-</span>
-            </div>
-        </div>
 
         <div id="status" class="stats">Loading dataset...</div>
     </header>
@@ -35,6 +27,6 @@
         crossorigin=""
     ></script>
     <script src="/static/js/map-shared.js"></script>
-    <script src="/static/js/convex_hull.js"></script>
+    <script src="/static/js/map.js"></script>
 </body>
 </html>
