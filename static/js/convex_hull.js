@@ -84,13 +84,56 @@ function calculatePolygonArea(points) {
 }
 
 // Create and display convex hull
-function createConvexHull() {
+function createConvexHull(fitMap = true) {
     if (hullLayer) {
         map.removeLayer(hullLayer);
     }
 
-    // Extract all points from geometries
-    const points = extractAllPoints(allGeometries);
+    // Extract points from visible, non-excluded layers in `geometryLayer`
+    const points = [];
+    if (geometryLayer && typeof geometryLayer.eachLayer === 'function') {
+        geometryLayer.eachLayer(function(layer) {
+            try {
+                const props = (layer.feature && layer.feature.properties) || layer.feature || {};
+                const excluded = props && (props.excluded === true || props.excluded === '1' || props.excluded === 1);
+                if (excluded) return;
+
+                // Helper to push latlng objects/arrays to points
+                function pushLatLng(latlng) {
+                    if (!latlng) return;
+                    if (Array.isArray(latlng)) {
+                        // [lat, lng]
+                        points.push([latlng[0], latlng[1]]);
+                    } else if (latlng.lat !== undefined && latlng.lng !== undefined) {
+                        points.push([latlng.lat, latlng.lng]);
+                    }
+                }
+
+                // Flatten nested latlng arrays (polylines/polygons)
+                function flattenLatLngs(lls) {
+                    if (!lls) return;
+                    if (Array.isArray(lls)) {
+                        lls.forEach(item => flattenLatLngs(item));
+                    } else {
+                        pushLatLng(lls);
+                    }
+                }
+
+                if (typeof layer.getLatLng === 'function') {
+                    const ll = layer.getLatLng();
+                    pushLatLng(ll);
+                } else if (typeof layer.getLatLngs === 'function') {
+                    const lls = layer.getLatLngs();
+                    flattenLatLngs(lls);
+                }
+            } catch (e) {
+                // ignore layer parsing errors
+            }
+        });
+    } else {
+        // Fallback: use previously collected geometries
+        points.push(...extractAllPoints(allGeometries));
+    }
     
     if (points.length < 3) {
         document.getElementById('areaValue').textContent = 'N/A';
@@ -110,10 +153,32 @@ function createConvexHull() {
         fillOpacity: 0.2
     }).addTo(map);
 
+    // Optionally fit map to hull bounds
+    if (fitMap) {
+        try {
+            const bounds = hullLayer.getBounds();
+            if (bounds && bounds.isValid()) map.fitBounds(bounds, { padding: [50, 50] });
+        } catch (e) {
+            // ignore
+        }
+    }
+
+    // Ensure the shared data layer is above the hull so features remain clickable
+    try {
+        if (window.sharedGeometryLayer && typeof window.sharedGeometryLayer.bringToFront === 'function') {
+            window.sharedGeometryLayer.bringToFront();
+        }
+    } catch (e) {
+        // ignore
+    }
+
     // Calculate and display area
     const area = calculatePolygonArea(hullPoints);
     document.getElementById('areaValue').textContent = `${area.toFixed(2)} km²`;
 }
+
+// Expose for other modules to trigger recalculation (e.g. after exclude toggles)
+window.createConvexHull = createConvexHull;
 
 // Function to fetch all pages of data
 async function fetchAllObservations() {
@@ -173,14 +238,8 @@ async function fetchAllObservations() {
         // Wait for all pages to load
         await Promise.all(fetchPromises);
 
-        // Create convex hull after all geometries are loaded
-        createConvexHull();
-
-        // Fit map to show all geometries
-        const bounds = geometryLayer.getBounds();
-        if (bounds.isValid()) {
-            map.fitBounds(bounds, { padding: [50, 50] });
-        }
+        // Create convex hull after all geometries are loaded (fit map)
+        createConvexHull(true);
 
         // Display final statistics (simplified)
         const statusMessage = `${datasetName}: ${stats.total} observations loaded with convex hull` +
@@ -206,10 +265,7 @@ fetchAllObservationsGeneric(datasetId,
     updateStatus,
     ({ datasetName, total }) => {
         stats.total = total || stats.total;
-        createConvexHull();
-
-        const bounds = geometryLayer.getBounds();
-        if (bounds.isValid()) map.fitBounds(bounds, { padding: [50, 50] });
+        createConvexHull(true);
 
         const statusMessage = `${datasetName}: ${stats.total} observations loaded` +
             (stats.skipped > 0 ? ` | Skipped: ${stats.skipped}` : '');

@@ -27,6 +27,8 @@
   const GRID_ORIGIN_LON = 20.0;
 
   const features = [];
+  let currentDatasetName = 'Dataset';
+  let currentTotal = 0;
 
   function getPropAccuracy(properties) {
     if (!properties) return undefined;
@@ -144,7 +146,7 @@
     return false;
   }
 
-  function createOrUpdateGrid(accurateGridSquares, lessAccurateRecords) {
+  function createOrUpdateGrid(accurateGridSquares, lessAccurateRecords, fitMap = true) {
     if (gridLayer) map.removeLayer(gridLayer);
     if (lessAccurateLayer) map.removeLayer(lessAccurateLayer);
     let totalVisibleSquares = 0;
@@ -196,29 +198,53 @@
       const allLayers = [];
       if (gridLayer) allLayers.push(...gridLayer.getLayers());
       if (lessAccurateLayer) allLayers.push(...lessAccurateLayer.getLayers());
-      if (allLayers.length > 0) {
-        const group = new L.featureGroup(allLayers);
-        const bounds = group.getBounds();
-        if (bounds && bounds.isValid()) map.fitBounds(bounds.pad(0.1), { maxZoom: 10 });
-        else map.setView([61.0, 25.0], 6);
-      } else {
-        map.setView([61.0, 25.0], 6);
+      if (fitMap) {
+        if (allLayers.length > 0) {
+          const group = new L.featureGroup(allLayers);
+          const bounds = group.getBounds();
+          if (bounds && bounds.isValid()) map.fitBounds(bounds.pad(0.1), { maxZoom: 10 });
+          else map.setView([61.0, 25.0], 6);
+        } else {
+          map.setView([61.0, 25.0], 6);
+        }
       }
     } catch (err) {
-      map.setView([61.0, 25.0], 6);
+      if (fitMap) map.setView([61.0, 25.0], 6);
+    }
+
+    // Ensure the shared data layer is above grids so data remains clickable
+    try {
+      if (window.sharedGeometryLayer && typeof window.sharedGeometryLayer.bringToFront === 'function') {
+        window.sharedGeometryLayer.bringToFront();
+      }
+    } catch (e) {
+      // ignore
     }
 
     return totalVisibleSquares;
   }
 
   // After collecting features, process them
-  function processCollectedFeatures(datasetName, total) {
+  function processCollectedFeatures(datasetName, total, fitMap = true) {
     updateStatus(`Processing ${datasetName} data...`);
+    // Clear background geometry layer and prepare points
+    try { if (geometryLayer && typeof geometryLayer.clearLayers === 'function') geometryLayer.clearLayers(); } catch (e) { /* ignore */ }
     const accuratePoints = [];
     const lessAccurateRecords = [];
 
     features.forEach(feature => {
       const props = feature.properties || {};
+      // Always add geometries to the background layer so they are visible behind the grid
+      try {
+        if (feature.geometry) addGeometryToMap(feature.geometry, props, geometryLayer);
+      } catch (e) {
+        // ignore geometry add errors
+      }
+
+      // For grid calculations, skip excluded features
+      const excluded = props && (props.excluded === true || props.excluded === '1' || props.excluded === 1);
+      if (excluded) return;
+
       const accuracy = getPropAccuracy(props);
       const center = featureCenterLatLon(feature);
       if (accuracy !== undefined && accuracy >= 2000) {
@@ -241,7 +267,7 @@
     });
 
     const accurateGridSquares = accuratePoints.length > 0 ? calculateGridSquares(accuratePoints) : [];
-    const totalVisible = createOrUpdateGrid(accurateGridSquares, lessAccurateRecords);
+    const totalVisible = createOrUpdateGrid(accurateGridSquares, lessAccurateRecords, fitMap);
     updateStatus(`Displaying ${totalVisible} visible squares (${accurateGridSquares.length} accurate).`);
   }
 
@@ -255,7 +281,22 @@
     ({ datasetName, totalPages, total }) => {
       // process once all pages are fetched
       stats.total = total || stats.total;
-      processCollectedFeatures(datasetName || 'Dataset', total || 0);
+      currentDatasetName = datasetName || 'Dataset';
+      currentTotal = total || 0;
+      // Expose collected features for other modules to update (e.g. exclude toggles)
+      window.sharedGridFeatures = features;
+      // Initial processing (fit map)
+      processCollectedFeatures(currentDatasetName, currentTotal, true);
     }
   );
+
+  // Allow external triggers to recalculate the grid (after includes/excludes)
+  window.recalculateGrid = function() {
+    try {
+      // Recalculate without changing current map view
+      processCollectedFeatures(currentDatasetName, currentTotal, false);
+    } catch (e) {
+      console.error('Error recalculating grid:', e);
+    }
+  };
 })();

@@ -14,6 +14,10 @@ window.createSharedMap = function(containerId = 'map', center = [60.1699, 24.938
 
     const geometryLayer = L.featureGroup().addTo(map);
 
+    // Expose map and geometry layer globally so other helpers can access them
+    window.sharedMap = map;
+    window.sharedGeometryLayer = geometryLayer;
+
     const stats = {
         total: 0,
         skipped: 0
@@ -136,6 +140,15 @@ function createPopupContent(properties) {
         content += `<strong>Collection ID:</strong> <a href="${collectionID}" target="_blank" rel="noopener noreferrer">${collectionID}</a><br>`;
     }
     
+    // Add Exclude / Include button if this feature references a DB record
+    const dbId = properties && (properties['_db_id'] || properties['db_id']);
+    const isExcluded = properties && properties['excluded'];
+    if (dbId) {
+        const btnLabel = isExcluded ? 'Include in analysis' : 'Exclude from analysis';
+        const dataExcluded = isExcluded ? '1' : '0';
+        content += `<div class="popup-actions"><button class="exclude-btn" data-db-id="${dbId}" data-excluded="${dataExcluded}" onclick="window.toggleExclude(${dbId}, this)">${btnLabel}</button></div>`;
+    }
+
     content += '</div>';
     return content;
 }
@@ -150,61 +163,77 @@ function addGeometryToLayer(geometry, properties, targetLayer) {
     const popupContent = createPopupContent(properties || {});
     
     function addGeometry(geom) {
+        const excluded = properties && (properties.excluded === true || properties.excluded === '1' || properties.excluded === 1);
+        const defaultColor = '#3388ff';
+        const excludedColor = '#ff3333';
+        const color = excluded ? excludedColor : defaultColor;
+
         if (geom.type === 'Point') {
             const marker = L.circleMarker([geom.coordinates[1], geom.coordinates[0]], {
                 radius: 5,
-                fillColor: '#3388ff',
+                fillColor: color,
                 color: '#ffffff',
                 weight: 1,
                 opacity: 1,
                 fillOpacity: 0.8
             });
             marker.bindPopup(popupContent);
+            // store properties for later lookup
+            marker.feature = marker.feature || {};
+            marker.feature.properties = properties || {};
             targetLayer.addLayer(marker);
         } else if (geom.type === 'LineString') {
             const latLngs = geom.coordinates.map(coord => [coord[1], coord[0]]);
             const line = L.polyline(latLngs, {
-                color: '#3388ff',
+                color: color,
                 weight: 3,
                 opacity: 0.8
             });
             line.bindPopup(popupContent);
+            line.feature = line.feature || {};
+            line.feature.properties = properties || {};
             targetLayer.addLayer(line);
         } else if (geom.type === 'Polygon') {
             const rings = geom.coordinates.map(ring => 
                 ring.map(coord => [coord[1], coord[0]])
             );
             const polygon = L.polygon(rings, {
-                color: '#3388ff',
+                color: color,
                 weight: 2,
                 opacity: 0.8,
-                fillColor: '#3388ff',
+                fillColor: color,
                 fillOpacity: 0.3
             });
             polygon.bindPopup(popupContent);
+            polygon.feature = polygon.feature || {};
+            polygon.feature.properties = properties || {};
             targetLayer.addLayer(polygon);
         } else if (geom.type === 'MultiPoint') {
             geom.coordinates.forEach(coord => {
                 const marker = L.circleMarker([coord[1], coord[0]], {
                     radius: 5,
-                    fillColor: '#3388ff',
+                    fillColor: color,
                     color: '#ffffff',
                     weight: 1,
                     opacity: 1,
                     fillOpacity: 0.8
                 });
                 marker.bindPopup(popupContent);
+                marker.feature = marker.feature || {};
+                marker.feature.properties = properties || {};
                 targetLayer.addLayer(marker);
             });
         } else if (geom.type === 'MultiLineString') {
             geom.coordinates.forEach(lineCoords => {
                 const latLngs = lineCoords.map(coord => [coord[1], coord[0]]);
                 const line = L.polyline(latLngs, {
-                    color: '#3388ff',
+                    color: color,
                     weight: 3,
                     opacity: 0.8
                 });
                 line.bindPopup(popupContent);
+                line.feature = line.feature || {};
+                line.feature.properties = properties || {};
                 targetLayer.addLayer(line);
             });
         } else if (geom.type === 'MultiPolygon') {
@@ -213,13 +242,15 @@ function addGeometryToLayer(geometry, properties, targetLayer) {
                     ring.map(coord => [coord[1], coord[0]])
                 );
                 const polygon = L.polygon(rings, {
-                    color: '#3388ff',
+                    color: color,
                     weight: 2,
                     opacity: 0.8,
-                    fillColor: '#3388ff',
+                    fillColor: color,
                     fillOpacity: 0.3
                 });
                 polygon.bindPopup(popupContent);
+                polygon.feature = polygon.feature || {};
+                polygon.feature.properties = properties || {};
                 targetLayer.addLayer(polygon);
             });
         } else if (geom.type === 'GeometryCollection') {
@@ -231,6 +262,100 @@ function addGeometryToLayer(geometry, properties, targetLayer) {
     
     addGeometry(geometry);
 }
+
+// Toggle excluded flag for an observation by DB id. Button element passed as `btn`.
+window.toggleExclude = async function(obsId, btn) {
+    try {
+        if (!obsId) return;
+        const current = btn.getAttribute('data-excluded') === '1';
+        const newValue = !current;
+
+        const res = await fetch(`/api/observation/${obsId}/exclude`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ excluded: newValue })
+        });
+
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            alert('Failed to update: ' + (err.error || res.statusText));
+            return;
+        }
+
+        const data = await res.json();
+        if (data.success) {
+            btn.setAttribute('data-excluded', data.excluded ? '1' : '0');
+            btn.textContent = data.excluded ? 'Include in analysis' : 'Exclude from analysis';
+            // Update styling of any layers that reference this DB id
+            try {
+                if (window.sharedGeometryLayer && typeof window.sharedGeometryLayer.eachLayer === 'function') {
+                    const targetId = String(obsId);
+                    window.sharedGeometryLayer.eachLayer(function(layer) {
+                        const props = (layer.feature && layer.feature.properties) || layer.feature || null;
+                        if (!props) return;
+                        const layerDbId = props._db_id || props.db_id;
+                        if (!layerDbId) return;
+                        if (String(layerDbId) === targetId) {
+                            // update stored property
+                            props.excluded = data.excluded;
+                            const newColor = data.excluded ? '#ff3333' : '#3388ff';
+                            try {
+                                if (typeof layer.setStyle === 'function') {
+                                    layer.setStyle({ color: newColor, fillColor: newColor });
+                                }
+                            } catch (e) {
+                                // ignore styling errors
+                            }
+                                // If marker (circleMarker) use setStyle via options or directly set fillColor
+                                try {
+                                    if (typeof layer.setStyle !== 'function') {
+                                        if (typeof layer.setRadius === 'function') {
+                                            // circleMarker/marker: update options directly and redraw
+                                            if (layer.options) {
+                                                layer.options.fillColor = newColor;
+                                            }
+                                            if (typeof layer.redraw === 'function') layer.redraw();
+                                        }
+                                    }
+                                } catch (e) {
+                                    // ignore
+                                }
+                                // Also update any shared features used by grids and request recalculations
+                                try {
+                                    if (window.sharedGridFeatures && Array.isArray(window.sharedGridFeatures)) {
+                                        window.sharedGridFeatures.forEach(f => {
+                                            const fId = f && f.properties && (f.properties._db_id || f.properties.db_id);
+                                            if (fId && String(fId) === targetId) {
+                                                f.properties = f.properties || {};
+                                                f.properties.excluded = data.excluded;
+                                            }
+                                        });
+                                    }
+                                } catch (e) {
+                                    // ignore
+                                }
+                                // Request convex hull recalculation without changing map view
+                                if (typeof window.createConvexHull === 'function') {
+                                    try { window.createConvexHull(false); } catch (e) { /* ignore */ }
+                                }
+                                // Request grid recalculation if available
+                                if (typeof window.recalculateGrid === 'function') {
+                                    try { window.recalculateGrid(); } catch (e) { /* ignore */ }
+                                }
+                        }
+                    });
+                }
+            } catch (e) {
+                console.error('Error updating layer styles after exclude:', e);
+            }
+        } else {
+            alert('Failed to update: ' + (data.error || 'unknown error'));
+        }
+    } catch (e) {
+        console.error('Error toggling exclude:', e);
+        alert('Error toggling exclude: ' + e.message);
+    }
+};
 
     // Shared per-feature handler that updates stats and adds geometry to a target layer.
     // Call as: `addGeometryToMap(geometry, properties, targetLayer, stats)`.

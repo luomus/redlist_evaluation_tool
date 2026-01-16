@@ -148,9 +148,12 @@ def get_observations(dataset_id):
         # Reconstruct GeoJSON features
         features = []
         for obs in observations:
+            # Include internal DB id in the properties so the frontend can reference the record
+            props = dict(obs.properties or {})
+            props['_db_id'] = obs.id
             feature = {
                 "type": "Feature",
-                "properties": obs.properties,
+                "properties": props,
                 "geometry": json.loads(session.scalar(obs.geometry.ST_AsGeoJSON())) if obs.geometry else None
             }
             features.append(feature)
@@ -178,6 +181,31 @@ def get_observations(dataset_id):
                 "pages": total_pages
             }
         })
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/observation/<int:obs_id>/exclude", methods=["POST"])
+def set_observation_excluded(obs_id):
+    """Set or unset the 'excluded' flag on an observation's properties JSONB."""
+    try:
+        data = request.get_json() or {}
+        excluded = bool(data.get('excluded', True))
+
+        session = Session()
+        obs = session.query(Observation).get(obs_id)
+        if not obs:
+            session.close()
+            return jsonify({"success": False, "error": "Observation not found"}), 404
+
+        props = dict(obs.properties or {})
+        props['excluded'] = excluded
+        obs.properties = props
+        session.add(obs)
+        session.commit()
+        session.close()
+
+        return jsonify({"success": True, "excluded": excluded})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
