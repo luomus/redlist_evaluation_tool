@@ -18,55 +18,6 @@ let hullLayer = null;
 // Store all geometries for convex hull calculation
 const allGeometries = [];
 
-// Function to add a single feature to map (stores geometry for hull)
-function addGeometryToMap(geometry, properties) {
-    if (!geometry || !geometry.type) {
-        stats.skipped++;
-        return;
-    }
-
-    try {
-        switch (geometry.type) {
-            case 'Point':
-                stats.points++;
-                break;
-            case 'LineString':
-                stats.linestrings++;
-                break;
-            case 'Polygon':
-                stats.polygons++;
-                break;
-            case 'MultiPoint':
-                stats.multipoints++;
-                break;
-            case 'MultiLineString':
-                stats.multilinestrings++;
-                break;
-            case 'MultiPolygon':
-                stats.multipolygons++;
-                break;
-            case 'GeometryCollection':
-                stats.geometrycollections++;
-                if (geometry.geometries && Array.isArray(geometry.geometries)) {
-                    geometry.geometries.forEach(geom => addGeometryToMap(geom, properties));
-                }
-                allGeometries.push(geometry);
-                return;
-            default:
-                console.warn('Unknown geometry type:', geometry.type);
-                stats.skipped++;
-                return;
-        }
-
-        stats.total++;
-        allGeometries.push(geometry);
-
-        addGeometryToLayer(geometry, properties, geometryLayer);
-    } catch (error) {
-        console.error('Error adding geometry to map:', error, geometry);
-    }
-}
-
 // Calculate the convex hull using Graham scan algorithm
 function calculateConvexHull(points) {
     if (points.length < 3) {
@@ -179,27 +130,28 @@ async function fetchAllObservations() {
         if (!firstResponse.ok) {
             throw new Error(`HTTP error! status: ${firstResponse.status}`);
         }
-        
+
         const firstData = await firstResponse.json();
-        
+
         if (firstData.features.length === 0) {
             updateStatus('No observations found for this dataset');
             return;
         }
-        
+
         datasetName = firstData.dataset_name || 'Dataset';
         totalPages = firstData.pagination.pages;
         total = firstData.pagination.total;
-        
+
         updateStatus(`Loading ${datasetName} (page 1 of ${totalPages})...`);
-        
+
         // Process first page
         firstData.features.forEach(feature => {
             if (feature.geometry) {
-                addGeometryToMap(feature.geometry, feature.properties || {});
+                allGeometries.push(feature.geometry);
+                addGeometryToMap(feature.geometry, feature.properties || {}, geometryLayer, stats);
             }
         });
-        
+
         // Fetch remaining pages
         const fetchPromises = [];
         for (let p = 2; p <= totalPages; p++) {
@@ -210,34 +162,32 @@ async function fetchAllObservations() {
                         updateStatus(`Loading ${datasetName} (page ${p} of ${totalPages})...`);
                         data.features.forEach(feature => {
                             if (feature.geometry) {
-                                addGeometryToMap(feature.geometry, feature.properties || {});
+                                allGeometries.push(feature.geometry);
+                                addGeometryToMap(feature.geometry, feature.properties || {}, geometryLayer, stats);
                             }
                         });
                     })
             );
         }
-        
+
         // Wait for all pages to load
         await Promise.all(fetchPromises);
-        
+
         // Create convex hull after all geometries are loaded
         createConvexHull();
-        
+
         // Fit map to show all geometries
         const bounds = geometryLayer.getBounds();
         if (bounds.isValid()) {
             map.fitBounds(bounds, { padding: [50, 50] });
         }
-        
-        // Display final statistics (match map.js format)
-        const statusMessage = `${datasetName}: ${total} observations loaded with convex hull | ` +
-            `Points: ${stats.points} | Lines: ${stats.linestrings} | Polygons: ${stats.polygons} | ` +
-            `MultiPoints: ${stats.multipoints} | MultiLines: ${stats.multilinestrings} | ` +
-            `MultiPolygons: ${stats.multipolygons} | GeometryCollections: ${stats.geometrycollections}` +
+
+        // Display final statistics (simplified)
+        const statusMessage = `${datasetName}: ${stats.total} observations loaded with convex hull` +
             (stats.skipped > 0 ? ` | Skipped: ${stats.skipped}` : '');
 
         updateStatus(statusMessage);
-        
+
     } catch (error) {
         console.error('Error fetching observations:', error);
         updateStatus(`Error loading data: ${error.message}`);
@@ -248,7 +198,10 @@ async function fetchAllObservations() {
 // Use generic fetcher and create hull once loaded
 fetchAllObservationsGeneric(datasetId,
     (feature) => {
-        if (feature.geometry) addGeometryToMap(feature.geometry, feature.properties || {});
+        if (feature.geometry) {
+            allGeometries.push(feature.geometry);
+            addGeometryToMap(feature.geometry, feature.properties || {}, geometryLayer, stats);
+        }
     },
     updateStatus,
     ({ datasetName, total }) => {
@@ -258,10 +211,7 @@ fetchAllObservationsGeneric(datasetId,
         const bounds = geometryLayer.getBounds();
         if (bounds.isValid()) map.fitBounds(bounds, { padding: [50, 50] });
 
-        const statusMessage = `${datasetName}: ${stats.total} observations loaded with convex hull | ` +
-            `Points: ${stats.points} | Lines: ${stats.linestrings} | Polygons: ${stats.polygons} | ` +
-            `MultiPoints: ${stats.multipoints} | MultiLines: ${stats.multilinestrings} | ` +
-            `MultiPolygons: ${stats.multipolygons} | GeometryCollections: ${stats.geometrycollections}` +
+        const statusMessage = `${datasetName}: ${stats.total} observations loaded` +
             (stats.skipped > 0 ? ` | Skipped: ${stats.skipped}` : '');
 
         updateStatus(statusMessage);

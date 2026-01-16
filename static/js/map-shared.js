@@ -16,13 +16,6 @@ window.createSharedMap = function(containerId = 'map', center = [60.1699, 24.938
 
     const stats = {
         total: 0,
-        points: 0,
-        linestrings: 0,
-        polygons: 0,
-        multipoints: 0,
-        multilinestrings: 0,
-        multipolygons: 0,
-        geometrycollections: 0,
         skipped: 0
     };
 
@@ -200,6 +193,28 @@ function addGeometryToLayer(geometry, properties, targetLayer) {
     
     addGeometry(geometry);
 }
+
+    // Shared per-feature handler that updates stats and adds geometry to a target layer.
+    // Call as: `addGeometryToMap(geometry, properties, targetLayer, stats)`.
+    window.addGeometryToMap = function(geometry, properties, targetLayer, statsObj) {
+        if (!geometry || !geometry.type) {
+            if (statsObj) statsObj.skipped++;
+            return;
+        }
+
+        try {
+            if (geometry.type === 'GeometryCollection' && geometry.geometries && Array.isArray(geometry.geometries)) {
+                geometry.geometries.forEach(g => window.addGeometryToMap(g, properties, targetLayer, statsObj));
+                return;
+            }
+
+            if (statsObj) statsObj.total++;
+            addGeometryToLayer(geometry, properties, targetLayer);
+        } catch (err) {
+            console.error('Error adding geometry to layer:', err, geometry);
+            if (statsObj) statsObj.skipped++;
+        }
+    };
 
 // Extract all points from geometries (for convex hull calculation, etc.)
 function extractAllPoints(geometries) {
