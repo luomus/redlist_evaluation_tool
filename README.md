@@ -60,22 +60,20 @@ docker run --rm -p 5000:5000 biotools
 The app now uses PostgreSQL/PostGIS for data storage. Use docker-compose to run both the database and web app:
 
 ```bash
-docker-compose -f docker-compose-yml up --build
+docker-compose -f docker-compose up --build
 ```
 
 Access the app at http://localhost:5000/simple
 
 To stop:
 ```bash
-docker-compose -f docker-compose-yml down
+docker-compose -f docker-compose down
 ```
 
 To remove all data (including database):
 ```bash
-docker-compose -f docker-compose-yml down -v
+docker-compose -f docker-compose down -v
 ```
-
-Tip: You can rename `docker-compose-yml` to `docker-compose.yml` to use `docker-compose up --build` directly.
 
 ### Package Management
 

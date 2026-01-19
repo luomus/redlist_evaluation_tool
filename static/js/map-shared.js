@@ -31,6 +31,9 @@ window.createSharedMap = function(containerId = 'map', center = [60.1699, 24.938
     // Setup multi-feature click handler
     setupMultiFeatureHandler(map, geometryLayer);
 
+    // Setup polygon selector and bulk enable/disable controls
+    try { setupPolygonSelector(map, geometryLayer); } catch (e) { console.warn('Polygon selector initialization failed:', e); }
+
     return { map, geometryLayer, stats, updateStatus };
 };
 
@@ -135,6 +138,310 @@ window.toggleFeatureDetails = function(index, element) {
         expandIcon.textContent = '▼';
     }
 };
+
+// Polygon selector and bulk enable/disable controls
+// Adds a small UI control to start polygon selection, finish/cancel drawing
+// and buttons to enable/disable all features at once. Does not require
+// external drawing libraries.
+function setupPolygonSelector(map, geometryLayer) {
+    let selecting = false;
+    let points = [];
+    let markersLayer = L.layerGroup().addTo(map);
+    let tempLine = L.polyline([], { color: '#3388ff', dashArray: '5,5' }).addTo(map);
+    let selectionPolygon = null;
+    let selectionPopup = null;
+    let startMarker = null;
+
+    const control = L.control({ position: 'topright' });
+    control.onAdd = function() {
+        const div = L.DomUtil.create('div', 'leaflet-bar polygon-selector-control');
+        div.innerHTML = `
+            <button id="polySelectBtn" title="Start polygon selection">🔺 Polygon</button>
+            <button id="polyCancelBtn" style="display:none;">✖ Cancel</button>
+            <button id="disableAllBtn" title="Disable all">⚫ Disable all</button>
+            <button id="enableAllBtn" title="Enable all">⚪ Enable all</button>
+        `;
+        L.DomEvent.disableClickPropagation(div);
+        return div;
+    };
+    control.addTo(map);
+
+    // Start or cancel drawing
+    function clearSelectionDrawing() {
+        points = [];
+        markersLayer.clearLayers();
+        tempLine.setLatLngs([]);
+        if (selectionPolygon) {
+            map.removeLayer(selectionPolygon);
+            selectionPolygon = null;
+        }
+        if (selectionPopup) {
+            map.closePopup(selectionPopup);
+            selectionPopup = null;
+        }
+        if (startMarker) {
+            try { map.removeLayer(startMarker); } catch (e) {}
+            startMarker = null;
+        }
+        selecting = false;
+        document.getElementById('polyCancelBtn').style.display = 'none';
+        document.getElementById('polySelectBtn').textContent = '🔺 Polygon';
+        map.off('click', onMapClick);
+        map.off('dblclick', onMapDblClick);
+        try { map.dragging.enable(); if (map.doubleClickZoom) map.doubleClickZoom.enable(); } catch (e) { /* ignore */ }
+    }
+
+    // Finish drawing and create selection polygon
+    function finishDrawing() {
+        if (points.length < 3) {
+            alert('Draw a polygon with at least 3 points.');
+            return;
+        }
+        selectionPolygon = L.polygon(points, { color: '#f39c12', weight: 2, fillOpacity: 0.15 }).addTo(map);
+        tempLine.setLatLngs([]);
+        markersLayer.clearLayers();
+        if (startMarker) {
+            try { map.removeLayer(startMarker); } catch (e) {}
+            startMarker = null;
+        }
+        selecting = false;
+        document.getElementById('polyCancelBtn').style.display = 'none';
+        document.getElementById('polySelectBtn').textContent = '🔺 Polygon';
+        map.off('click', onMapClick);
+        map.off('dblclick', onMapDblClick);
+        try { map.dragging.enable(); if (map.doubleClickZoom) map.doubleClickZoom.enable(); } catch (e) { /* ignore */ }
+
+        // Show popup with actions
+        const center = selectionPolygon.getBounds().getCenter();
+        const popupHtml = `<div class="polygon-actions"><button id="disableSelected">Disable selected</button> <button id="enableSelected">Enable selected</button> <button id="clearSelection">Clear selection</button></div>`;
+        selectionPopup = L.popup({ maxWidth: 260 }).setLatLng(center).setContent(popupHtml).openOn(map);
+
+        // Attach handlers after popup opens
+        setTimeout(() => {
+            const disableBtn = document.getElementById('disableSelected');
+            const enableBtn = document.getElementById('enableSelected');
+            const clearBtn = document.getElementById('clearSelection');
+            if (disableBtn) disableBtn.addEventListener('click', () => applyExcludeToSelection(true));
+            if (enableBtn) enableBtn.addEventListener('click', () => applyExcludeToSelection(false));
+            if (clearBtn) clearBtn.addEventListener('click', () => { map.closePopup(); if (selectionPolygon) { map.removeLayer(selectionPolygon); selectionPolygon = null; } });
+        }, 50);
+    }
+
+    // When drawing, click to add points. Clicking near the first point (or double-click) finishes automatically.
+    function onMapClick(e) {
+        // If click near first point and have 3+ points, finish
+        if (points.length > 0) {
+            const containerPoint = map.latLngToContainerPoint(e.latlng);
+            const firstContainer = map.latLngToContainerPoint(points[0]);
+            const dist = containerPoint.distanceTo(firstContainer);
+            if (points.length >= 3 && dist < 10) {
+                finishDrawing();
+                return;
+            }
+        }
+
+        // Normal add point behavior
+        points.push(e.latlng);
+        const mkStyle = { radius: 4, color: '#3388ff', fillColor: '#3388ff', fillOpacity: 1 };
+        const mk = L.circleMarker(e.latlng, mkStyle).addTo(markersLayer);
+        tempLine.addLatLng(e.latlng);
+
+        // If this is the first point, add a standout start marker that is clickable to finish
+        if (points.length === 1) {
+            try {
+                startMarker = L.circleMarker(e.latlng, { radius: 6, color: '#e67e22', fillColor: '#e67e22', fillOpacity: 0.9 }).addTo(map);
+                startMarker.on('click', function() { if (points.length >= 3) finishDrawing(); });
+                startMarker.bindTooltip('Click to close polygon', { permanent: false, direction: 'top' });
+            } catch (e) {
+                startMarker = null;
+            }
+        }
+    }
+
+    function onMapDblClick() {
+        if (selecting && points.length >= 3) {
+            finishDrawing();
+        }
+    }
+
+    document.getElementById('polySelectBtn').addEventListener('click', () => {
+        if (selecting) {
+            // Cancel
+            clearSelectionDrawing();
+            return;
+        }
+        selecting = true;
+        points = [];
+        markersLayer.clearLayers();
+        tempLine.setLatLngs([]);
+        document.getElementById('polyCancelBtn').style.display = 'inline-block';
+        document.getElementById('polySelectBtn').textContent = '● Drawing...';
+        map.on('click', onMapClick);
+        map.on('dblclick', onMapDblClick);
+        try { map.dragging.disable(); if (map.doubleClickZoom) map.doubleClickZoom.disable(); } catch (e) { /* ignore */ }
+    });
+
+    // Utility: ray-casting point-in-polygon test (latlng objects {lat, lng})
+    function pointInPolygon(pt, vs) {
+        const x = pt.lng, y = pt.lat;
+        let inside = false;
+        for (let i = 0, j = vs.length - 1; i < vs.length; j = i++) {
+            const xi = vs[i].lng, yi = vs[i].lat;
+            const xj = vs[j].lng, yj = vs[j].lat;
+
+            const intersect = ((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi + 0.0) + xi);
+            if (intersect) inside = !inside;
+        }
+        return inside;
+    }
+
+    // Flatten nested latlngs to an array of latlngs
+    function flattenLatLngs(arr) {
+        const out = [];
+        (function rec(a) {
+            if (!a) return;
+            if (Array.isArray(a)) {
+                a.forEach(v => rec(v));
+            } else if (a.lat !== undefined && a.lng !== undefined) {
+                out.push(a);
+            }
+        })(arr);
+        return out;
+    }
+
+    function getLayersInSelection() {
+        if (!selectionPolygon) return [];
+        const polyPoints = selectionPolygon.getLatLngs()[0];
+        const selected = [];
+        geometryLayer.eachLayer(function(layer) {
+            try {
+                if (layer instanceof L.CircleMarker) {
+                    if (pointInPolygon(layer.getLatLng(), polyPoints)) selected.push(layer);
+                } else {
+                    const latlngs = flattenLatLngs(layer.getLatLngs && layer.getLatLngs());
+                    if (latlngs && latlngs.length) {
+                        for (let i = 0; i < latlngs.length; i++) {
+                            if (pointInPolygon(latlngs[i], polyPoints)) { selected.push(layer); break; }
+                        }
+                    }
+                }
+            } catch (e) {
+                // ignore non-geo layers
+            }
+        });
+        return selected;
+    }
+
+    async function applyExcludeToSelection(exclude) {
+        const layers = getLayersInSelection();
+        if (!layers.length) { alert('No features found inside selection.'); return; }
+        const dbIds = [];
+        layers.forEach(l => {
+            const props = (l.feature && l.feature.properties) || l.feature || {};
+            const id = props && (props._db_id || props.db_id);
+            if (id) dbIds.push(id);
+        });
+        if (!dbIds.length) { alert('No DB-backed features in selection.'); return; }
+
+        if (!confirm(`Apply ${exclude ? 'disable' : 'enable'} to ${dbIds.length} observations?`)) return;
+        for (let i = 0; i < dbIds.length; i++) {
+            try {
+                await window.setExclude(dbIds[i], exclude);
+            } catch (e) {
+                console.error('Error setting exclude for', dbIds[i], e);
+            }
+        }
+        map.closePopup();
+        if (selectionPolygon) { map.removeLayer(selectionPolygon); selectionPolygon = null; }
+        alert(`Processed ${dbIds.length} observations.`);
+    }
+
+    // Enable/Disable all buttons
+    document.getElementById('disableAllBtn').addEventListener('click', async () => {
+        if (!confirm('Disable all observations visible on the map?')) return;
+        const ids = [];
+        geometryLayer.eachLayer(l => {
+            const props = (l.feature && l.feature.properties) || l.feature || {};
+            const id = props && (props._db_id || props.db_id);
+            if (id) ids.push(id);
+        });
+        for (let i = 0; i < ids.length; i++) {
+            try { await window.setExclude(ids[i], true); } catch (e) { console.error(e); }
+        }
+        alert(`Disabled ${ids.length} observations.`);
+    });
+    document.getElementById('enableAllBtn').addEventListener('click', async () => {
+        if (!confirm('Enable all observations visible on the map?')) return;
+        const ids = [];
+        geometryLayer.eachLayer(l => {
+            const props = (l.feature && l.feature.properties) || l.feature || {};
+            const id = props && (props._db_id || props.db_id);
+            if (id) ids.push(id);
+        });
+        for (let i = 0; i < ids.length; i++) {
+            try { await window.setExclude(ids[i], false); } catch (e) { console.error(e); }
+        }
+        alert(`Enabled ${ids.length} observations.`);
+    });
+}
+
+// Set exclude status to a specific value (true/false) for an observation ID
+window.setExclude = async function(obsId, excluded) {
+    try {
+        if (!obsId) return;
+        const res = await fetch(`/api/observation/${obsId}/exclude`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ excluded: !!excluded })
+        });
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            console.error('Failed to update:', err.error || res.statusText);
+            return;
+        }
+        const data = await res.json();
+        if (data.success) {
+            // Update geometry layers that reference this id
+            const targetId = String(obsId);
+            if (window.sharedGeometryLayer && typeof window.sharedGeometryLayer.eachLayer === 'function') {
+                window.sharedGeometryLayer.eachLayer(function(layer) {
+                    const props = (layer.feature && layer.feature.properties) || layer.feature || {};
+                    const layerDbId = props._db_id || props.db_id;
+                    if (layerDbId && String(layerDbId) === targetId) {
+                        props.excluded = data.excluded;
+                        const newColor = data.excluded ? '#ff3333' : '#3388ff';
+                        try { if (typeof layer.setStyle === 'function') layer.setStyle({ color: newColor, fillColor: newColor }); } catch (e) {}
+                        try {
+                            if (typeof layer.setStyle !== 'function') {
+                                if (typeof layer.setRadius === 'function') {
+                                    if (layer.options) layer.options.fillColor = newColor;
+                                    if (typeof layer.redraw === 'function') layer.redraw();
+                                }
+                            }
+                        } catch (e) {}
+                        try {
+                            if (window.sharedGridFeatures && Array.isArray(window.sharedGridFeatures)) {
+                                window.sharedGridFeatures.forEach(f => {
+                                    const fId = f && f.properties && (f.properties._db_id || f.properties.db_id);
+                                    if (fId && String(fId) === targetId) {
+                                        f.properties = f.properties || {};
+                                        f.properties.excluded = data.excluded;
+                                    }
+                                });
+                            }
+                        } catch (e) {}
+                        if (typeof window.createConvexHull === 'function') { try { window.createConvexHull(false); } catch (e) {} }
+                        if (typeof window.recalculateGrid === 'function') { try { window.recalculateGrid(); } catch (e) {} }
+                    }
+                });
+            }
+        } else {
+            console.error('Failed to update: ' + (data.error || 'unknown error'));
+        }
+    } catch (e) {
+        console.error('Error setting exclude:', e);
+    }
+}
 
 
 // Generic paginated observations fetcher. Calls `perFeature(feature)` for
