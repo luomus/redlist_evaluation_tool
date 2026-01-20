@@ -156,8 +156,7 @@ function setupPolygonSelector(map, geometryLayer) {
     control.onAdd = function() {
         const div = L.DomUtil.create('div', 'leaflet-bar polygon-selector-control');
         div.innerHTML = `
-            <button id="polySelectBtn" title="Start polygon selection">🔺 Select by Polygon</button>
-            <button id="polyCancelBtn" style="display:none;">✖ Cancel</button>
+            <button id="polySelectBtn" title="Start polygon selection">🔺 Polygon</button>
             <button id="disableAllBtn" title="Disable all">Disable all</button>
             <button id="enableAllBtn" title="Enable all">Enable all</button>
         `;
@@ -184,8 +183,8 @@ function setupPolygonSelector(map, geometryLayer) {
             startMarker = null;
         }
         selecting = false;
-        document.getElementById('polyCancelBtn').style.display = 'none';
-        document.getElementById('polySelectBtn').textContent = '🔺 Polygon';
+        const selBtn = document.getElementById('polySelectBtn');
+        if (selBtn) selBtn.textContent = '🔺 Polygon';
         map.off('click', onMapClick);
         map.off('dblclick', onMapDblClick);
         try { map.dragging.enable(); if (map.doubleClickZoom) map.doubleClickZoom.enable(); } catch (e) { /* ignore */ }
@@ -205,8 +204,8 @@ function setupPolygonSelector(map, geometryLayer) {
             startMarker = null;
         }
         selecting = false;
-        document.getElementById('polyCancelBtn').style.display = 'none';
-        document.getElementById('polySelectBtn').textContent = '🔺 Polygon';
+        const selBtn = document.getElementById('polySelectBtn');
+        if (selBtn) selBtn.textContent = '🔺 Polygon';
         map.off('click', onMapClick);
         map.off('dblclick', onMapDblClick);
         try { map.dragging.enable(); if (map.doubleClickZoom) map.doubleClickZoom.enable(); } catch (e) { /* ignore */ }
@@ -215,6 +214,19 @@ function setupPolygonSelector(map, geometryLayer) {
         const center = selectionPolygon.getBounds().getCenter();
         const popupHtml = `<div class="polygon-actions"><button id="disableSelected">Disable selected</button> <button id="enableSelected">Enable selected</button> <button id="clearSelection">Clear selection</button></div>`;
         selectionPopup = L.popup({ maxWidth: 260 }).setLatLng(center).setContent(popupHtml).openOn(map);
+
+        // If the user closes the popup (clicks X or outside), remove the polygon
+        map.once('popupclose', function(e) {
+            try {
+                if (e && e.popup === selectionPopup) {
+                    if (selectionPolygon) {
+                        map.removeLayer(selectionPolygon);
+                        selectionPolygon = null;
+                    }
+                    selectionPopup = null;
+                }
+            } catch (err) { /* ignore */ }
+        });
 
         // Attach handlers after popup opens
         setTimeout(() => {
@@ -274,8 +286,8 @@ function setupPolygonSelector(map, geometryLayer) {
         points = [];
         markersLayer.clearLayers();
         tempLine.setLatLngs([]);
-        document.getElementById('polyCancelBtn').style.display = 'inline-block';
-        document.getElementById('polySelectBtn').textContent = '● Drawing...';
+        const selBtn = document.getElementById('polySelectBtn');
+        if (selBtn) selBtn.textContent = '✖ Cancel drawing';
         map.on('click', onMapClick);
         map.on('dblclick', onMapDblClick);
         try { map.dragging.disable(); if (map.doubleClickZoom) map.doubleClickZoom.disable(); } catch (e) { /* ignore */ }
