@@ -5,9 +5,37 @@ from models import init_db, Session, Observation, engine
 from sqlalchemy import Integer, text
 import json
 from shapely.geometry import shape
+from datetime import datetime, timedelta
 
 app = Flask(__name__)
 app.debug = True
+
+# Simple in-memory cache for stats
+class SimpleCache:
+    def __init__(self, ttl_seconds=300):
+        self.cache = {}
+        self.ttl = timedelta(seconds=ttl_seconds)
+    
+    def get(self, key):
+        if key in self.cache:
+            value, timestamp = self.cache[key]
+            if datetime.utcnow() - timestamp < self.ttl:
+                return value
+            else:
+                del self.cache[key]
+        return None
+    
+    def set(self, key, value):
+        self.cache[key] = (value, datetime.utcnow())
+    
+    def delete(self, key):
+        if key in self.cache:
+            del self.cache[key]
+    
+    def clear(self):
+        self.cache.clear()
+
+stats_cache = SimpleCache(ttl_seconds=300)  # 5 minutes TTL
 
 # Initialize database on startup
 with app.app_context():
@@ -94,6 +122,9 @@ def save_observations():
                     session.execute(insert(Observation), observations)
                     session.commit()
                     total_inserted += len(observations)
+            
+            # Invalidate cache for this dataset since new data was added
+            stats_cache.delete(f"stats:{dataset_id}")
             
             return jsonify({"success": True, "count": total_inserted})
             
@@ -241,6 +272,12 @@ def list_datasets():
 def get_dataset_stats(dataset_id):
     """Calculate dataset statistics in the database for scalability"""
     try:
+        # Check cache first
+        cache_key = f"stats:{dataset_id}"
+        cached_result = stats_cache.get(cache_key)
+        if cached_result:
+            return jsonify(cached_result)
+        
         session = Session()
         from sqlalchemy import func, cast, String, text
         from sqlalchemy.dialects.postgresql import ARRAY
@@ -378,7 +415,7 @@ def get_dataset_stats(dataset_id):
         
         session.close()
         
-        return jsonify({
+        result = {
             "success": True,
             "dataset_id": dataset_id,
             "dataset_name": metadata[0] if metadata else "Unknown",
@@ -395,7 +432,12 @@ def get_dataset_stats(dataset_id):
                 "topSpecies": top_species,
                 "topObservers": top_observers
             }
-        })
+        }
+        
+        # Cache the result
+        stats_cache.set(cache_key, result)
+        
+        return jsonify(result)
         
     except Exception as e:
         import traceback
@@ -410,6 +452,9 @@ def delete_observations(dataset_id):
         count = session.query(Observation).filter_by(dataset_id=dataset_id).delete()
         session.commit()
         session.close()
+        
+        # Invalidate cache for this dataset
+        stats_cache.delete(f"stats:{dataset_id}")
         
         return jsonify({"success": True, "deleted": count})
     except Exception as e:

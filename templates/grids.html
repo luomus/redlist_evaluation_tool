@@ -11,9 +11,17 @@
   </head>
   <body>
     <header>
-        <a href="/simple" class="back-btn">← Back to Datasets</a>
+      <a href="/simple" class="back-btn">← Back to Datasets</a>
 
-        <div id="status" class="stats">Loading dataset...</div>
+      <div class="info-panel">
+        <h3>Dataset Info</h3>
+        <div class="info-item">
+          <span class="info-label">Area:</span>
+          <span class="info-value" id="areaValue">-</span>
+        </div>
+      </div>
+
+      <div id="status" class="stats">Loading dataset...</div>
     </header>
     <div id="map"></div>
 

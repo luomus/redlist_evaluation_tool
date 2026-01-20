@@ -356,16 +356,15 @@ function setupPolygonSelector(map, geometryLayer) {
         if (!dbIds.length) { alert('No DB-backed features in selection.'); return; }
 
         if (!confirm(`Apply ${exclude ? 'disable' : 'enable'} to ${dbIds.length} observations?`)) return;
-        for (let i = 0; i < dbIds.length; i++) {
-            try {
-                await window.setExclude(dbIds[i], exclude);
-            } catch (e) {
-                console.error('Error setting exclude for', dbIds[i], e);
-            }
+        try {
+            const res = await window.setExcludeBatch(dbIds, exclude, 50);
+            map.closePopup();
+            if (selectionPolygon) { map.removeLayer(selectionPolygon); selectionPolygon = null; }
+            alert(`Processed ${res.processed} observations (${res.failed} failed).`);
+        } catch (e) {
+            console.error('Batch exclude encountered an error', e);
+            alert('Error processing selection: ' + (e && e.message));
         }
-        map.closePopup();
-        if (selectionPolygon) { map.removeLayer(selectionPolygon); selectionPolygon = null; }
-        alert(`Processed ${dbIds.length} observations.`);
     }
 
     // Enable/Disable all buttons
@@ -377,10 +376,13 @@ function setupPolygonSelector(map, geometryLayer) {
             const id = props && (props._db_id || props.db_id);
             if (id) ids.push(id);
         });
-        for (let i = 0; i < ids.length; i++) {
-            try { await window.setExclude(ids[i], true); } catch (e) { console.error(e); }
+        try {
+            const r = await window.setExcludeBatch(ids, true, 50);
+            alert(`Disabled ${r.processed} observations (${r.failed} failed).`);
+        } catch (e) {
+            console.error('Error disabling all:', e);
+            alert('Error disabling observations: ' + (e && e.message));
         }
-        alert(`Disabled ${ids.length} observations.`);
     });
     document.getElementById('enableAllBtn').addEventListener('click', async () => {
         if (!confirm('Enable all observations visible on the map?')) return;
@@ -390,10 +392,13 @@ function setupPolygonSelector(map, geometryLayer) {
             const id = props && (props._db_id || props.db_id);
             if (id) ids.push(id);
         });
-        for (let i = 0; i < ids.length; i++) {
-            try { await window.setExclude(ids[i], false); } catch (e) { console.error(e); }
+        try {
+            const r = await window.setExcludeBatch(ids, false, 50);
+            alert(`Enabled ${r.processed} observations (${r.failed} failed).`);
+        } catch (e) {
+            console.error('Error enabling all:', e);
+            alert('Error enabling observations: ' + (e && e.message));
         }
-        alert(`Enabled ${ids.length} observations.`);
     });
 }
 
@@ -450,6 +455,85 @@ window.setExclude = async function(obsId, excluded) {
     } catch (e) {
         console.error('Error setting exclude:', e);
     }
+}
+
+// Batch set exclude for many observation IDs. Sends requests in parallel chunks
+// and applies the same layer update logic as `window.setExclude` for each
+// successful response. Returns a summary {processed, failed}.
+window.setExcludeBatch = async function(obsIds, excluded, batchSize = 100) {
+    if (!Array.isArray(obsIds) || obsIds.length === 0) return { processed: 0, failed: 0 };
+    const ids = obsIds.map(id => String(id));
+    let processed = 0;
+    let failed = 0;
+
+    for (let i = 0; i < ids.length; i += batchSize) {
+        const chunk = ids.slice(i, i + batchSize);
+
+        const promises = chunk.map(id => {
+            return fetch(`/api/observation/${id}/exclude`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ excluded: !!excluded })
+            })
+            .then(async res => {
+                if (!res.ok) {
+                    const err = await res.json().catch(() => ({}));
+                    throw new Error(err.error || res.statusText || 'request-failed');
+                }
+                const data = await res.json().catch(() => ({}));
+                return { success: !!data.success, excluded: data.excluded, id };
+            })
+            .catch(err => ({ success: false, error: err.message || String(err), id }));
+        });
+
+        const results = await Promise.all(promises);
+
+        results.forEach(result => {
+            const targetId = String(result.id);
+            if (result.success) {
+                processed++;
+                // Update geometry layers that reference this id (same logic as single-set)
+                try {
+                    if (window.sharedGeometryLayer && typeof window.sharedGeometryLayer.eachLayer === 'function') {
+                        window.sharedGeometryLayer.eachLayer(function(layer) {
+                            const props = (layer.feature && layer.feature.properties) || layer.feature || {};
+                            const layerDbId = props._db_id || props.db_id;
+                            if (layerDbId && String(layerDbId) === targetId) {
+                                props.excluded = result.excluded;
+                                try {
+                                    const el = (typeof layer.getElement === 'function') ? layer.getElement() : null;
+                                    if (el && el.classList) {
+                                        el.classList.toggle('geom-excluded', !!result.excluded);
+                                        el.classList.toggle('geom-included', !result.excluded);
+                                    }
+                                } catch (e) {}
+                                try {
+                                    if (window.sharedGridFeatures && Array.isArray(window.sharedGridFeatures)) {
+                                        window.sharedGridFeatures.forEach(f => {
+                                            const fId = f && f.properties && (f.properties._db_id || f.properties.db_id);
+                                            if (fId && String(fId) === targetId) {
+                                                f.properties = f.properties || {};
+                                                f.properties.excluded = result.excluded;
+                                            }
+                                        });
+                                    }
+                                } catch (e) {}
+                                if (typeof window.createConvexHull === 'function') { try { window.createConvexHull(false); } catch (e) {} }
+                                if (typeof window.recalculateGrid === 'function') { try { window.recalculateGrid(); } catch (e) {} }
+                            }
+                        });
+                    }
+                } catch (e) {
+                    console.error('Error updating layer styles after batch exclude:', e);
+                }
+            } else {
+                failed++;
+                console.error('Batch exclude failed for', result.id, result.error || 'unknown');
+            }
+        });
+    }
+
+    return { processed, failed };
 }
 
 
@@ -561,11 +645,11 @@ function createPopupContent(properties) {
         content += `<strong>Collection ID:</strong> <a href="${collectionID}" target="_blank" rel="noopener noreferrer">${collectionID}</a><br>`;
     }
     
-    // Add Exclude / Include button if this feature references a DB record
+    // Add Enable / Include button if this feature references a DB record
     const dbId = properties && (properties['_db_id'] || properties['db_id']);
     const isExcluded = properties && properties['excluded'];
     if (dbId) {
-        const btnLabel = isExcluded ? 'Include in analysis' : 'Exclude from analysis';
+        const btnLabel = isExcluded ? 'Enable in analysis' : 'Disable from analysis';
         const dataExcluded = isExcluded ? '1' : '0';
         content += `<div class="popup-actions"><button class="exclude-btn" data-db-id="${dbId}" data-excluded="${dataExcluded}" onclick="window.toggleExclude(${dbId}, this)">${btnLabel}</button></div>`;
     }
