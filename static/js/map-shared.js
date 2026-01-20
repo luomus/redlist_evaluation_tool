@@ -156,10 +156,10 @@ function setupPolygonSelector(map, geometryLayer) {
     control.onAdd = function() {
         const div = L.DomUtil.create('div', 'leaflet-bar polygon-selector-control');
         div.innerHTML = `
-            <button id="polySelectBtn" title="Start polygon selection">🔺 Polygon</button>
+            <button id="polySelectBtn" title="Start polygon selection">🔺 Select by Polygon</button>
             <button id="polyCancelBtn" style="display:none;">✖ Cancel</button>
-            <button id="disableAllBtn" title="Disable all">⚫ Disable all</button>
-            <button id="enableAllBtn" title="Enable all">⚪ Enable all</button>
+            <button id="disableAllBtn" title="Disable all">Disable all</button>
+            <button id="enableAllBtn" title="Enable all">Enable all</button>
         `;
         L.DomEvent.disableClickPropagation(div);
         return div;
@@ -409,14 +409,11 @@ window.setExclude = async function(obsId, excluded) {
                     const layerDbId = props._db_id || props.db_id;
                     if (layerDbId && String(layerDbId) === targetId) {
                         props.excluded = data.excluded;
-                        const newColor = data.excluded ? '#ff3333' : '#3388ff';
-                        try { if (typeof layer.setStyle === 'function') layer.setStyle({ color: newColor, fillColor: newColor }); } catch (e) {}
                         try {
-                            if (typeof layer.setStyle !== 'function') {
-                                if (typeof layer.setRadius === 'function') {
-                                    if (layer.options) layer.options.fillColor = newColor;
-                                    if (typeof layer.redraw === 'function') layer.redraw();
-                                }
+                            const el = (typeof layer.getElement === 'function') ? layer.getElement() : null;
+                            if (el && el.classList) {
+                                el.classList.toggle('geom-excluded', !!data.excluded);
+                                el.classList.toggle('geom-included', !data.excluded);
                             }
                         } catch (e) {}
                         try {
@@ -568,57 +565,37 @@ function createPopupContent(properties) {
 // Function to add a geometry to a Leaflet feature group
 // Returns the created layer(s)
 function addGeometryToLayer(geometry, properties, targetLayer) {
-    if (!geometry || !geometry.type) {
-        return null;
-    }
-    
+    if (!geometry || !geometry.type) return null;
+
     const popupContent = createPopupContent(properties || {});
-    
+
     function addGeometry(geom) {
         const excluded = properties && (properties.excluded === true || properties.excluded === '1' || properties.excluded === 1);
-        const defaultColor = '#3388ff';
-        const excludedColor = '#ff3333';
-        const color = excluded ? excludedColor : defaultColor;
+        const className = excluded ? 'geom-excluded' : 'geom-included';
 
         if (geom.type === 'Point') {
             const marker = L.circleMarker([geom.coordinates[1], geom.coordinates[0]], {
-                radius: 5,
-                fillColor: color,
-                color: '#ffffff',
+                radius: 7,
+                className: className,
                 weight: 1,
                 opacity: 1,
                 fillOpacity: 0.8
             });
-            // Disable default popup binding - will be handled by multi-feature handler
-            // marker.bindPopup(popupContent);
-            // store properties for later lookup
             marker.feature = marker.feature || {};
             marker.feature.properties = properties || {};
             marker.feature.geometry = geom;
             targetLayer.addLayer(marker);
         } else if (geom.type === 'LineString') {
-            const latLngs = geom.coordinates.map(coord => [coord[1], coord[0]]);
-            const line = L.polyline(latLngs, {
-                color: color,
-                weight: 3,
-                opacity: 0.8
-            });
+            const latLngs = geom.coordinates.map(c => [c[1], c[0]]);
+            const line = L.polyline(latLngs, { className: className, weight: 7, opacity: 0.8 });
             line.bindPopup(popupContent);
             line.feature = line.feature || {};
             line.feature.properties = properties || {};
             line.feature.geometry = geom;
             targetLayer.addLayer(line);
         } else if (geom.type === 'Polygon') {
-            const rings = geom.coordinates.map(ring => 
-                ring.map(coord => [coord[1], coord[0]])
-            );
-            const polygon = L.polygon(rings, {
-                color: color,
-                weight: 2,
-                opacity: 0.8,
-                fillColor: color,
-                fillOpacity: 0.3
-            });
+            const rings = geom.coordinates.map(r => r.map(c => [c[1], c[0]]));
+            const polygon = L.polygon(rings, { className: className, weight: 7, opacity: 0.8, fillOpacity: 0.5 });
             polygon.bindPopup(popupContent);
             polygon.feature = polygon.feature || {};
             polygon.feature.properties = properties || {};
@@ -626,16 +603,7 @@ function addGeometryToLayer(geometry, properties, targetLayer) {
             targetLayer.addLayer(polygon);
         } else if (geom.type === 'MultiPoint') {
             geom.coordinates.forEach(coord => {
-                const marker = L.circleMarker([coord[1], coord[0]], {
-                    radius: 5,
-                    fillColor: color,
-                    color: '#ffffff',
-                    weight: 1,
-                    opacity: 1,
-                    fillOpacity: 0.8
-                });
-                // Disable default popup binding - will be handled by multi-feature handler
-                // marker.bindPopup(popupContent);
+                const marker = L.circleMarker([coord[1], coord[0]], { radius: 7, className: className, weight: 1, opacity: 1, fillOpacity: 0.8 });
                 marker.feature = marker.feature || {};
                 marker.feature.properties = properties || {};
                 marker.feature.geometry = { type: 'Point', coordinates: [coord[0], coord[1]] };
@@ -643,12 +611,8 @@ function addGeometryToLayer(geometry, properties, targetLayer) {
             });
         } else if (geom.type === 'MultiLineString') {
             geom.coordinates.forEach(lineCoords => {
-                const latLngs = lineCoords.map(coord => [coord[1], coord[0]]);
-                const line = L.polyline(latLngs, {
-                    color: color,
-                    weight: 3,
-                    opacity: 0.8
-                });
+                const latLngs = lineCoords.map(c => [c[1], c[0]]);
+                const line = L.polyline(latLngs, { className: className, weight: 7, opacity: 0.8 });
                 line.bindPopup(popupContent);
                 line.feature = line.feature || {};
                 line.feature.properties = properties || {};
@@ -656,16 +620,8 @@ function addGeometryToLayer(geometry, properties, targetLayer) {
             });
         } else if (geom.type === 'MultiPolygon') {
             geom.coordinates.forEach(polygonCoords => {
-                const rings = polygonCoords.map(ring => 
-                    ring.map(coord => [coord[1], coord[0]])
-                );
-                const polygon = L.polygon(rings, {
-                    color: color,
-                    weight: 2,
-                    opacity: 0.8,
-                    fillColor: color,
-                    fillOpacity: 0.3
-                });
+                const rings = polygonCoords.map(r => r.map(c => [c[1], c[0]]));
+                const polygon = L.polygon(rings, { className: className, weight: 7, opacity: 0.8, fillOpacity: 0.5 });
                 polygon.bindPopup(popupContent);
                 polygon.feature = polygon.feature || {};
                 polygon.feature.properties = properties || {};
@@ -677,7 +633,7 @@ function addGeometryToLayer(geometry, properties, targetLayer) {
             }
         }
     }
-    
+
     addGeometry(geometry);
 }
 
@@ -716,28 +672,15 @@ window.toggleExclude = async function(obsId, btn) {
                         if (String(layerDbId) === targetId) {
                             // update stored property
                             props.excluded = data.excluded;
-                            const newColor = data.excluded ? '#ff3333' : '#3388ff';
                             try {
-                                if (typeof layer.setStyle === 'function') {
-                                    layer.setStyle({ color: newColor, fillColor: newColor });
+                                const el = (typeof layer.getElement === 'function') ? layer.getElement() : null;
+                                if (el && el.classList) {
+                                    el.classList.toggle('geom-excluded', !!data.excluded);
+                                    el.classList.toggle('geom-included', !data.excluded);
                                 }
                             } catch (e) {
                                 // ignore styling errors
                             }
-                                // If marker (circleMarker) use setStyle via options or directly set fillColor
-                                try {
-                                    if (typeof layer.setStyle !== 'function') {
-                                        if (typeof layer.setRadius === 'function') {
-                                            // circleMarker/marker: update options directly and redraw
-                                            if (layer.options) {
-                                                layer.options.fillColor = newColor;
-                                            }
-                                            if (typeof layer.redraw === 'function') layer.redraw();
-                                        }
-                                    }
-                                } catch (e) {
-                                    // ignore
-                                }
                                 // Also update any shared features used by grids and request recalculations
                                 try {
                                     if (window.sharedGridFeatures && Array.isArray(window.sharedGridFeatures)) {

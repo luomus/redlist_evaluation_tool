@@ -111,3 +111,19 @@ header { padding: 12px 16px; border-bottom: 1px solid #eee; display: flex; gap: 
 .feature-details strong {
     color: #333;
 }
+/* Geometry styling via classes: prefer CSS-based colors for SVG layers */
+.leaflet-interactive.geom-included {
+    stroke: #940000;
+    fill: #cc4141;
+    stroke-opacity: 0.9;
+    fill-opacity: 0.9;
+}
+.leaflet-interactive.geom-excluded {
+    stroke: #888888;
+    fill: #acacac;
+    stroke-opacity: 0.9;
+    fill-opacity: 0.9;
+}
+.leaflet-interactive.geom-included, .leaflet-interactive.geom-excluded {
+    transition: stroke 150ms ease, fill 150ms ease, opacity 150ms ease;
+}
