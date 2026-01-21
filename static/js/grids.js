@@ -16,10 +16,9 @@
   let gridLayer = null;
   let lessAccurateLayer = null;
 
-  // Grid / square configuration
-  const KM_PER_DEG_LAT = 111.32; // approx km per degree latitude
-  const SQUARE_SIDE_KM = 2; // 2km x 2km squares
-  const HALF_SIDE_KM = SQUARE_SIDE_KM / 2;
+  // Grid / square configuration in EPSG:3067 (meters)
+  const SQUARE_SIDE_METERS = 2000; // 2km x 2km squares = 2000m x 2000m
+  const HALF_SIDE_METERS = SQUARE_SIDE_METERS / 2;
 
   const features = [];
   let currentDatasetName = 'Dataset';
@@ -38,42 +37,32 @@
     return undefined;
   }
 
-  function featureCenterLatLon(feature) {
+  // Returns center in EPSG:3067 [x, y] meters
+  function featureCenter3067(feature) {
     if (!feature || !feature.geometry) return null;
     const geom = feature.geometry;
-    // GeoJSON coordinates are [lon, lat]
+    // Coordinates are already in EPSG:3067 [x, y]
     if (geom.type === 'Point') {
-      return [geom.coordinates[1], geom.coordinates[0]];
+      return [geom.coordinates[0], geom.coordinates[1]];
     }
-    // For LineString/Polygon, use Leaflet to compute center
+    // For other types, compute centroid directly in EPSG:3067
     try {
+      const pts = [];
       if (geom.type === 'LineString') {
-        const latlngs = geom.coordinates.map(c => [c[1], c[0]]);
-        const poly = L.polyline(latlngs);
-        const center = poly.getBounds().getCenter();
-        return [center.lat, center.lng];
+        geom.coordinates.forEach(c => pts.push([c[0], c[1]]));
+      } else if (geom.type === 'Polygon') {
+        geom.coordinates.forEach(ring => ring.forEach(c => pts.push([c[0], c[1]])));
+      } else if (geom.type === 'MultiPoint') {
+        geom.coordinates.forEach(c => pts.push([c[0], c[1]]));
+      } else if (geom.type === 'MultiLineString') {
+        geom.coordinates.forEach(line => line.forEach(c => pts.push([c[0], c[1]])));
+      } else if (geom.type === 'MultiPolygon') {
+        geom.coordinates.forEach(p => p.forEach(r => r.forEach(c => pts.push([c[0], c[1]]))));
       }
-      if (geom.type === 'Polygon') {
-        const rings = geom.coordinates.map(r => r.map(c => [c[1], c[0]]));
-        const poly = L.polygon(rings);
-        const center = poly.getBounds().getCenter();
-        return [center.lat, center.lng];
-      }
-      if (geom.type === 'MultiPoint' || geom.type === 'MultiLineString' || geom.type === 'MultiPolygon') {
-        // Compute centroid of all points
-        const pts = [];
-        if (geom.type === 'MultiPoint') {
-          geom.coordinates.forEach(c => pts.push([c[1], c[0]]));
-        } else if (geom.type === 'MultiLineString') {
-          geom.coordinates.forEach(line => line.forEach(c => pts.push([c[1], c[0]])));
-        } else if (geom.type === 'MultiPolygon') {
-          geom.coordinates.forEach(p => p.forEach(r => r.forEach(c => pts.push([c[1], c[0]]))));
-        }
-        if (pts.length === 0) return null;
-        const avgLat = pts.reduce((s, p) => s + p[0], 0) / pts.length;
-        const avgLon = pts.reduce((s, p) => s + p[1], 0) / pts.length;
-        return [avgLat, avgLon];
-      }
+      if (pts.length === 0) return null;
+      const avgX = pts.reduce((s, p) => s + p[0], 0) / pts.length;
+      const avgY = pts.reduce((s, p) => s + p[1], 0) / pts.length;
+      return [avgX, avgY];
     } catch (err) {
       console.warn('Failed to compute center for feature', err);
       return null;
@@ -82,42 +71,67 @@
     return null;
   }
 
-  // Calculate 2km x 2km squares centered on each observation center.
-  // Skip features whose bounding box is larger than the square.
+  // Calculate 2km x 2km squares centered on each observation in EPSG:3067 (meters)
+  // Much simpler than lat/lon! No trigonometry needed.
   function calculateGridSquares(points) {
     const gridSquares = new Map();
     points.forEach(point => {
-      if (!point.lat || !point.lon || isNaN(point.lat) || isNaN(point.lon)) return;
+      if (!point.x || !point.y || isNaN(point.x) || isNaN(point.y)) return;
 
-      // Compute degree offsets for 1 km (half-side) at this latitude
-      const lat = point.lat;
-      const halfLatDeg = HALF_SIDE_KM / KM_PER_DEG_LAT;
-      const kmPerDegLon = KM_PER_DEG_LAT * Math.cos(lat * Math.PI / 180);
-      const halfLonDeg = HALF_SIDE_KM / (kmPerDegLon || KM_PER_DEG_LAT);
+      // In EPSG:3067, 1km = 1000 meters exactly (no latitude adjustments needed!)
+      const x = point.x;
+      const y = point.y;
 
       // If the original feature exists and is larger than the square, skip it
       if (point.geometry) {
         try {
-          const layer = L.geoJSON(point.geometry);
-          const b = layer.getBounds();
-          const bboxHeightMeters = (b.getNorth() - b.getSouth()) * KM_PER_DEG_LAT * 1000;
-          const midLat = (b.getNorth() + b.getSouth()) / 2;
-          const bboxWidthMeters = (b.getEast() - b.getWest()) * KM_PER_DEG_LAT * 1000 * Math.cos(midLat * Math.PI / 180);
-          if (bboxHeightMeters > SQUARE_SIDE_KM * 1000 || bboxWidthMeters > SQUARE_SIDE_KM * 1000) {
-            return; // feature too large to represent as 2km square
+          // Calculate bounding box in EPSG:3067 meters
+          let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+          function processBounds(geom) {
+            if (geom.type === 'Point') {
+              minX = Math.min(minX, geom.coordinates[0]);
+              maxX = Math.max(maxX, geom.coordinates[0]);
+              minY = Math.min(minY, geom.coordinates[1]);
+              maxY = Math.max(maxY, geom.coordinates[1]);
+            } else if (geom.coordinates) {
+              const flatten = (arr) => {
+                arr.forEach(item => {
+                  if (Array.isArray(item) && typeof item[0] === 'number') {
+                    minX = Math.min(minX, item[0]);
+                    maxX = Math.max(maxX, item[0]);
+                    minY = Math.min(minY, item[1]);
+                    maxY = Math.max(maxY, item[1]);
+                  } else if (Array.isArray(item)) {
+                    flatten(item);
+                  }
+                });
+              };
+              flatten(geom.coordinates);
+            }
+          }
+          processBounds(point.geometry);
+          const bboxWidth = maxX - minX;
+          const bboxHeight = maxY - minY;
+          if (bboxWidth > SQUARE_SIDE_METERS || bboxHeight > SQUARE_SIDE_METERS) {
+            return; // feature too large
           }
         } catch (e) {
-          // if any error, be conservative and skip drawing
-          return;
+          return; // skip on error
         }
       }
 
-      const bounds = [[lat - halfLatDeg, point.lon - halfLonDeg], [lat + halfLatDeg, point.lon + halfLonDeg]];
+      // Create bounds in EPSG:3067, then we'll transform for display
+      const bounds3067 = {
+        minX: x - HALF_SIDE_METERS,
+        minY: y - HALF_SIDE_METERS,
+        maxX: x + HALF_SIDE_METERS,
+        maxY: y + HALF_SIDE_METERS
+      };
 
-      // Use rounded center as key to aggregate overlapping identical centers
-      const key = `${point.lat.toFixed(6)},${point.lon.toFixed(6)}`;
+      // Use rounded center as key
+      const key = `${x.toFixed(0)},${y.toFixed(0)}`;
       if (!gridSquares.has(key)) {
-        gridSquares.set(key, { bounds, count: 0, totalWeight: 0, centerLat: lat, centerLon: point.lon });
+        gridSquares.set(key, { bounds3067, count: 0, totalWeight: 0, centerX: x, centerY: y });
       }
       const square = gridSquares.get(key);
       square.count++;
@@ -167,31 +181,29 @@
     return false;
   }
 
-  // Helper to test intersection and merge axis-aligned rectangles defined by bounds arrays
-  function rectsIntersect(a, b) {
-    // a and b are [[south, west], [north, east]]
-    const aS = a[0][0], aW = a[0][1], aN = a[1][0], aE = a[1][1];
-    const bS = b[0][0], bW = b[0][1], bN = b[1][0], bE = b[1][1];
-    return !(aE < bW || aW > bE || aN < bS || aS > bN);
+  // Helper functions for EPSG:3067 rectangles (in meters)
+  function rectsIntersect3067(a, b) {
+    return !(a.maxX < b.minX || a.minX > b.maxX || a.maxY < b.minY || a.minY > b.maxY);
   }
 
-  function mergeRects(a, b) {
-    const s = Math.min(a[0][0], b[0][0]);
-    const w = Math.min(a[0][1], b[0][1]);
-    const n = Math.max(a[1][0], b[1][0]);
-    const e = Math.max(a[1][1], b[1][1]);
-    return [[s, w], [n, e]];
+  function mergeRects3067(a, b) {
+    return {
+      minX: Math.min(a.minX, b.minX),
+      minY: Math.min(a.minY, b.minY),
+      maxX: Math.max(a.maxX, b.maxX),
+      maxY: Math.max(a.maxY, b.maxY)
+    };
   }
 
-  function dissolveRectangles(rects) {
+  function dissolveRectangles3067(rects) {
     const out = rects.slice();
     let merged = true;
     while (merged) {
       merged = false;
       outer: for (let i = 0; i < out.length; i++) {
         for (let j = i + 1; j < out.length; j++) {
-          if (rectsIntersect(out[i], out[j])) {
-            out[i] = mergeRects(out[i], out[j]);
+          if (rectsIntersect3067(out[i], out[j])) {
+            out[i] = mergeRects3067(out[i], out[j]);
             out.splice(j, 1);
             merged = true;
             break outer;
@@ -208,32 +220,32 @@
     let totalVisibleSquares = 0;
 
     if (accurateGridSquares.length > 0) {
-      // accurateGridSquares is array of bounds arrays ([[s,w],[n,e]])
-      const rects = accurateGridSquares.map(sq => sq.bounds ? sq.bounds : sq);
-      const dissolved = dissolveRectangles(rects);
+      // Convert EPSG:3067 bounds to simple rects for dissolving
+      const rects3067 = accurateGridSquares.map(sq => ({
+        minX: sq.bounds3067.minX,
+        minY: sq.bounds3067.minY,
+        maxX: sq.bounds3067.maxX,
+        maxY: sq.bounds3067.maxY
+      }));
+      const dissolved = dissolveRectangles3067(rects3067);
       gridLayer = L.layerGroup();
-      // compute total area of dissolved grid polygons (approximate, in km^2)
       let totalAreaKm2 = 0;
-      dissolved.forEach(boundsArr => {
-        const rectangle = L.rectangle(boundsArr, { color: '#000', weight: 1, fillColor: '#3388ff', fillOpacity: 0.45 });
-        gridLayer.addLayer(rectangle);
-        try {
-          const south = boundsArr[0][0];
-          const west = boundsArr[0][1];
-          const north = boundsArr[1][0];
-          const east = boundsArr[1][1];
-          const deltaLatDeg = Math.abs(north - south);
-          const deltaLonDeg = Math.abs(east - west);
-          const meanLat = (north + south) / 2;
-          const areaKm2 = deltaLatDeg * deltaLonDeg * KM_PER_DEG_LAT * KM_PER_DEG_LAT * Math.cos(meanLat * Math.PI / 180);
-          if (!isNaN(areaKm2) && isFinite(areaKm2) && areaKm2 > 0) totalAreaKm2 += areaKm2;
-        } catch (e) {
-          // ignore area calc errors for this rectangle
-        }
+      dissolved.forEach(rect => {
+        // Transform corners to WGS84 for Leaflet display
+        const sw = transformToWGS84(rect.minX, rect.minY);
+        const se = transformToWGS84(rect.maxX, rect.minY);
+        const nw = transformToWGS84(rect.minX, rect.maxY);
+        const ne = transformToWGS84(rect.maxX, rect.maxY);
+        // Create polygon from transformed corners
+        const polygon = L.polygon([sw, se, ne, nw], { color: '#000', weight: 1, fillColor: '#3388ff', fillOpacity: 0.45 });
+        gridLayer.addLayer(polygon);
+        // Area calculation is trivial in EPSG:3067 (meters)
+        const areaM2 = (rect.maxX - rect.minX) * (rect.maxY - rect.minY);
+        const areaKm2 = areaM2 / 1000000;
+        if (!isNaN(areaKm2) && isFinite(areaKm2) && areaKm2 > 0) totalAreaKm2 += areaKm2;
       });
       gridLayer.addTo(map);
       totalVisibleSquares += dissolved.length;
-      // Update dataset info area element if present
       try {
         const el = document.getElementById('areaValue');
         if (el) el.textContent = `${totalAreaKm2.toFixed(3)} km²`;
@@ -251,7 +263,7 @@
           if (checkPolygonOverlap(record.polygonCoords, accurateGridSquares)) return;
           if (checkPolygonOverlapWithOthers(record.polygonCoords, validLessAccuratePolygons)) return;
           const polygon = L.polygon(record.polygonCoords, { color: '#ff6b35', weight: 2, fillColor: '#ff6b35', fillOpacity: 0.3 });
-          const centerInfo = record.center ? `Center: ${record.center.lat.toFixed(6)}, ${record.center.lon.toFixed(6)}<br>` : '';
+          const centerInfo = record.center ? `Center: ${record.center.x.toFixed(0)}, ${record.center.y.toFixed(0)} (EPSG:3067)<br>` : '';
           polygon.bindPopup(`${centerInfo}Accuracy: ${record.accuracy}m`);
           lessAccurateLayer.addLayer(polygon);
           validLessAccuratePolygons.push(record.polygonCoords);
@@ -318,23 +330,23 @@
       if (excluded) return;
 
       const accuracy = getPropAccuracy(props);
-      const center = featureCenterLatLon(feature);
+      const center = featureCenter3067(feature); // Returns [x, y] in EPSG:3067
       if (accuracy !== undefined && accuracy >= 2000) {
         // treat as less accurate if polygon exists
         if (feature.geometry && (feature.geometry.type === 'Polygon' || feature.geometry.type === 'MultiPolygon')) {
-          // convert polygon coords to [lat,lon]
-          const polygonCoords = feature.geometry.type === 'Polygon'
-            ? feature.geometry.coordinates[0].map(c => [c[1], c[0]])
-            : // MultiPolygon take first polygon
-              (feature.geometry.coordinates[0] && feature.geometry.coordinates[0][0]) ? feature.geometry.coordinates[0][0].map(c => [c[1], c[0]]) : null;
-          lessAccurateRecords.push({ polygonCoords, accuracy, center: center ? { lat: center[0], lon: center[1] } : null, weight: props['unit.interpretations.individualCount'] || 1 });
+          // Polygon coords are already in EPSG:3067, transform to WGS84 for display
+          const polygonCoords3067 = feature.geometry.type === 'Polygon'
+            ? feature.geometry.coordinates[0]
+            : (feature.geometry.coordinates[0] && feature.geometry.coordinates[0][0]) ? feature.geometry.coordinates[0][0] : null;
+          const polygonCoordsWGS84 = polygonCoords3067 ? polygonCoords3067.map(c => transformToWGS84(c[0], c[1])) : null;
+          lessAccurateRecords.push({ polygonCoords: polygonCoordsWGS84, accuracy, center: center ? { x: center[0], y: center[1] } : null, weight: props['unit.interpretations.individualCount'] || 1 });
         } else if (center) {
-          lessAccurateRecords.push({ polygonCoords: null, accuracy, center: { lat: center[0], lon: center[1] }, weight: props['unit.interpretations.individualCount'] || 1 });
+          lessAccurateRecords.push({ polygonCoords: null, accuracy, center: { x: center[0], y: center[1] }, weight: props['unit.interpretations.individualCount'] || 1 });
         }
       } else {
         if (center) {
-            accuratePoints.push({ lat: center[0], lon: center[1], weight: props['unit.interpretations.individualCount'] || 1, accuracy: accuracy || 0, geometry: feature.geometry });
-          }
+          accuratePoints.push({ x: center[0], y: center[1], weight: props['unit.interpretations.individualCount'] || 1, accuracy: accuracy || 0, geometry: feature.geometry });
+        }
       }
     });
 

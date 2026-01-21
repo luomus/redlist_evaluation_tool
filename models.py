@@ -21,8 +21,8 @@ class Observation(Base):
     # Store properties as JSONB for efficient querying
     properties = Column(JSONB, nullable=False)
     
-    # PostGIS geometry column
-    geometry = Column(Geometry(geometry_type='GEOMETRY', srid=4326))
+    # PostGIS geometry column (ETRS-TM35FIN / EPSG:3067)
+    geometry = Column(Geometry(geometry_type='GEOMETRY', srid=3067))
     
     # Indexes for performance
     __table_args__ = (

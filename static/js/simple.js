@@ -121,9 +121,9 @@ function displayDatasets(datasets) {
                         <option value="">Select a tool...</option>
                         <option value="/stats">View Stats</option>
                         <option value="/raw">View Raw</option>
-                        <option value="/convex_hull">View Convex Hull</option>
-                        <option value="/map">Edit or View on Map</option>
-                        <option value="/grids">View 2km Grids</option>
+                        <option value="/map">View or Edit on Map</option>
+                        <option value="/convex_hull">View Convex Hull (EOO)</option>
+                        <option value="/grids">View 2km Grids (AOO)</option>
 
                     </select>
                     <button onclick="removeDataset('${dataset.id}')" class="remove-btn">Remove</button>

@@ -15,8 +15,8 @@ const { map, geometryLayer, stats, updateStatus } = createSharedMap();
 // Layer for convex hull
 let hullLayer = null;
 
-// Store all geometries for convex hull calculation
-const allGeometries = [];
+// Store all features (geometry + properties) for convex hull calculation
+const allFeatures = [];
 
 // Calculate the convex hull using Graham scan algorithm
 function calculateConvexHull(points) {
@@ -60,6 +60,7 @@ function crossProduct(o, a, b) {
 }
 
 // Calculate area of polygon using the shoelace formula
+// Points are in EPSG:3067 (meters), so area calculation is straightforward
 function calculatePolygonArea(points) {
     if (points.length < 3) return 0;
 
@@ -68,19 +69,14 @@ function calculatePolygonArea(points) {
     
     for (let i = 0; i < n; i++) {
         const j = (i + 1) % n;
-        area += points[i][1] * points[j][0];
-        area -= points[j][1] * points[i][0];
+        area += points[i][0] * points[j][1];
+        area -= points[j][0] * points[i][1];
     }
     
     area = Math.abs(area) / 2;
     
-    // Convert from square degrees to square kilometers
-    const lat = points[0][0];
-    const latRad = lat * Math.PI / 180;
-    const kmPerDegreeLat = 111.32;
-    const kmPerDegreeLon = 111.32 * Math.cos(latRad);
-    
-    return area * kmPerDegreeLat * kmPerDegreeLon;
+    // Convert from square meters to square kilometers
+    return area / 1000000;
 }
 
 // Create and display convex hull
@@ -89,62 +85,46 @@ function createConvexHull(fitMap = true) {
         map.removeLayer(hullLayer);
     }
 
-    // Extract points from visible, non-excluded layers in `geometryLayer`
+    // Extract points in EPSG:3067 from non-excluded features
     const points = [];
-    if (geometryLayer && typeof geometryLayer.eachLayer === 'function') {
-        geometryLayer.eachLayer(function(layer) {
-            try {
-                const props = (layer.feature && layer.feature.properties) || layer.feature || {};
-                const excluded = props && (props.excluded === true || props.excluded === '1' || props.excluded === 1);
-                if (excluded) return;
+    allFeatures.forEach(feature => {
+        // Check if feature is excluded
+        const props = feature.properties || {};
+        const excluded = props.excluded === true || props.excluded === '1' || props.excluded === 1;
+        if (excluded) return; // Skip excluded features
 
-                // Helper to push latlng objects/arrays to points
-                function pushLatLng(latlng) {
-                    if (!latlng) return;
-                    if (Array.isArray(latlng)) {
-                        // [lat, lng]
-                        points.push([latlng[0], latlng[1]]);
-                    } else if (latlng.lat !== undefined && latlng.lng !== undefined) {
-                        points.push([latlng.lat, latlng.lng]);
-                    }
-                }
+        const geom = feature.geometry;
+        if (!geom) return;
 
-                // Flatten nested latlng arrays (polylines/polygons)
-                function flattenLatLngs(lls) {
-                    if (!lls) return;
-                    if (Array.isArray(lls)) {
-                        lls.forEach(item => flattenLatLngs(item));
-                    } else {
-                        pushLatLng(lls);
-                    }
-                }
-
-                if (typeof layer.getLatLng === 'function') {
-                    const ll = layer.getLatLng();
-                    pushLatLng(ll);
-                } else if (typeof layer.getLatLngs === 'function') {
-                    const lls = layer.getLatLngs();
-                    flattenLatLngs(lls);
-                }
-            } catch (e) {
-                // ignore layer parsing errors
+        function processGeom(g) {
+            if (!g || !g.type) return;
+            if (g.type === 'Point') {
+                points.push([g.coordinates[0], g.coordinates[1]]); // [x, y] in EPSG:3067
+            } else if (g.type === 'LineString' || g.type === 'MultiPoint') {
+                g.coordinates.forEach(c => points.push([c[0], c[1]]));
+            } else if (g.type === 'Polygon') {
+                g.coordinates.forEach(ring => ring.forEach(c => points.push([c[0], c[1]])));
+            } else if (g.type === 'MultiLineString') {
+                g.coordinates.forEach(line => line.forEach(c => points.push([c[0], c[1]])));
+            } else if (g.type === 'MultiPolygon') {
+                g.coordinates.forEach(poly => poly.forEach(ring => ring.forEach(c => points.push([c[0], c[1]]))));
+            } else if (g.type === 'GeometryCollection' && g.geometries) {
+                g.geometries.forEach(processGeom);
             }
-        });
-    } else {
-        // Fallback: use previously collected geometries
-        points.push(...extractAllPoints(allGeometries));
-    }
+        }
+        processGeom(geom);
+    });
     
     if (points.length < 3) {
         document.getElementById('areaValue').textContent = 'N/A';
         return;
     }
 
-    // Calculate convex hull
+    // Calculate convex hull in EPSG:3067 (meters)
     const hullPoints = calculateConvexHull(points);
     
-    // Create hull polygon
-    const latLngs = hullPoints.map(point => [point[0], point[1]]);
+    // Transform hull points to WGS84 for display on Leaflet map
+    const latLngs = hullPoints.map(point => transformToWGS84(point[0], point[1]));
     hullLayer = L.polygon(latLngs, {
         color: '#ff7800',
         weight: 2,
@@ -258,7 +238,7 @@ async function fetchAllObservations() {
 fetchAllObservationsGeneric(datasetId,
     (feature) => {
         if (feature.geometry) {
-            allGeometries.push(feature.geometry);
+            allFeatures.push(feature); // Store complete feature with properties
             addGeometryToMap(feature.geometry, feature.properties || {}, geometryLayer, stats);
         }
     },

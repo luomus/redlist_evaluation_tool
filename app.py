@@ -114,7 +114,7 @@ def save_observations():
                         'dataset_url': dataset_url,
                         'created_at': current_time,
                         'properties': feature.get('properties', {}),
-                        'geometry': f'SRID=4326;{geom}' if geom else None
+                        'geometry': (f'SRID=3067;{geom}' if geom else None)
                     })
                 
                 # Bulk insert chunk
