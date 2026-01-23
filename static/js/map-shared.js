@@ -561,7 +561,7 @@ window.setExcludeBatch = async function(obsIds, excluded, batchSize = 100) {
 window.fetchAllObservationsGeneric = async function(datasetId, perFeature, updateStatus, onComplete) {
     updateStatus('Loading observations...');
     try {
-        const firstResponse = await fetch(`/api/observations/${datasetId}?page=1&per_page=1000`);
+        const firstResponse = await fetch(`/api/observations/${datasetId}?page=1&per_page=5000&`);
         if (!firstResponse.ok) throw new Error(`HTTP error! status: ${firstResponse.status}`);
         const firstData = await firstResponse.json();
 
@@ -581,7 +581,7 @@ window.fetchAllObservationsGeneric = async function(datasetId, perFeature, updat
         const fetchPromises = [];
         for (let p = 2; p <= totalPages; p++) {
             fetchPromises.push(
-                fetch(`/api/observations/${datasetId}?page=${p}&per_page=1000`)
+                fetch(`/api/observations/${datasetId}?page=${p}&per_page=5000`)
                     .then(r => r.json())
                     .then(data => {
                         updateStatus(`Loading ${datasetName} (page ${p} of ${totalPages})...`);

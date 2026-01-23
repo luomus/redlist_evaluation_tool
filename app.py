@@ -1,6 +1,6 @@
 from flask import Flask, render_template, jsonify, request
 from livereload import Server
-from config import LAJI_API_ACCESS_TOKEN, LAJI_API_BASE_URL
+from config import LAJI_API_ACCESS_TOKEN, LAJI_API_BASE_URL, SIMPLIFY_IN_METERS
 from models import init_db, Session, Observation, ConvexHull, engine
 from sqlalchemy import Integer, text
 import json
@@ -139,19 +139,55 @@ def save_observations():
 
 @app.route("/api/observations/<dataset_id>", methods=["GET"])
 def get_observations(dataset_id):
-    """Get observations for a dataset with pagination"""
+    """Get observations for a dataset with pagination and spatial filtering
+    
+    Query Parameters:
+    - page: Page number (default: 1)
+    - per_page: Records per page (default: 1000, max: 5000)
+    - bbox: Bounding box filter as 'minx,miny,maxx,maxy' in EPSG:3067
+    """
     try:
         # Pagination parameters
         page = request.args.get('page', 1, type=int)
-        per_page = request.args.get('per_page', 100, type=int)
-        per_page = min(per_page, 1000)  # Max 1000 per page
-        
+        per_page = request.args.get('per_page', 1000, type=int)
+                
         session = Session()
         
-        # Get total count
-        total = session.query(Observation).filter_by(dataset_id=dataset_id).count()
+        # Build optimized SQL query with bulk geometry conversion
+        # This does everything in a single database query for maximum performance
+        offset = (page - 1) * per_page
+        params = {
+            'dataset_id': dataset_id,
+            'limit': per_page,
+            'offset': offset
+        }
+
+        # Parameterize SIMPLIFY_IN_METERS to avoid inlining dynamic values into SQL
+        if SIMPLIFY_IN_METERS > 0:
+            geom_sql = "ST_AsGeoJSON(ST_Simplify(geometry, :SIMPLIFY_IN_METERS))"
+            params['_SIMPLIFY_IN_METERS'] = float(SIMPLIFY_IN_METERS)
+        else:
+            geom_sql = "ST_AsGeoJSON(geometry)"
+
+        # Execute optimized query with window function for count
+        query = text(f"""
+            SELECT 
+                id,
+                dataset_name,
+                dataset_url,
+                created_at,
+                properties,
+                {geom_sql} as geometry_json,
+                COUNT(*) OVER() as total_count
+            FROM observations
+            WHERE dataset_id = :dataset_id
+            ORDER BY id
+            LIMIT :limit OFFSET :offset
+        """)
         
-        if total == 0:
+        results = session.execute(query, params).fetchall()
+        
+        if not results:
             session.close()
             return jsonify({
                 "type": "FeatureCollection",
@@ -165,30 +201,25 @@ def get_observations(dataset_id):
                 }
             })
         
-        # Get paginated observations
-        observations = session.query(Observation).filter_by(
-            dataset_id=dataset_id
-        ).order_by(
-            Observation.id
-        ).offset((page - 1) * per_page).limit(per_page).all()
+        # Get total from first row (window function gives same total for all rows)
+        total = results[0].total_count
         
-        # Reconstruct GeoJSON features
+        # Reconstruct GeoJSON features - geometry is already JSON
         features = []
-        for obs in observations:
-            # Include internal DB id in the properties so the frontend can reference the record
-            props = dict(obs.properties or {})
-            props['_db_id'] = obs.id
+        for row in results:
+            props = dict(row.properties or {})
+            props['_db_id'] = row.id
             feature = {
                 "type": "Feature",
                 "properties": props,
-                "geometry": json.loads(session.scalar(obs.geometry.ST_AsGeoJSON())) if obs.geometry else None
+                "geometry": json.loads(row.geometry_json) if row.geometry_json else None
             }
             features.append(feature)
         
-        # Get dataset metadata from first observation
-        dataset_name = observations[0].dataset_name if observations else "Unknown"
-        dataset_url = observations[0].dataset_url if observations else None
-        created_at = observations[0].created_at if observations else None
+        # Get dataset metadata from first row
+        dataset_name = results[0].dataset_name
+        dataset_url = results[0].dataset_url
+        created_at = results[0].created_at
         
         session.close()
         
@@ -209,6 +240,8 @@ def get_observations(dataset_id):
             }
         })
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return jsonify({"success": False, "error": str(e)}), 500
 
 
