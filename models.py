@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, Text, Index
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, Text, Index, Float
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.dialects.postgresql import JSONB
@@ -32,6 +32,26 @@ class Observation(Base):
         Index('idx_observations_geometry', geometry, postgresql_using='gist'),
         # Composite index for common query patterns
         Index('idx_observations_dataset_created', dataset_id, created_at.desc()),
+    )
+
+class ConvexHull(Base):
+    __tablename__ = 'convex_hulls'
+    
+    id = Column(Integer, primary_key=True)
+    dataset_id = Column(String(100), nullable=False, unique=True, index=True)
+    
+    # PostGIS geometry column for the convex hull (ETRS-TM35FIN / EPSG:3067)
+    geometry = Column(Geometry(geometry_type='POLYGON', srid=3067))
+    
+    # Area in square kilometers
+    area_km2 = Column(Float)
+    
+    # Track when it was calculated
+    calculated_at = Column(DateTime, default=datetime.utcnow, index=True)
+    
+    # Spatial index for geometry queries
+    __table_args__ = (
+        Index('idx_convex_hulls_geometry', geometry, postgresql_using='gist'),
     )
 
 # Database connection with connection pooling

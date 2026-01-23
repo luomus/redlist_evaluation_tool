@@ -1,7 +1,7 @@
 from flask import Flask, render_template, jsonify, request
 from livereload import Server
 from config import LAJI_API_ACCESS_TOKEN, LAJI_API_BASE_URL
-from models import init_db, Session, Observation, engine
+from models import init_db, Session, Observation, ConvexHull, engine
 from sqlalchemy import Integer, text
 import json
 from shapely.geometry import shape
@@ -444,19 +444,152 @@ def get_dataset_stats(dataset_id):
         traceback.print_exc()
         return jsonify({"success": False, "error": str(e)}), 500
 
-@app.route("/api/observations/<dataset_id>", methods=["DELETE"])
-def delete_observations(dataset_id):
-    """Delete a dataset"""
+@app.route("/api/observations/<dataset_id>/convex_hull", methods=["GET"])
+def get_convex_hull(dataset_id):
+    """Get the pre-calculated convex hull for a dataset"""
     try:
         session = Session()
-        count = session.query(Observation).filter_by(dataset_id=dataset_id).delete()
+        
+        convex_hull = session.query(ConvexHull).filter_by(dataset_id=dataset_id).first()
+        
+        if not convex_hull:
+            session.close()
+            return jsonify({
+                "success": False, 
+                "error": "Convex hull not calculated yet. Click 'Re-calculate Hull' to generate it."
+            }), 404
+        
+        # Convert geometry to GeoJSON
+        geometry_geojson = None
+        if convex_hull.geometry:
+            geometry_geojson = json.loads(session.scalar(convex_hull.geometry.ST_AsGeoJSON()))
+        
+        session.close()
+        
+        return jsonify({
+            "success": True,
+            "dataset_id": dataset_id,
+            "geometry": geometry_geojson,
+            "area_km2": convex_hull.area_km2,
+            "calculated_at": convex_hull.calculated_at.isoformat() if convex_hull.calculated_at else None
+        })
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route("/api/observations/<dataset_id>/convex_hull", methods=["POST"])
+def calculate_convex_hull(dataset_id):
+    """Calculate convex hull for a dataset using PostGIS and store in database"""
+    try:
+        session = Session()
+        
+        # Check if dataset exists
+        dataset_count = session.query(Observation).filter_by(dataset_id=dataset_id).count()
+        if dataset_count == 0:
+            session.close()
+            return jsonify({"success": False, "error": "Dataset not found"}), 404
+        
+        # Use PostGIS to calculate convex hull of all non-excluded geometries
+        # ST_ConvexHull works on collections, so we use ST_Collect to aggregate all geometries
+        convex_hull_query = text("""
+            WITH non_excluded AS (
+                SELECT geometry
+                FROM observations
+                WHERE dataset_id = :dataset_id
+                  AND geometry IS NOT NULL
+                  AND (properties->>'excluded' IS NULL 
+                       OR properties->>'excluded' = 'false' 
+                       OR properties->>'excluded' = '0')
+            ),
+            collected AS (
+                SELECT ST_Collect(geometry) as geom_collection
+                FROM non_excluded
+            )
+            SELECT 
+                ST_ConvexHull(geom_collection) as hull_geom,
+                ST_Area(ST_ConvexHull(geom_collection)) / 1000000.0 as area_km2
+            FROM collected
+            WHERE geom_collection IS NOT NULL
+        """)
+        
+        result = session.execute(convex_hull_query, {'dataset_id': dataset_id}).fetchone()
+        
+        if not result or not result[0]:
+            session.close()
+            return jsonify({
+                "success": False, 
+                "error": "Could not calculate convex hull. Dataset may have insufficient non-excluded geometries."
+            }), 400
+        
+        hull_wkb = result[0]
+        area_km2 = float(result[1]) if result[1] else 0.0
+        
+        # Check if convex hull already exists for this dataset
+        existing_hull = session.query(ConvexHull).filter_by(dataset_id=dataset_id).first()
+        
+        if existing_hull:
+            # Update existing
+            existing_hull.geometry = hull_wkb
+            existing_hull.area_km2 = area_km2
+            existing_hull.calculated_at = datetime.utcnow()
+        else:
+            # Create new
+            new_hull = ConvexHull(
+                dataset_id=dataset_id,
+                geometry=hull_wkb,
+                area_km2=area_km2,
+                calculated_at=datetime.utcnow()
+            )
+            session.add(new_hull)
+        
+        session.commit()
+        
+        # Get the geometry as GeoJSON for response
+        convex_hull = session.query(ConvexHull).filter_by(dataset_id=dataset_id).first()
+        geometry_geojson = None
+        if convex_hull and convex_hull.geometry:
+            geometry_geojson = json.loads(session.scalar(convex_hull.geometry.ST_AsGeoJSON()))
+        
+        session.close()
+        
+        return jsonify({
+            "success": True,
+            "dataset_id": dataset_id,
+            "geometry": geometry_geojson,
+            "area_km2": area_km2,
+            "calculated_at": datetime.utcnow().isoformat()
+        })
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route("/api/observations/<dataset_id>", methods=["DELETE"])
+def delete_observations(dataset_id):
+    """Delete a dataset and its convex hull"""
+    try:
+        session = Session()
+        
+        # Delete observations
+        obs_count = session.query(Observation).filter_by(dataset_id=dataset_id).delete()
+        
+        # Delete convex hull if exists
+        hull_count = session.query(ConvexHull).filter_by(dataset_id=dataset_id).delete()
+        
         session.commit()
         session.close()
         
         # Invalidate cache for this dataset
         stats_cache.delete(f"stats:{dataset_id}")
         
-        return jsonify({"success": True, "deleted": count})
+        return jsonify({
+            "success": True, 
+            "deleted_observations": obs_count,
+            "deleted_convex_hull": hull_count > 0
+        })
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 

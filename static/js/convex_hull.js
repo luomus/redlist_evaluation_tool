@@ -1,4 +1,4 @@
-/* global L, addGeometryToLayer, extractAllPoints */
+/* global L, addGeometryToMap, fetchAllObservationsGeneric, createSharedMap, transformToWGS84 */
 
 // Get dataset ID from URL
 const urlParams = new URLSearchParams(window.location.search);
@@ -15,226 +15,150 @@ const { map, geometryLayer, stats, updateStatus } = createSharedMap();
 // Layer for convex hull
 let hullLayer = null;
 
-// Store all features (geometry + properties) for convex hull calculation
+// Store all features (geometry + properties)
 const allFeatures = [];
 
-// Calculate the convex hull using Graham scan algorithm
-function calculateConvexHull(points) {
-    if (points.length < 3) {
-        return points;
-    }
+// Helper to format ISO timestamp into a readable local string
+function formatIsoTimestamp(iso) {
+    if (!iso) return '-';
+    const d = new Date(iso);
+    if (isNaN(d)) return iso;
+    return d.toLocaleString();
+}
 
-    // Find the bottom-most point (and leftmost in case of tie)
-    let start = 0;
-    for (let i = 1; i < points.length; i++) {
-        if (points[i][0] < points[start][0] || 
-            (points[i][0] === points[start][0] && points[i][1] < points[start][1])) {
-            start = i;
+// Fetch and display convex hull from the backend
+async function fetchAndDisplayConvexHull(fitMap = true) {
+    try {
+        const response = await fetch(`/api/observations/${datasetId}/convex_hull`);
+        
+        if (!response.ok) {
+            if (response.status === 404) {
+                // Convex hull not calculated yet
+                document.getElementById('areaValue').textContent = 'Not calculated';
+                document.getElementById('calculated_at').textContent = 'Not calculated';
+                console.log('Convex hull not calculated yet. Click "Re-calculate Hull" button.');
+                return;
+            }
+            throw new Error(`HTTP error! status: ${response.status}`);
         }
-    }
-
-    // Sort points by polar angle with respect to start point
-    const sortedPoints = points.slice();
-    sortedPoints.sort((a, b) => {
-        const angleA = Math.atan2(a[0] - points[start][0], a[1] - points[start][1]);
-        const angleB = Math.atan2(b[0] - points[start][0], b[1] - points[start][1]);
-        return angleA - angleB;
-    });
-
-    // Graham scan
-    const hull = [];
-    for (let i = 0; i < sortedPoints.length; i++) {
-        while (hull.length > 1 && 
-               crossProduct(hull[hull.length - 2], hull[hull.length - 1], sortedPoints[i]) <= 0) {
-            hull.pop();
+        
+        const data = await response.json();
+        
+        if (!data.success || !data.geometry) {
+            document.getElementById('areaValue').textContent = 'N/A';
+            document.getElementById('calculated_at').textContent = '-';
+            return;
         }
-        hull.push(sortedPoints[i]);
-    }
-
-    return hull;
-}
-
-// Calculate cross product for three points
-function crossProduct(o, a, b) {
-    return (a[1] - o[1]) * (b[0] - o[0]) - (a[0] - o[0]) * (b[1] - o[1]);
-}
-
-// Calculate area of polygon using the shoelace formula
-// Points are in EPSG:3067 (meters), so area calculation is straightforward
-function calculatePolygonArea(points) {
-    if (points.length < 3) return 0;
-
-    let area = 0;
-    const n = points.length;
-    
-    for (let i = 0; i < n; i++) {
-        const j = (i + 1) % n;
-        area += points[i][0] * points[j][1];
-        area -= points[j][0] * points[i][1];
-    }
-    
-    area = Math.abs(area) / 2;
-    
-    // Convert from square meters to square kilometers
-    return area / 1000000;
-}
-
-// Create and display convex hull
-function createConvexHull(fitMap = true) {
-    if (hullLayer) {
-        map.removeLayer(hullLayer);
-    }
-
-    // Extract points in EPSG:3067 from non-excluded features
-    const points = [];
-    allFeatures.forEach(feature => {
-        // Check if feature is excluded
-        const props = feature.properties || {};
-        const excluded = props.excluded === true || props.excluded === '1' || props.excluded === 1;
-        if (excluded) return; // Skip excluded features
-
-        const geom = feature.geometry;
-        if (!geom) return;
-
-        function processGeom(g) {
-            if (!g || !g.type) return;
-            if (g.type === 'Point') {
-                points.push([g.coordinates[0], g.coordinates[1]]); // [x, y] in EPSG:3067
-            } else if (g.type === 'LineString' || g.type === 'MultiPoint') {
-                g.coordinates.forEach(c => points.push([c[0], c[1]]));
-            } else if (g.type === 'Polygon') {
-                g.coordinates.forEach(ring => ring.forEach(c => points.push([c[0], c[1]])));
-            } else if (g.type === 'MultiLineString') {
-                g.coordinates.forEach(line => line.forEach(c => points.push([c[0], c[1]])));
-            } else if (g.type === 'MultiPolygon') {
-                g.coordinates.forEach(poly => poly.forEach(ring => ring.forEach(c => points.push([c[0], c[1]]))));
-            } else if (g.type === 'GeometryCollection' && g.geometries) {
-                g.geometries.forEach(processGeom);
+        
+        // Remove existing hull layer
+        if (hullLayer) {
+            map.removeLayer(hullLayer);
+        }
+        
+        // Transform hull coordinates from EPSG:3067 to WGS84 for Leaflet display
+        const coords = data.geometry.coordinates[0]; // Polygon outer ring
+        const latLngs = coords.map(coord => transformToWGS84(coord[0], coord[1]));
+        
+        hullLayer = L.polygon(latLngs, {
+            color: '#ff7800',
+            weight: 2,
+            opacity: 0.8,
+            fillColor: '#ff7800',
+            fillOpacity: 0.2
+        }).addTo(map);
+        
+        // Optionally fit map to hull bounds
+        if (fitMap) {
+            try {
+                const bounds = hullLayer.getBounds();
+                if (bounds && bounds.isValid()) map.fitBounds(bounds, { padding: [50, 50] });
+            } catch (e) {
+                // ignore
             }
         }
-        processGeom(geom);
-    });
-    
-    if (points.length < 3) {
-        document.getElementById('areaValue').textContent = 'N/A';
-        return;
-    }
-
-    // Calculate convex hull in EPSG:3067 (meters)
-    const hullPoints = calculateConvexHull(points);
-    
-    // Transform hull points to WGS84 for display on Leaflet map
-    const latLngs = hullPoints.map(point => transformToWGS84(point[0], point[1]));
-    hullLayer = L.polygon(latLngs, {
-        color: '#ff7800',
-        weight: 2,
-        opacity: 0.8,
-        fillColor: '#ff7800',
-        fillOpacity: 0.2
-    }).addTo(map);
-
-    // Optionally fit map to hull bounds
-    if (fitMap) {
+        
+        // Ensure the shared data layer is above the hull so features remain clickable
         try {
-            const bounds = hullLayer.getBounds();
-            if (bounds && bounds.isValid()) map.fitBounds(bounds, { padding: [50, 50] });
+            if (window.sharedGeometryLayer && typeof window.sharedGeometryLayer.bringToFront === 'function') {
+                window.sharedGeometryLayer.bringToFront();
+            }
         } catch (e) {
             // ignore
         }
+        
+        // Display area and calculation timestamp
+        document.getElementById('areaValue').textContent = `${data.area_km2.toFixed(2)} km²`;
+        document.getElementById('calculated_at').textContent = formatIsoTimestamp(data.calculated_at);
+        
+    } catch (error) {
+        console.error('Error fetching convex hull:', error);
+        document.getElementById('areaValue').textContent = 'Error';
+        document.getElementById('calculated_at').textContent = 'Error';
     }
-
-    // Ensure the shared data layer is above the hull so features remain clickable
-    try {
-        if (window.sharedGeometryLayer && typeof window.sharedGeometryLayer.bringToFront === 'function') {
-            window.sharedGeometryLayer.bringToFront();
-        }
-    } catch (e) {
-        // ignore
-    }
-
-    // Calculate and display area
-    const area = calculatePolygonArea(hullPoints);
-    document.getElementById('areaValue').textContent = `${area.toFixed(2)} km²`;
 }
 
-// Expose for other modules to trigger recalculation (e.g. after exclude toggles)
-window.createConvexHull = createConvexHull;
-
-// Function to fetch all pages of data
-async function fetchAllObservations() {
-    updateStatus('Loading observations...');
-    
-    let page = 1;
-    let totalPages = 1;
-    let datasetName = 'Dataset';
-    let total = 0;
-    
+// Calculate convex hull on the server
+async function calculateConvexHull(fitMap = true) {
     try {
-        // Fetch first page to get metadata
-        const firstResponse = await fetch(`/api/observations/${datasetId}?page=1&per_page=1000`);
-        if (!firstResponse.ok) {
-            throw new Error(`HTTP error! status: ${firstResponse.status}`);
+        updateStatus('Calculating convex hull...');
+        document.getElementById('areaValue').textContent = 'Calculating...';
+        document.getElementById('calculated_at').textContent = 'Calculating...';
+        // Disable recalc button while operation runs
+        let recalcBtn = document.getElementById('recalcBtn');
+        if (recalcBtn) {
+            recalcBtn.disabled = true;
+            recalcBtn.style.opacity = '0.6';
+            recalcBtn.style.cursor = 'not-allowed';
         }
 
-        const firstData = await firstResponse.json();
-
-        if (firstData.features.length === 0) {
-            updateStatus('No observations found for this dataset');
-            return;
-        }
-
-        datasetName = firstData.dataset_name || 'Dataset';
-        totalPages = firstData.pagination.pages;
-        total = firstData.pagination.total;
-
-        updateStatus(`Loading ${datasetName} (page 1 of ${totalPages})...`);
-
-        // Process first page
-        firstData.features.forEach(feature => {
-            if (feature.geometry) {
-                allGeometries.push(feature.geometry);
-                addGeometryToMap(feature.geometry, feature.properties || {}, geometryLayer, stats);
+        const response = await fetch(`/api/observations/${datasetId}/convex_hull`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
             }
         });
-
-        // Fetch remaining pages
-        const fetchPromises = [];
-        for (let p = 2; p <= totalPages; p++) {
-            fetchPromises.push(
-                fetch(`/api/observations/${datasetId}?page=${p}&per_page=1000`)
-                    .then(response => response.json())
-                    .then(data => {
-                        updateStatus(`Loading ${datasetName} (page ${p} of ${totalPages})...`);
-                        data.features.forEach(feature => {
-                            if (feature.geometry) {
-                                allGeometries.push(feature.geometry);
-                                addGeometryToMap(feature.geometry, feature.properties || {}, geometryLayer, stats);
-                            }
-                        });
-                    })
-            );
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
         }
+        
+        const data = await response.json();
+        
+        if (!data.success) {
+            throw new Error(data.error || 'Failed to calculate convex hull');
+        }
+        
+        updateStatus('Convex hull calculated successfully');
+        
+        // Fetch and display the newly calculated hull
+        await fetchAndDisplayConvexHull(fitMap);
 
-        // Wait for all pages to load
-        await Promise.all(fetchPromises);
-
-        // Create convex hull after all geometries are loaded (fit map)
-        createConvexHull(true);
-
-        // Display final statistics (simplified)
-        const statusMessage = `${datasetName}: ${stats.total} observations loaded with convex hull` +
-            (stats.skipped > 0 ? ` | Skipped: ${stats.skipped}` : '');
-
-        updateStatus(statusMessage);
-
+        // Re-enable recalc button
+        if (recalcBtn) {
+            recalcBtn.disabled = false;
+            recalcBtn.style.opacity = '';
+            recalcBtn.style.cursor = '';
+        }
+        
     } catch (error) {
-        console.error('Error fetching observations:', error);
-        updateStatus(`Error loading data: ${error.message}`);
+        console.error('Error calculating convex hull:', error);
+        updateStatus(`Error: ${error.message}`);
+        document.getElementById('areaValue').textContent = 'Error';
+        document.getElementById('calculated_at').textContent = 'Error';
+        if (recalcBtn) {
+            recalcBtn.disabled = false;
+            recalcBtn.style.opacity = '';
+            recalcBtn.style.cursor = '';
+        }
     }
 }
 
+// Expose functions for the re-calculate button and external modules
+window.createConvexHull = calculateConvexHull;
+window.fetchAndDisplayConvexHull = fetchAndDisplayConvexHull;
+
 // Start loading data when page loads
-// Use generic fetcher and create hull once loaded
+// Use generic fetcher and then fetch hull from backend
 fetchAllObservationsGeneric(datasetId,
     (feature) => {
         if (feature.geometry) {
@@ -245,7 +169,9 @@ fetchAllObservationsGeneric(datasetId,
     updateStatus,
     ({ datasetName, total }) => {
         stats.total = total || stats.total;
-        createConvexHull(true);
+        
+        // Fetch pre-calculated convex hull from backend instead of calculating client-side
+        fetchAndDisplayConvexHull(true);
 
         const statusMessage = `${datasetName}: ${stats.total} observations loaded` +
             (stats.skipped > 0 ? ` | Skipped: ${stats.skipped}` : '');

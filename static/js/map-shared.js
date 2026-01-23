@@ -464,7 +464,6 @@ window.setExclude = async function(obsId, excluded) {
                                 });
                             }
                         } catch (e) {}
-                        if (typeof window.createConvexHull === 'function') { try { window.createConvexHull(false); } catch (e) {} }
                         if (typeof window.recalculateGrid === 'function') { try { window.recalculateGrid(); } catch (e) {} }
                     }
                 });
@@ -538,7 +537,6 @@ window.setExcludeBatch = async function(obsIds, excluded, batchSize = 100) {
                                         });
                                     }
                                 } catch (e) {}
-                                if (typeof window.createConvexHull === 'function') { try { window.createConvexHull(false); } catch (e) {} }
                                 if (typeof window.recalculateGrid === 'function') { try { window.recalculateGrid(); } catch (e) {} }
                             }
                         });
@@ -812,10 +810,6 @@ window.toggleExclude = async function(obsId, btn) {
                                     }
                                 } catch (e) {
                                     // ignore
-                                }
-                                // Request convex hull recalculation without changing map view
-                                if (typeof window.createConvexHull === 'function') {
-                                    try { window.createConvexHull(false); } catch (e) { /* ignore */ }
                                 }
                                 // Request grid recalculation if available
                                 if (typeof window.recalculateGrid === 'function') {
