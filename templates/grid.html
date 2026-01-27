@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Dataset Grid</title>
+    <link
+        rel="stylesheet"
+        href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+        crossorigin=""
+    />
+    <link rel="stylesheet" href="/static/css/map.css">
+</head>
+<body>
+    <header>
+        <a href="/simple" class="back-btn">← Back to Datasets</a>
+
+        <div class="info-panel">
+            <h3>Dataset Grid</h3>
+            <div class="info-item">
+                <span class="info-label">Grid cells:</span>
+                <span class="info-value" id="cellsCount">-</span>
+            </div>     
+            <button id="genBtn" onclick="window.createGrid(false)" style="margin-top: 10px; padding: 8px 16px; background: #3388ff; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">↻ Generate Grid</button>
+        </div>
+
+        <div id="status" class="stats">Loading dataset...</div>
+    </header>
+
+    <div id="map"></div>
+
+    <script
+        src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+        crossorigin=""
+    ></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.9.2/proj4.min.js"></script>
+    <script src="/static/js/map-shared.js"></script>
+    <script src="/static/js/grid.js"></script>
+</body>
+</html>

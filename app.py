@@ -1,7 +1,7 @@
 from flask import Flask, render_template, jsonify, request
 from livereload import Server
 from config import LAJI_API_ACCESS_TOKEN, LAJI_API_BASE_URL, SIMPLIFY_IN_METERS
-from models import init_db, Session, Observation, ConvexHull, engine
+from models import init_db, Session, Observation, ConvexHull
 from sqlalchemy import Integer, text
 import json
 from shapely.geometry import shape
@@ -57,6 +57,10 @@ def raw():
 @app.route("/convex_hull")
 def convex_hull():
     return render_template("convex_hull.html")
+
+@app.route("/grid")
+def grid():
+    return render_template("grid.html")
 
 @app.route("/map")
 def map():
@@ -592,6 +596,68 @@ def calculate_convex_hull(dataset_id):
         })
         
     except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route("/api/observations/<dataset_id>/grid", methods=["GET"])
+def get_grid(dataset_id):
+    """Get the stored grid cells for a dataset as a GeoJSON FeatureCollection"""
+    print("Fetching grid for dataset:", dataset_id)
+    try:
+        session = Session()
+        rows = session.execute(text("SELECT id, ST_AsGeoJSON(geom) as geom_json FROM grid_cells WHERE dataset_id = :dataset_id"), {'dataset_id': dataset_id}).fetchall()
+        features = []
+        for r in rows:
+            features.append({
+                "type": "Feature",
+                "properties": {"_db_id": r.id},
+                "geometry": json.loads(r.geom_json) if r.geom_json else None
+            })
+        session.close()
+        return jsonify({"type": "FeatureCollection", "features": features, "dataset_id": dataset_id, "success": True})
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route("/api/observations/<dataset_id>/grid", methods=["POST"])
+def calculate_grid(dataset_id):
+    print("Calculating grid for dataset:", dataset_id)
+    """Generate grid for dataset by selecting base grid cells that intersect observations."""
+
+    session = Session()
+    
+    try:
+        # Delete previous grid cells for the dataset
+        session.execute(text("DELETE FROM grid_cells WHERE dataset_id = :dataset_id"), {'dataset_id': dataset_id})
+                
+        # Use base grid: select cells that intersect dataset observations
+        print("Using base grid for grid generation")
+        generation_sql = text("""
+            INSERT INTO grid_cells (dataset_id, geom)
+            SELECT :dataset_id, bg.geom_4326
+            FROM base_grid_cells bg
+            WHERE EXISTS (
+                SELECT 1 FROM observations o
+                WHERE o.dataset_id = :dataset_id
+                    AND o.geometry IS NOT NULL
+                    AND (o.properties->>'excluded' IS NULL OR o.properties->>'excluded' = 'false' OR o.properties->>'excluded' = '0')
+                    AND ST_Intersects(ST_SetSRID(o.geometry, 4326), bg.geom_4326)
+            );
+        """)
+        
+        session.execute(generation_sql, {'dataset_id': dataset_id})
+        session.commit()
+        
+        # Count inserted cells
+        cell_count = session.execute(text("SELECT COUNT(*) FROM grid_cells WHERE dataset_id = :dataset_id"), {'dataset_id': dataset_id}).scalar()
+        
+        session.close()
+        return jsonify({"success": True, "dataset_id": dataset_id, "message": "Grid generated", "cell_count": cell_count})
+    except Exception as e:
+        session.rollback()
+        session.close()
         import traceback
         traceback.print_exc()
         return jsonify({"success": False, "error": str(e)}), 500

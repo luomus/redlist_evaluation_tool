@@ -37,5 +37,29 @@ CREATE INDEX idx_convex_hulls_dataset_id ON convex_hulls(dataset_id);
 CREATE INDEX idx_convex_hulls_calculated_at ON convex_hulls(calculated_at DESC);
 CREATE INDEX idx_convex_hulls_geometry ON convex_hulls USING gist(geometry);
 
+-- Create grid_cells table for WGS84 grids
+CREATE TABLE IF NOT EXISTS grid_cells (
+    id SERIAL PRIMARY KEY,
+    dataset_id VARCHAR(100) NOT NULL,
+    cell_row INTEGER,
+    cell_col INTEGER,
+    geom GEOMETRY(POLYGON, 4326),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_grid_cells_dataset_id ON grid_cells(dataset_id);
+CREATE INDEX IF NOT EXISTS idx_grid_cells_geom ON grid_cells USING gist(geom);
+
+-- Create base_grid_cells table (Finland-wide base grid, created once)
+CREATE TABLE IF NOT EXISTS base_grid_cells (
+    id SERIAL PRIMARY KEY,
+    grid_x INTEGER,
+    grid_y INTEGER,
+    geom_3067 GEOMETRY(POLYGON, 3067),
+    geom_4326 GEOMETRY(POLYGON, 4326),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_base_grid_geom3067 ON base_grid_cells USING gist(geom_3067);
+CREATE INDEX IF NOT EXISTS idx_base_grid_geom4326 ON base_grid_cells USING gist(geom_4326);
+
 -- Verify tables were created
 \dt
