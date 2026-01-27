@@ -13,5 +13,9 @@ RUN apt-get update \
 
 COPY . /app
 
+# Make entrypoint script executable
+RUN chmod +x docker-entrypoint.sh
+
 EXPOSE 5000
+ENTRYPOINT ["./docker-entrypoint.sh"]
 CMD ["python", "app.py"]

@@ -10,6 +10,12 @@ services:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U biotools -d biotools -h localhost || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
 
   web:
     build: .
@@ -21,7 +27,8 @@ services:
       - PYTHONUNBUFFERED=1
       - DATABASE_URL=postgresql://biotools:biotools@db:5432/biotools
     depends_on:
-      - db
+      db:
+        condition: service_healthy
 
 volumes:
   pgdata:

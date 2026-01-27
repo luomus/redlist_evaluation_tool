@@ -60,20 +60,37 @@ docker run --rm -p 5000:5000 biotools
 The app now uses PostgreSQL/PostGIS for data storage. Use docker-compose to run both the database and web app:
 
 ```bash
-docker-compose -f docker-compose up --build
+docker-compose up --build
 ```
 
 Access the app at http://localhost:5000/simple
 
 To stop:
 ```bash
-docker-compose -f docker-compose down
+docker-compose down
 ```
 
 To remove all data (including database):
 ```bash
-docker-compose -f docker-compose down -v
+docker-compose down -v
 ```
+
+#### Database Initialization
+
+The database tables are automatically created on first startup via the `docker-entrypoint.sh` script and `init_database.py`. If you ever need to manually reinitialize:
+
+```bash
+# Inside the running web container
+docker exec -it biotools-main-web-1 python init_database.py
+
+# Or directly via SQL
+Get-Content create_tables.sql | docker exec -i biotools-main-db-1 psql -U biotools -d biotools
+```
+
+**Troubleshooting**: If you get "relation does not exist" errors:
+1. Check if containers are running: `docker ps`
+2. Verify tables exist: `docker exec -it biotools-main-db-1 psql -U biotools -d biotools -c "\dt"`
+3. Recreate tables: `docker exec -it biotools-main-web-1 python init_database.py`
 
 ### Package Management
 

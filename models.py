@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, Text, Index, Float
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, Text, Index, Float, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.dialects.postgresql import JSONB
@@ -67,21 +67,31 @@ Session = sessionmaker(bind=engine)
 
 def init_db():
     """Initialize database tables with retry logic"""
-    max_retries = 30
+    max_retries = 10
     retry_interval = 2
     
     for attempt in range(max_retries):
         try:
             # Create tables (this is idempotent - won't recreate existing tables)
             Base.metadata.create_all(engine, checkfirst=True)
-            print("Database initialized successfully")
-            return
+            
+            # Verify tables were actually created by checking if they exist
+            with engine.connect() as conn:
+                result = conn.execute(text(
+                    "SELECT table_name FROM information_schema.tables "
+                    "WHERE table_schema = 'public' AND table_name IN ('observations', 'convex_hulls')"
+                ))
+                existing_tables = {row[0] for row in result}
+                
+                if 'observations' in existing_tables and 'convex_hulls' in existing_tables:
+                    print("Database initialized successfully - all tables exist")
+                    return
+                else:
+                    missing = {'observations', 'convex_hulls'} - existing_tables
+                    raise Exception(f"Tables not created properly. Missing: {missing}")
+            
         except Exception as e:
             error_msg = str(e).lower()
-            # If the error is just about indexes already existing, that's fine - continue
-            if 'already exists' in error_msg and 'idx_' in error_msg:
-                print(f"Note: Some indexes already exist (this is normal on restart)")
-                return
             
             if attempt < max_retries - 1:
                 print(f"Database connection attempt {attempt + 1} failed: {e}")
