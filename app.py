@@ -62,10 +62,6 @@ def convex_hull():
 def map():
     return render_template("map.html")
 
-@app.route("/grids")
-def grids():
-    return render_template("grids.html")
-
 @app.route("/api/config")
 def get_config():
     return jsonify({

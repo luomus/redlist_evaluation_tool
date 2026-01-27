@@ -1,26 +1,6 @@
-/* global L, proj4 */
+/* global L */
 
 // Shared map utilities for handling geometries
-
-// Define EPSG:3067 (ETRS-TM35FIN) projection for coordinate transformations
-if (typeof proj4 !== 'undefined') {
-    proj4.defs('EPSG:3067', '+proj=utm +zone=35 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs +type=crs');
-}
-
-// Transform coordinates from EPSG:3067 to WGS84 (lat/lon)
-function transformToWGS84(x, y) {
-    if (typeof proj4 === 'undefined') {
-        console.warn('proj4 not loaded, coordinates may be incorrect');
-        return [y, x]; // Fallback: assume already in lat/lon
-    }
-    try {
-        const [lon, lat] = proj4('EPSG:3067', 'EPSG:4326', [x, y]);
-        return [lat, lon];
-    } catch (e) {
-        console.error('Coordinate transformation failed:', e);
-        return [y, x]; // Fallback
-    }
-}
 
 // Create a shared Leaflet map and helper objects. Returns an object with
 // `{ map, geometryLayer, stats, updateStatus }`.
@@ -688,7 +668,8 @@ function addGeometryToLayer(geometry, properties, targetLayer) {
         const className = excluded ? 'geom-excluded' : 'geom-included';
 
         if (geom.type === 'Point') {
-            const [lat, lon] = transformToWGS84(geom.coordinates[0], geom.coordinates[1]);
+            // Server returns WGS84 [lon, lat]; Leaflet expects [lat, lon]
+            const lat = geom.coordinates[1], lon = geom.coordinates[0];
             const marker = L.circleMarker([lat, lon], {
                 radius: 7,
                 className: className,
@@ -701,7 +682,7 @@ function addGeometryToLayer(geometry, properties, targetLayer) {
             marker.feature.geometry = geom;
             targetLayer.addLayer(marker);
         } else if (geom.type === 'LineString') {
-            const latLngs = geom.coordinates.map(c => transformToWGS84(c[0], c[1]));
+            const latLngs = geom.coordinates.map(c => [c[1], c[0]]);
             const line = L.polyline(latLngs, { className: className, weight: 7, opacity: 0.8 });
             line.bindPopup(popupContent);
             line.feature = line.feature || {};
@@ -709,7 +690,7 @@ function addGeometryToLayer(geometry, properties, targetLayer) {
             line.feature.geometry = geom;
             targetLayer.addLayer(line);
         } else if (geom.type === 'Polygon') {
-            const rings = geom.coordinates.map(r => r.map(c => transformToWGS84(c[0], c[1])));
+            const rings = geom.coordinates.map(r => r.map(c => [c[1], c[0]]));
             const polygon = L.polygon(rings, { className: className, weight: 7, opacity: 0.8, fillOpacity: 0.5 });
             polygon.bindPopup(popupContent);
             polygon.feature = polygon.feature || {};
@@ -718,7 +699,7 @@ function addGeometryToLayer(geometry, properties, targetLayer) {
             targetLayer.addLayer(polygon);
         } else if (geom.type === 'MultiPoint') {
             geom.coordinates.forEach(coord => {
-                const [lat, lon] = transformToWGS84(coord[0], coord[1]);
+                const lat = coord[1], lon = coord[0];
                 const marker = L.circleMarker([lat, lon], { radius: 7, className: className, weight: 1, opacity: 1, fillOpacity: 0.8 });
                 marker.feature = marker.feature || {};
                 marker.feature.properties = properties || {};
@@ -727,7 +708,7 @@ function addGeometryToLayer(geometry, properties, targetLayer) {
             });
         } else if (geom.type === 'MultiLineString') {
             geom.coordinates.forEach(lineCoords => {
-                const latLngs = lineCoords.map(c => transformToWGS84(c[0], c[1]));
+                const latLngs = lineCoords.map(c => [c[1], c[0]]);
                 const line = L.polyline(latLngs, { className: className, weight: 7, opacity: 0.8 });
                 line.bindPopup(popupContent);
                 line.feature = line.feature || {};
@@ -736,7 +717,7 @@ function addGeometryToLayer(geometry, properties, targetLayer) {
             });
         } else if (geom.type === 'MultiPolygon') {
             geom.coordinates.forEach(polygonCoords => {
-                const rings = polygonCoords.map(r => r.map(c => transformToWGS84(c[0], c[1])));
+                const rings = polygonCoords.map(r => r.map(c => [c[1], c[0]]));
                 const polygon = L.polygon(rings, { className: className, weight: 7, opacity: 0.8, fillOpacity: 0.5 });
                 polygon.bindPopup(popupContent);
                 polygon.feature = polygon.feature || {};
@@ -858,33 +839,33 @@ function extractAllPoints(geometries) {
     
     function processGeometry(geom) {
         if (geom.type === 'Point') {
-            // Transform from EPSG:3067 to WGS84 [lat, lon]
-            points.push(transformToWGS84(geom.coordinates[0], geom.coordinates[1]));
+            // Server returns WGS84 [lon, lat]; we store as [lat, lon]
+            points.push([geom.coordinates[1], geom.coordinates[0]]);
         } else if (geom.type === 'LineString') {
             geom.coordinates.forEach(coord => {
-                points.push(transformToWGS84(coord[0], coord[1]));
+                points.push([coord[1], coord[0]]);
             });
         } else if (geom.type === 'Polygon') {
             geom.coordinates.forEach(ring => {
                 ring.forEach(coord => {
-                    points.push(transformToWGS84(coord[0], coord[1]));
+                    points.push([coord[1], coord[0]]);
                 });
             });
         } else if (geom.type === 'MultiPoint') {
             geom.coordinates.forEach(coord => {
-                points.push(transformToWGS84(coord[0], coord[1]));
+                points.push([coord[1], coord[0]]);
             });
         } else if (geom.type === 'MultiLineString') {
             geom.coordinates.forEach(lineCoords => {
                 lineCoords.forEach(coord => {
-                    points.push(transformToWGS84(coord[0], coord[1]));
+                    points.push([coord[1], coord[0]]);
                 });
             });
         } else if (geom.type === 'MultiPolygon') {
             geom.coordinates.forEach(polygonCoords => {
                 polygonCoords.forEach(ring => {
                     ring.forEach(coord => {
-                        points.push(transformToWGS84(coord[0], coord[1]));
+                        points.push([coord[1], coord[0]]);
                     });
                 });
             });

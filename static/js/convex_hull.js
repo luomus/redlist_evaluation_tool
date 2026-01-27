@@ -1,4 +1,4 @@
-/* global L, addGeometryToMap, fetchAllObservationsGeneric, createSharedMap, transformToWGS84 */
+/* global L, addGeometryToMap, fetchAllObservationsGeneric, createSharedMap */
 
 // Get dataset ID from URL
 const urlParams = new URLSearchParams(window.location.search);
@@ -55,9 +55,9 @@ async function fetchAndDisplayConvexHull(fitMap = true) {
             map.removeLayer(hullLayer);
         }
         
-        // Transform hull coordinates from EPSG:3067 to WGS84 for Leaflet display
+        // Coordinates are in WGS84 (lon, lat) so just swap to Leaflet's [lat, lon]
         const coords = data.geometry.coordinates[0]; // Polygon outer ring
-        const latLngs = coords.map(coord => transformToWGS84(coord[0], coord[1]));
+        const latLngs = coords.map(coord => [coord[1], coord[0]]);
         
         hullLayer = L.polygon(latLngs, {
             color: '#ff7800',
