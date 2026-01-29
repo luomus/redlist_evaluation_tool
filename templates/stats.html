@@ -3,28 +3,28 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Dataset Statistics</title>
+    <title>Project Statistics</title>
     <link rel="stylesheet" href="/static/css/search.css">
     <link rel="stylesheet" href="/static/css/stats.css">
 </head>
 <body>
     <div class="container">
         <header>
-            <h1>Dataset Statistics</h1>
+            <h1>Project Statistics</h1>
             <nav style="margin-bottom: 20px;">
-                <a href="/simple" class="back-btn">← Back to Datasets</a>
+                <a href="/simple" class="back-btn">← Back to Projects</a>
             </nav>
         </header>
         
         <div id="loading" class="loading" style="display: none;">
             <div class="spinner"></div>
-            <span>Loading dataset...</span>
+            <span>Loading project...</span>
         </div>
         
         <div id="error" class="error" style="display: none;"></div>
         
         <div id="datasetInfo" class="dataset-info-section" style="display: none;">
-            <h3>Dataset Information</h3>
+            <h3>Project Information</h3>
             <div id="datasetDetails"></div>
         </div>
         
@@ -34,8 +34,8 @@
         </div>
         
         <div id="noData" class="no-data" style="display: none;">
-            <p>No dataset found with the specified ID.</p>
-            <a href="/simple">Go back to create a dataset</a>
+            <p>No project found with the specified ID.</p>
+            <a href="/simple">Go back to projects</a>
         </div>
     </div>
 

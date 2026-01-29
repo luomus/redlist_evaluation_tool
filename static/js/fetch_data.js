@@ -1,5 +1,33 @@
+// Global variables for fetched data
+window.currentFetchedData = null;
+window.currentFetchedUrl = null;
+
+// Helper function to add progress log entry
+function addProgressLog(message, type = 'success', logElement) {
+    const entry = document.createElement('div');
+    entry.className = `progress-entry ${type}`;
+    entry.textContent = message;
+    logElement.appendChild(entry);
+    logElement.scrollTop = logElement.scrollHeight;
+}
+
+// Helper function to update progress summary
+function updateProgressSummary(pagesFetched, totalRecords, totalTime, logElement) {
+    const existingSummary = logElement.querySelector('.progress-summary');
+    if (existingSummary) {
+        existingSummary.remove();
+    }
+    
+    const summary = document.createElement('div');
+    summary.className = 'progress-summary';
+    summary.innerHTML = `
+        <div>Pages fetched: ${pagesFetched} | Total records: ${totalRecords} | Total time: ${totalTime.toFixed(2)}s</div>
+    `;
+    logElement.appendChild(summary);
+}
+
 // Fetch all pages of data
-async function fetchAllPages(baseUrl, config) {
+async function fetchAllPages(baseUrl, config, logElement) {
     const allResults = [];
     let currentPage = 1;
     let totalRecords = 0;
@@ -7,12 +35,6 @@ async function fetchAllPages(baseUrl, config) {
     let pageSize = 1000;
     let totalTime = 0;
     const startTime = Date.now();
-    
-    isPaginationInProgress = true;
-    
-    // Show progress section
-    document.getElementById('fetchProgress').style.display = 'block';
-    document.getElementById('progressLog').innerHTML = '';
     
     try {
         while (currentPage <= 10 && totalRecords < 10000) {
@@ -24,22 +46,18 @@ async function fetchAllPages(baseUrl, config) {
             // Add original parameters from the input URL
             const urlObj = new URL(baseUrl);
             urlObj.searchParams.forEach((value, key) => {
-            if (key !== "page" && key !== "pageSize") {
-                apiQuery += `&${encodeURIComponent(key)}=${encodeURIComponent(value)}`;
-            }
+                if (key !== "page" && key !== "pageSize") {
+                    apiQuery += `&${encodeURIComponent(key)}=${encodeURIComponent(value)}`;
+                }
             });
 
             // Final API URL
             const apiUrl = `${config.base_url}?${apiQuery}`;
             
-            addProgressLog(`Fetching page ${currentPage}...`);
-
-            // Log the URL for debugging
-            console.log('Fetching API URL:', apiUrl);
+            addProgressLog(`Fetching page ${currentPage}...`, 'success', logElement);
 
             const response = await fetch(apiUrl);
             if (!response.ok) {
-                // Try to read response body for more detailed error
                 let respText = '';
                 try {
                     respText = await response.text();
@@ -47,7 +65,7 @@ async function fetchAllPages(baseUrl, config) {
                     respText = '<failed to read response body>';
                 }
                 console.error('API request failed', { url: apiUrl, status: response.status, body: respText });
-                throw new Error(`HTTP error! status: ${response.status} body: ${respText}`);
+                throw new Error(`HTTP error! status: ${response.status}`);
             }
 
             const data = await response.json();
@@ -60,10 +78,10 @@ async function fetchAllPages(baseUrl, config) {
                 lastPage = data.lastPage || 1;
                 pageSize = data.pageSize || 1000;
                 const recordCount = data.features ? data.features.length : 0;
-                addProgressLog(`Page ${currentPage}: ${recordCount} records fetched in ${pageTime.toFixed(2)}s (Total available: ${data.total || 'unknown'})`);
+                addProgressLog(`Page ${currentPage}: ${recordCount} records fetched in ${pageTime.toFixed(2)}s (Total available: ${data.total || 'unknown'})`, 'success', logElement);
             } else {
                 const recordCount = data.features ? data.features.length : 0;
-                addProgressLog(`Page ${currentPage}: ${recordCount} records fetched in ${pageTime.toFixed(2)}s`);
+                addProgressLog(`Page ${currentPage}: ${recordCount} records fetched in ${pageTime.toFixed(2)}s`, 'success', logElement);
             }
             
             // Add features to our collection
@@ -73,11 +91,11 @@ async function fetchAllPages(baseUrl, config) {
             }
             
             // Update progress summary
-            updateProgressSummary(currentPage, totalRecords, totalTime);
+            updateProgressSummary(currentPage, totalRecords, totalTime, logElement);
             
             // Check if we've reached the end
             if (currentPage >= lastPage || (data.features && data.features.length === 0)) {
-                addProgressLog(`Reached end of data (page ${currentPage} of ${lastPage})`);
+                addProgressLog(`Reached end of data (page ${currentPage} of ${lastPage})`, 'success', logElement);
                 break;
             }
             
@@ -85,12 +103,9 @@ async function fetchAllPages(baseUrl, config) {
         }
         
         const totalElapsedTime = (Date.now() - startTime) / 1000;
-        addProgressLog(`Fetching completed! Total time: ${totalElapsedTime.toFixed(2)}s`, 'success');
+        addProgressLog(`Fetching completed! Total time: ${totalElapsedTime.toFixed(2)}s`, 'success', logElement);
         
         // Create combined GeoJSON dataset
-        // Note: API returns flattened GeoJSON where nested properties like
-        // unit.linkings.taxon.scientificName are stored as flat field names:
-        // e.g., properties['unit.linkings.taxon.scientificName']
         const combinedData = {
             type: "FeatureCollection",
             currentPage: 1,
@@ -111,51 +126,22 @@ async function fetchAllPages(baseUrl, config) {
         
     } catch (error) {
         console.error('Error fetching pages:', error);
-        addProgressLog(`Error on page ${currentPage}: ${error.message}`, 'error');
+        addProgressLog(`Error on page ${currentPage}: ${error.message}`, 'error', logElement);
         throw error;
-    } finally {
-        isPaginationInProgress = false;
     }
 }
 
-
-async function parseUrl() {
-    const urlInput = document.getElementById('urlInput');
-    const errorDiv = document.getElementById('error');
-    const responseDiv = document.getElementById('response');
-    
-    // Clear previous results
-    errorDiv.style.display = 'none';
-    responseDiv.style.display = 'none';
-    
-    const url = urlInput.value.trim();
-    
-    if (!url) {
-        showError('Please enter a URL');
-        return;
-    }
-    
+// Parse URL and fetch data
+window.parseUrl = async function(url, projectId, logElement) {
     try {
         // Create URL object to parse the URL
         const urlObj = new URL(url);
         const params = urlObj.searchParams;
         
         if (params.size === 0) {
-            showError('No parameters found in the URL');
-            return;
+            throw new Error('No parameters found in the URL');
         }
         
-        // Generate API URL and call it immediately
-        await generateApiUrlAndCall(params);
-        
-    } catch (error) {
-        showError('Invalid URL format. Please check your URL and try again.');
-        console.error('URL parsing error:', error);
-    }
-}
-
-async function generateApiUrlAndCall(params) {
-    try {
         // Fetch config from Flask app
         const configResponse = await fetch('/api/config');
         const config = await configResponse.json();
@@ -172,66 +158,16 @@ async function generateApiUrlAndCall(params) {
         const baseApiUrl = `${baseUrl}?${apiParams.toString()}`;
         
         // Fetch all pages
-        await fetchAllPagesAndCall(baseApiUrl, config);
-    } catch (error) {
-        console.error('Config fetch error:', error);
-        showError('Failed to load configuration');
-    }
-}
-
-// Fetch all pages and call the display function
-async function fetchAllPagesAndCall(baseUrl, config) {
-    const parseBtn = document.getElementById('parseBtn');
-    const responseDiv = document.getElementById('response');
-    const responseData = document.getElementById('responseData');
-    const errorDiv = document.getElementById('error');
-    const fetchProgress = document.getElementById('fetchProgress');
-    
-    // Show loading state
-    parseBtn.disabled = true;
-    parseBtn.textContent = 'Fetching all pages...';
-    responseDiv.style.display = 'block';
-    responseData.innerHTML = '';
-    fetchProgress.style.display = 'none';
-    errorDiv.style.display = 'none';
-    
-    try {
-        const combinedData = await fetchAllPages(baseUrl, config);
+        const combinedData = await fetchAllPages(baseApiUrl, config, logElement);
         
-        // Store data for saving
-        currentApiData = combinedData;
-        currentApiUrl = baseUrl;
+        // Store data globally for saving
+        window.currentFetchedData = combinedData;
+        window.currentFetchedUrl = url;
         
-        // Display pagination summary
-        const summary = {
-            currentPage: combinedData.currentPage || 'N/A',
-            nextPage: combinedData.nextPage || 'N/A',
-            lastPage: combinedData.lastPage || 'N/A',
-            pageSize: combinedData.pageSize || 'N/A',
-            total: combinedData.total || 'N/A',
-            pagesFetched: combinedData.paginationInfo?.pagesFetched || 'N/A',
-            actualRecords: combinedData.paginationInfo?.actualRecords || 'N/A'
-        };
-        
-        responseData.innerHTML = `
-            <div><strong>Total Records Fetched:</strong> ${summary.actualRecords}</div>
-            <div><strong>Pages Fetched:</strong> ${summary.pagesFetched}</div>
-            <div><strong>Original Total Available:</strong> ${summary.total}</div>
-            <div><strong>Records per Page:</strong> ${summary.pageSize}</div>
-        `;
-        
-        // Show save section
-        document.getElementById('saveSection').style.display = 'block';
-        document.getElementById('saveDatasetBtn').disabled = false;
+        return combinedData;
         
     } catch (error) {
-        console.error('API call error:', error);
-        responseData.innerHTML = '';
-        fetchProgress.style.display = 'none';
-        showError(`Error: ${error.message}`);
-    } finally {
-        // Hide loading state
-        parseBtn.disabled = false;
-        parseBtn.textContent = 'Get data';
+        console.error('URL parsing error:', error);
+        throw error;
     }
-}
+};

@@ -1,13 +1,29 @@
 /* global L, addGeometryToMap, fetchAllObservationsGeneric, createSharedMap */
 
-// Get dataset ID from URL
+// Get project ID from URL
 const urlParamsGrid = new URLSearchParams(window.location.search);
-const datasetIdGrid = urlParamsGrid.get('id');
+const projectId = urlParamsGrid.get('id');
 
-if (!datasetIdGrid) {
-    document.getElementById('status').textContent = 'Error: No dataset ID provided';
-    throw new Error('No dataset ID provided');
+if (!projectId) {
+    document.getElementById('status').textContent = 'Error: No project ID provided';
+    throw new Error('No project ID provided');
 }
+
+// Fetch project name for nicer UI messages
+let projectNameGrid = `Project ${projectId}`;
+(async () => {
+    try {
+        const resp = await fetch(`/api/projects/${projectId}`);
+        if (resp.ok) {
+            const json = await resp.json();
+            if (json.success && json.project && json.project.name) {
+                projectNameGrid = json.project.name;
+            }
+        }
+    } catch (e) {
+        // ignore
+    }
+})();
 
 // Create shared map and helpers
 const { map, geometryLayer, stats, updateStatus } = createSharedMap();
@@ -26,7 +42,7 @@ function formatIsoTimestamp(iso) {
 // Fetch and display grid from the backend
 async function fetchAndDisplayGrid(fitMap = true) {
     try {
-        const response = await fetch(`/api/observations/${datasetIdGrid}/grid`);
+        const response = await fetch(`/api/observations/${projectId}/grid`);
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
         const data = await response.json();
 
@@ -90,7 +106,7 @@ async function calculateGrid(fitMap = true) {
             genBtn.style.cursor = 'not-allowed';
         }
 
-        const response = await fetch(`/api/observations/${datasetIdGrid}/grid`, {
+        const response = await fetch(`/api/observations/${projectId}/grid`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' }
         });
@@ -127,7 +143,7 @@ window.createGrid = calculateGrid;
 window.fetchAndDisplayGrid = fetchAndDisplayGrid;
 
 // Start loading data when page loads and then fetch grid
-fetchAllObservationsGeneric(datasetIdGrid,
+fetchAllObservationsGeneric(projectId,
     (feature) => {
         if (feature.geometry) {
             addGeometryToMap(feature.geometry, feature.properties || {}, geometryLayer, stats);
@@ -135,7 +151,8 @@ fetchAllObservationsGeneric(datasetIdGrid,
     },
     updateStatus,
     ({ datasetName, total }) => {
-        const statusMessage = `${datasetName}: ${stats.total} observations loaded` + (stats.skipped > 0 ? ` | Skipped: ${stats.skipped}` : '');
+        const nameForStatus = projectNameGrid || datasetName || `Project ${projectId}`;
+        const statusMessage = `${nameForStatus}: ${stats.total} observations loaded` + (stats.skipped > 0 ? ` | Skipped: ${stats.skipped}` : '');
         updateStatus(statusMessage);
         // Fetch grid after observations loaded
         fetchAndDisplayGrid(true);

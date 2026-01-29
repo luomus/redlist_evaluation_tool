@@ -3,40 +3,32 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Data Analyzer</title>
+    <title>Red List Tool Project Manager</title>
     <link rel="stylesheet" href="/static/css/search.css">
     <link rel="stylesheet" href="/static/css/simple.css">
 </head>
 <body>
     <div class="container">
-        <h1>Data Analyzer</h1>
+        <h1>Red List Tool Project Manager</h1>
         
-        <div class="input-group">
-            <label for="urlInput">Enter Laji.fi observation search URL:</label>
-            <input type="text" id="urlInput" placeholder="https://laji.fi/observation/list?time=-1%2F0">
+        <!-- Create Project Section -->
+        <div class="section">
+            <h2>Create New Project</h2>
+            <div class="input-group">
+                <label for="projectName">Project Name *</label>
+                <input type="text" id="projectName" placeholder="My Research Project" required>
+            </div>
+            <div class="input-group">
+                <label for="projectDescription">Description (optional)</label>
+                <textarea id="projectDescription" placeholder="Brief description of this project"></textarea>
+            </div>
+            <button id="createProjectBtn" onclick="createProject()">Create Project</button>
         </div>
         
-        <button id="parseBtn" onclick="parseUrl()">Get data</button>
-        
-        <div id="response" class="response" style="display: none;">
-            <h3>API Response:</h3>
-            <div id="responseData"></div>
-            <div id="fetchProgress" class="fetch-progress" style="display: none;">
-                <h4>Fetching Progress:</h4>
-                <div id="progressLog"></div>
-            </div>
-            <div id="saveSection" style="margin-top: 15px; display: none;">
-                <div class="input-group">
-                    <label for="datasetName">Dataset Name (optional, max 256 chars):</label>
-                    <input type="text" id="datasetName" maxlength="256">
-                </div>
-                <button id="saveDatasetBtn" onclick="saveDataset()" disabled>Save Dataset</button>
-            </div>
-        </div>
-        
-        <div id="datasets" class="datasets" style="display: none;">
-            <h3>Saved Datasets:</h3>
-            <div id="datasetsList"></div>
+        <!-- Projects List -->
+        <div id="projects" class="section" style="display: none;">
+            <h2>Your Projects</h2>
+            <div id="projectsList"></div>
         </div>
         
         <div id="error" class="error" style="display: none;"></div>

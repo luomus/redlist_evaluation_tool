@@ -1,6 +1,6 @@
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, Text, Index, Float, text
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, Text, Index, Float, text, ForeignKey
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, relationship
 from sqlalchemy.dialects.postgresql import JSONB
 from geoalchemy2 import Geometry
 from datetime import datetime
@@ -9,11 +9,24 @@ import time
 
 Base = declarative_base()
 
+class Project(Base):
+    __tablename__ = 'projects'
+    
+    id = Column(Integer, primary_key=True)
+    name = Column(String(255), nullable=False)
+    description = Column(Text)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationship to observations
+    observations = relationship('Observation', back_populates='project', cascade='all, delete-orphan')
+
 class Observation(Base):
     __tablename__ = 'observations'
     
     id = Column(Integer, primary_key=True)
-    dataset_id = Column(String(100), nullable=False, index=True)
+    project_id = Column(Integer, ForeignKey('projects.id', ondelete='CASCADE'), nullable=False, index=True)
+    dataset_id = Column(String(100), nullable=False, index=True)  # Keep for tracking individual datasets within project
     dataset_name = Column(String(255))
     dataset_url = Column(Text)  # Store the original URL used to fetch the dataset
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
@@ -24,6 +37,9 @@ class Observation(Base):
     # PostGIS geometry column (ETRS-TM35FIN / EPSG:3067)
     geometry = Column(Geometry(geometry_type='GEOMETRY', srid=3067))
     
+    # Relationship to project
+    project = relationship('Project', back_populates='observations')
+    
     # Indexes for performance
     __table_args__ = (
         # GIN index for JSONB queries (fast property searches)
@@ -31,6 +47,7 @@ class Observation(Base):
         # Spatial index for geometry queries
         Index('idx_observations_geometry', geometry, postgresql_using='gist'),
         # Composite index for common query patterns
+        Index('idx_observations_project_created', project_id, created_at.desc()),
         Index('idx_observations_dataset_created', dataset_id, created_at.desc()),
     )
 
@@ -38,7 +55,7 @@ class ConvexHull(Base):
     __tablename__ = 'convex_hulls'
     
     id = Column(Integer, primary_key=True)
-    dataset_id = Column(String(100), nullable=False, unique=True, index=True)
+    project_id = Column(Integer, nullable=False, unique=True, index=True)
     
     # PostGIS geometry column for the convex hull (ETRS-TM35FIN / EPSG:3067)
     geometry = Column(Geometry(geometry_type='POLYGON', srid=3067))
@@ -58,7 +75,7 @@ class GridCell(Base):
     __tablename__ = 'grid_cells'
 
     id = Column(Integer, primary_key=True)
-    dataset_id = Column(String(100), nullable=False, index=True)
+    project_id = Column(Integer, nullable=False, index=True)
     cell_row = Column(Integer)
     cell_col = Column(Integer)
     geom = Column(Geometry(geometry_type='POLYGON', srid=4326))
@@ -141,7 +158,7 @@ def create_base_grid_if_missing():
 
 def init_db():
     """Initialize database tables with retry logic"""
-    max_retries = 10
+    max_retries = 3
     retry_interval = 2
     
     for attempt in range(max_retries):
@@ -153,11 +170,11 @@ def init_db():
             with engine.connect() as conn:
                 result = conn.execute(text(
                     "SELECT table_name FROM information_schema.tables "
-                    "WHERE table_schema = 'public' AND table_name IN ('observations', 'convex_hulls', 'grid_cells', 'base_grid_cells')"
+                    "WHERE table_schema = 'public' AND table_name IN ('projects', 'observations', 'convex_hulls', 'grid_cells', 'base_grid_cells')"
                 ))
                 existing_tables = {row[0] for row in result}
                 
-                required = {'observations', 'convex_hulls', 'grid_cells', 'base_grid_cells'}
+                required = {'projects', 'observations', 'convex_hulls', 'grid_cells', 'base_grid_cells'}
                 if required.issubset(existing_tables):
                     print("Database initialized successfully - all tables exist")
                     # Create base grid if missing (idempotent)

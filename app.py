@@ -1,7 +1,7 @@
 from flask import Flask, render_template, jsonify, request
 from livereload import Server
 from config import LAJI_API_ACCESS_TOKEN, LAJI_API_BASE_URL, SIMPLIFY_IN_METERS
-from models import init_db, Session, Observation, ConvexHull
+from models import init_db, Session, Observation, ConvexHull, Project
 from sqlalchemy import Integer, text
 import json
 from shapely.geometry import shape
@@ -41,6 +41,13 @@ stats_cache = SimpleCache(ttl_seconds=300)  # 5 minutes TTL
 with app.app_context():
     init_db()
 
+# Generate unique ID
+def generate_id():
+    from time import time
+    from random import randint
+    # Millisecond timestamp plus small random suffix to reduce collision risk
+    return int(time() * 1000) + randint(0, 999)
+
 @app.route("/")
 @app.route("/simple")
 def simple():
@@ -73,24 +80,210 @@ def get_config():
         "base_url": LAJI_API_BASE_URL
     })
 
+# ===== PROJECT ENDPOINTS =====
+
+@app.route("/api/projects", methods=["GET"])
+def list_projects():
+    """List all projects with their dataset counts"""
+    try:
+        session = Session()
+        from sqlalchemy import func
+        
+        # Get projects with observation counts and dataset counts
+        results = session.query(
+            Project.id,
+            Project.name,
+            Project.description,
+            Project.created_at,
+            Project.updated_at,
+            func.count(Observation.id).label('observation_count'),
+            func.count(func.distinct(Observation.dataset_id)).label('dataset_count')
+        ).outerjoin(Observation).group_by(
+            Project.id, Project.name, Project.description, Project.created_at, Project.updated_at
+        ).order_by(Project.created_at.desc()).all()
+        
+        projects = []
+        for row in results:
+            projects.append({
+                "id": row.id,
+                "name": row.name,
+                "description": row.description,
+                "created_at": row.created_at.isoformat() if row.created_at else None,
+                "updated_at": row.updated_at.isoformat() if row.updated_at else None,
+                "observation_count": row.observation_count,
+                "dataset_count": row.dataset_count
+            })
+        
+        session.close()
+        return jsonify({"projects": projects})
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route("/api/projects", methods=["POST"])
+def create_project():
+    """Create a new project"""
+    try:
+        data = request.json
+        name = data.get('name', '').strip()
+        description = data.get('description', '').strip()
+        
+        if not name:
+            return jsonify({"success": False, "error": "Project name is required"}), 400
+        
+        session = Session()
+        new_project = Project(
+            name=name,
+            description=description
+        )
+        session.add(new_project)
+        session.commit()
+        
+        result = {
+            "success": True,
+            "project": {
+                "id": new_project.id,
+                "name": new_project.name,
+                "description": new_project.description,
+                "created_at": new_project.created_at.isoformat(),
+                "updated_at": new_project.updated_at.isoformat()
+            }
+        }
+        session.close()
+        return jsonify(result)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route("/api/projects/<int:project_id>", methods=["DELETE"])
+def delete_project(project_id):
+    """Delete a project and all its observations"""
+    try:
+        session = Session()
+        project = session.query(Project).filter_by(id=project_id).first()
+        
+        if not project:
+            session.close()
+            return jsonify({"success": False, "error": "Project not found"}), 404
+        
+        # Get counts before deletion
+        obs_count = session.query(Observation).filter_by(project_id=project_id).count()
+        
+        # Delete convex hull if exists
+        session.query(ConvexHull).filter_by(project_id=project_id).delete()
+        
+        # Delete project (cascade will delete observations)
+        session.delete(project)
+        session.commit()
+        session.close()
+        
+        # Invalidate cache
+        stats_cache.delete(f"stats:{project_id}")
+        
+        return jsonify({
+            "success": True,
+            "deleted_observations": obs_count
+        })
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route("/api/projects/<int:project_id>/datasets", methods=["GET"])
+def list_project_datasets(project_id):
+    """List all datasets within a project"""
+    try:
+        session = Session()
+        from sqlalchemy import func
+        
+        # Get distinct datasets in the project
+        results = session.query(
+            Observation.dataset_id,
+            func.max(Observation.dataset_name).label('dataset_name'),
+            func.max(Observation.dataset_url).label('dataset_url'),
+            func.max(Observation.created_at).label('created_at'),
+            func.count(Observation.id).label('count')
+        ).filter_by(
+            project_id=project_id
+        ).group_by(
+            Observation.dataset_id
+        ).order_by(
+            func.max(Observation.created_at).desc()
+        ).all()
+        
+        datasets = []
+        for row in results:
+            datasets.append({
+                "dataset_id": row.dataset_id,
+                "dataset_name": row.dataset_name,
+                "dataset_url": row.dataset_url,
+                "created_at": row.created_at.isoformat() if row.created_at else None,
+                "count": row.count
+            })
+        
+        session.close()
+        return jsonify({"datasets": datasets, "project_id": project_id})
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route("/api/projects/<int:project_id>/datasets/<dataset_id>", methods=["DELETE"])
+def delete_dataset_from_project(project_id, dataset_id):
+    """Delete a specific dataset from a project"""
+    try:
+        session = Session()
+        
+        # Delete observations with matching project_id and dataset_id
+        obs_count = session.query(Observation).filter_by(
+            project_id=project_id,
+            dataset_id=dataset_id
+        ).delete()
+        
+        session.commit()
+        session.close()
+        
+        # Invalidate cache
+        stats_cache.delete(f"stats:{project_id}")
+        
+        return jsonify({
+            "success": True,
+            "deleted_observations": obs_count
+        })
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"success": False, "error": str(e)}), 500
+
 @app.route("/api/observations", methods=["POST"])
 def save_observations():
     """Save observations to database using batched inserts for scalability"""
     try:
         data = request.json
+        project_id = data.get('project_id')
         dataset_id = data.get('dataset_id')
         dataset_name = data.get('dataset_name', 'Unnamed Dataset')
         dataset_url = data.get('dataset_url', '')
         features = data.get('features', [])
         
+        if not project_id:
+            return jsonify({"success": False, "error": "project_id is required"}), 400
+        
         if not features:
             return jsonify({"success": False, "error": "No features provided"}), 400
+        
+        # Verify project exists
+        session = Session()
+        project = session.query(Project).filter_by(id=project_id).first()
+        if not project:
+            session.close()
+            return jsonify({"success": False, "error": "Project not found"}), 404
         
         from datetime import datetime
         from sqlalchemy import insert
         current_time = datetime.utcnow()
-        
-        session = Session()
         
         # Process in chunks for memory efficiency
         chunk_size = 1000
@@ -109,6 +302,7 @@ def save_observations():
                         geom = shape(feature['geometry']).wkt
                     
                     observations.append({
+                        'project_id': project_id,
                         'dataset_id': dataset_id,
                         'dataset_name': dataset_name,
                         'dataset_url': dataset_url,
@@ -123,8 +317,12 @@ def save_observations():
                     session.commit()
                     total_inserted += len(observations)
             
-            # Invalidate cache for this dataset since new data was added
-            stats_cache.delete(f"stats:{dataset_id}")
+            # Update project's updated_at timestamp
+            project.updated_at = datetime.utcnow()
+            session.commit()
+            
+            # Invalidate cache for this project since new data was added
+            stats_cache.delete(f"stats:{project_id}")
             
             return jsonify({"success": True, "count": total_inserted})
             
@@ -137,9 +335,9 @@ def save_observations():
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
-@app.route("/api/observations/<dataset_id>", methods=["GET"])
-def get_observations(dataset_id):
-    """Get observations for a dataset with pagination and spatial filtering
+@app.route("/api/observations/<int:project_id>", methods=["GET"])
+def get_observations(project_id):
+    """Get observations for a project with pagination and spatial filtering
     
     Query Parameters:
     - page: Page number (default: 1)
@@ -157,7 +355,7 @@ def get_observations(dataset_id):
         # This does everything in a single database query for maximum performance
         offset = (page - 1) * per_page
         params = {
-            'dataset_id': dataset_id,
+            'project_id': project_id,
             'limit': per_page,
             'offset': offset
         }
@@ -173,6 +371,7 @@ def get_observations(dataset_id):
         query = text(f"""
             SELECT 
                 id,
+                dataset_id,
                 dataset_name,
                 dataset_url,
                 created_at,
@@ -180,7 +379,7 @@ def get_observations(dataset_id):
                 {geom_sql} as geometry_json,
                 COUNT(*) OVER() as total_count
             FROM observations
-            WHERE dataset_id = :dataset_id
+            WHERE project_id = :project_id
             ORDER BY id
             LIMIT :limit OFFSET :offset
         """)
@@ -192,7 +391,7 @@ def get_observations(dataset_id):
             return jsonify({
                 "type": "FeatureCollection",
                 "features": [],
-                "dataset_id": dataset_id,
+                "project_id": project_id,
                 "pagination": {
                     "page": page,
                     "per_page": per_page,
@@ -209,17 +408,13 @@ def get_observations(dataset_id):
         for row in results:
             props = dict(row.properties or {})
             props['_db_id'] = row.id
+            props['_dataset_id'] = row.dataset_id
             feature = {
                 "type": "Feature",
                 "properties": props,
                 "geometry": json.loads(row.geometry_json) if row.geometry_json else None
             }
             features.append(feature)
-        
-        # Get dataset metadata from first row
-        dataset_name = results[0].dataset_name
-        dataset_url = results[0].dataset_url
-        created_at = results[0].created_at
         
         session.close()
         
@@ -228,10 +423,7 @@ def get_observations(dataset_id):
         return jsonify({
             "type": "FeatureCollection",
             "features": features,
-            "dataset_id": dataset_id,
-            "dataset_name": dataset_name,
-            "dataset_url": dataset_url,
-            "created_at": created_at.isoformat() if created_at else None,
+            "project_id": project_id,
             "pagination": {
                 "page": page,
                 "per_page": per_page,
@@ -301,12 +493,12 @@ def list_datasets():
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
-@app.route("/api/observations/<dataset_id>/stats", methods=["GET"])
-def get_dataset_stats(dataset_id):
-    """Calculate dataset statistics in the database for scalability"""
+@app.route("/api/observations/<int:project_id>/stats", methods=["GET"])
+def get_dataset_stats(project_id):
+    """Calculate project statistics in the database for scalability"""
     try:
         # Check cache first
-        cache_key = f"stats:{dataset_id}"
+        cache_key = f"stats:{project_id}"
         cached_result = stats_cache.get(cache_key)
         if cached_result:
             return jsonify(cached_result)
@@ -315,19 +507,18 @@ def get_dataset_stats(dataset_id):
         from sqlalchemy import func, cast, String, text
         from sqlalchemy.dialects.postgresql import ARRAY
         
+        # Get project info
+        project = session.query(Project).filter_by(id=project_id).first()
+        if not project:
+            session.close()
+            return jsonify({"success": False, "error": "Project not found"}), 404
+        
         # Get total count
-        total = session.query(func.count(Observation.id)).filter_by(dataset_id=dataset_id).scalar()
+        total = session.query(func.count(Observation.id)).filter_by(project_id=project_id).scalar()
         
         if total == 0:
             session.close()
-            return jsonify({"success": False, "error": "Dataset not found or empty"}), 404
-        
-        # Get dataset metadata
-        metadata = session.query(
-            Observation.dataset_name,
-            Observation.dataset_url,
-            Observation.created_at
-        ).filter_by(dataset_id=dataset_id).first()
+            return jsonify({"success": False, "error": "Project has no observations"}), 404
         
         # Calculate statistics using PostgreSQL aggregations
         # Note: JSONB keys are accessed using -> or ->>
@@ -338,7 +529,7 @@ def get_dataset_stats(dataset_id):
                 Observation.properties['unit.linkings.taxon.scientificName'].astext
             ))
         ).filter(
-            Observation.dataset_id == dataset_id,
+            Observation.project_id == project_id,
             Observation.properties['unit.linkings.taxon.scientificName'].astext.isnot(None)
         ).scalar() or 0
         
@@ -348,7 +539,7 @@ def get_dataset_stats(dataset_id):
                 Observation.properties['gathering.locality'].astext
             ))
         ).filter(
-            Observation.dataset_id == dataset_id,
+            Observation.project_id == project_id,
             Observation.properties['gathering.locality'].astext.isnot(None)
         ).scalar() or 0
         
@@ -356,7 +547,7 @@ def get_dataset_stats(dataset_id):
         dates = session.query(
             func.min(Observation.properties['gathering.displayDateTime'].astext),
             func.max(Observation.properties['gathering.displayDateTime'].astext)
-        ).filter_by(dataset_id=dataset_id).first()
+        ).filter_by(project_id=project_id).first()
         
         date_range = {
             "earliest": dates[0].split(' ')[0] if dates[0] else None,
@@ -368,7 +559,7 @@ def get_dataset_stats(dataset_id):
             Observation.properties['unit.recordBasis'].astext.label('basis'),
             func.count(Observation.id).label('count')
         ).filter_by(
-            dataset_id=dataset_id
+            project_id=project_id
         ).group_by(
             Observation.properties['unit.recordBasis'].astext
         ).all()
@@ -386,7 +577,7 @@ def get_dataset_stats(dataset_id):
             func.avg(cast(Observation.properties['unit.interpretations.individualCount'].astext, Integer)),
             func.count(Observation.id)
         ).filter(
-            Observation.dataset_id == dataset_id,
+            Observation.project_id == project_id,
             Observation.properties['unit.interpretations.individualCount'].astext.isnot(None),
             Observation.properties['unit.interpretations.individualCount'].astext.cast(Integer).isnot(None)
         ).first()
@@ -406,7 +597,7 @@ def get_dataset_stats(dataset_id):
             Observation.properties['unit.linkings.taxon.scientificName'].astext.label('species'),
             func.count(Observation.id).label('count')
         ).filter(
-            Observation.dataset_id == dataset_id,
+            Observation.project_id == project_id,
             Observation.properties['unit.linkings.taxon.scientificName'].astext.isnot(None)
         ).group_by(
             Observation.properties['unit.linkings.taxon.scientificName'].astext
@@ -423,7 +614,7 @@ def get_dataset_stats(dataset_id):
         observer_query = """
             SELECT kv.value as observer, COUNT(*) as count
             FROM observations, jsonb_each_text(properties) AS kv(key, value)
-            WHERE dataset_id = :dataset_id
+            WHERE project_id = :project_id
               AND kv.key LIKE 'gathering.team%'
               AND kv.value IS NOT NULL
             GROUP BY kv.value
@@ -431,7 +622,7 @@ def get_dataset_stats(dataset_id):
             LIMIT 10
         """
 
-        top_observers_results = session.execute(text(observer_query), {'dataset_id': dataset_id}).fetchall()
+        top_observers_results = session.execute(text(observer_query), {'project_id': project_id}).fetchall()
         top_observers = [
             {"observer": row[0], "count": row[1]}
             for row in top_observers_results
@@ -440,20 +631,20 @@ def get_dataset_stats(dataset_id):
         # Count unique observers (flattened keys only)
         unique_observers_query = """
             SELECT COUNT(DISTINCT kv.value) FROM observations, jsonb_each_text(properties) AS kv(key, value)
-            WHERE dataset_id = :dataset_id
+            WHERE project_id = :project_id
               AND kv.key LIKE 'gathering.team%'
               AND kv.value IS NOT NULL
         """
-        unique_observers = session.execute(text(unique_observers_query), {'dataset_id': dataset_id}).scalar() or 0
+        unique_observers = session.execute(text(unique_observers_query), {'project_id': project_id}).scalar() or 0
         
         session.close()
         
         result = {
             "success": True,
-            "dataset_id": dataset_id,
-            "dataset_name": metadata[0] if metadata else "Unknown",
-            "dataset_url": metadata[1] if metadata else None,
-            "created_at": metadata[2].isoformat() if metadata and metadata[2] else None,
+            "project_id": project_id,
+            "project_name": project.name,
+            "project_description": project.description,
+            "created_at": project.created_at.isoformat() if project.created_at else None,
             "stats": {
                 "totalRecords": total,
                 "uniqueSpecies": unique_species,
@@ -477,13 +668,13 @@ def get_dataset_stats(dataset_id):
         traceback.print_exc()
         return jsonify({"success": False, "error": str(e)}), 500
 
-@app.route("/api/observations/<dataset_id>/convex_hull", methods=["GET"])
-def get_convex_hull(dataset_id):
-    """Get the pre-calculated convex hull for a dataset"""
+@app.route("/api/observations/<int:project_id>/convex_hull", methods=["GET"])
+def get_convex_hull(project_id):
+    """Get the pre-calculated convex hull for a project"""
     try:
         session = Session()
         
-        convex_hull = session.query(ConvexHull).filter_by(dataset_id=dataset_id).first()
+        convex_hull = session.query(ConvexHull).filter_by(project_id=project_id).first()
         
         if not convex_hull:
             session.close()
@@ -501,7 +692,7 @@ def get_convex_hull(dataset_id):
         
         return jsonify({
             "success": True,
-            "dataset_id": dataset_id,
+            "project_id": project_id,
             "geometry": geometry_geojson,
             "area_km2": convex_hull.area_km2,
             "calculated_at": convex_hull.calculated_at.isoformat() if convex_hull.calculated_at else None
@@ -512,17 +703,17 @@ def get_convex_hull(dataset_id):
         traceback.print_exc()
         return jsonify({"success": False, "error": str(e)}), 500
 
-@app.route("/api/observations/<dataset_id>/convex_hull", methods=["POST"])
-def calculate_convex_hull(dataset_id):
-    """Calculate convex hull for a dataset using PostGIS and store in database"""
+@app.route("/api/observations/<int:project_id>/convex_hull", methods=["POST"])
+def calculate_convex_hull(project_id):
+    """Calculate convex hull for a project using PostGIS and store in database"""
     try:
         session = Session()
         
-        # Check if dataset exists
-        dataset_count = session.query(Observation).filter_by(dataset_id=dataset_id).count()
-        if dataset_count == 0:
+        # Check if project exists
+        project_count = session.query(Observation).filter_by(project_id=project_id).count()
+        if project_count == 0:
             session.close()
-            return jsonify({"success": False, "error": "Dataset not found"}), 404
+            return jsonify({"success": False, "error": "Project not found or has no observations"}), 404
         
         # Use PostGIS to calculate convex hull of all non-excluded geometries
         # ST_ConvexHull works on collections, so we use ST_Collect to aggregate all geometries
@@ -530,7 +721,7 @@ def calculate_convex_hull(dataset_id):
             WITH non_excluded AS (
                 SELECT geometry
                 FROM observations
-                WHERE dataset_id = :dataset_id
+                WHERE project_id = :project_id
                   AND geometry IS NOT NULL
                   AND (properties->>'excluded' IS NULL 
                        OR properties->>'excluded' = 'false' 
@@ -547,40 +738,41 @@ def calculate_convex_hull(dataset_id):
             WHERE geom_collection IS NOT NULL
         """)
         
-        result = session.execute(convex_hull_query, {'dataset_id': dataset_id}).fetchone()
+        result = session.execute(convex_hull_query, {'project_id': project_id}).fetchone()
         
         if not result or not result[0]:
             session.close()
             return jsonify({
                 "success": False, 
-                "error": "Could not calculate convex hull. Dataset may have insufficient non-excluded geometries."
+                "error": "Could not calculate convex hull. Project may have insufficient non-excluded geometries."
             }), 400
         
         hull_wkb = result[0]
         area_km2 = float(result[1]) if result[1] else 0.0
-        
-        # Check if convex hull already exists for this dataset
-        existing_hull = session.query(ConvexHull).filter_by(dataset_id=dataset_id).first()
-        
+
+
+        # Check if convex hull already exists for this project
+        existing_hull = session.query(ConvexHull).filter_by(project_id=project_id).first()
+
         if existing_hull:
-            # Update existing
+            # Update existing via ORM; if we need to set dataset_id (fallback) do a direct UPDATE
             existing_hull.geometry = hull_wkb
             existing_hull.area_km2 = area_km2
             existing_hull.calculated_at = datetime.utcnow()
-        else:
-            # Create new
+
+            # Create new via ORM
             new_hull = ConvexHull(
-                dataset_id=dataset_id,
+                project_id=project_id,
                 geometry=hull_wkb,
                 area_km2=area_km2,
                 calculated_at=datetime.utcnow()
             )
             session.add(new_hull)
-        
+
         session.commit()
         
         # Get the geometry as GeoJSON for response
-        convex_hull = session.query(ConvexHull).filter_by(dataset_id=dataset_id).first()
+        convex_hull = session.query(ConvexHull).filter_by(project_id=project_id).first()
         geometry_geojson = None
         if convex_hull and convex_hull.geometry:
             geometry_geojson = json.loads(session.scalar(convex_hull.geometry.ST_AsGeoJSON()))
@@ -589,7 +781,7 @@ def calculate_convex_hull(dataset_id):
         
         return jsonify({
             "success": True,
-            "dataset_id": dataset_id,
+            "project_id": project_id,
             "geometry": geometry_geojson,
             "area_km2": area_km2,
             "calculated_at": datetime.utcnow().isoformat()
@@ -600,13 +792,12 @@ def calculate_convex_hull(dataset_id):
         traceback.print_exc()
         return jsonify({"success": False, "error": str(e)}), 500
 
-@app.route("/api/observations/<dataset_id>/grid", methods=["GET"])
-def get_grid(dataset_id):
-    """Get the stored grid cells for a dataset as a GeoJSON FeatureCollection"""
-    print("Fetching grid for dataset:", dataset_id)
+@app.route("/api/observations/<int:project_id>/grid", methods=["GET"])
+def get_grid(project_id):
+    """Get the stored grid cells for a project as a GeoJSON FeatureCollection"""
     try:
         session = Session()
-        rows = session.execute(text("SELECT id, ST_AsGeoJSON(geom) as geom_json FROM grid_cells WHERE dataset_id = :dataset_id"), {'dataset_id': dataset_id}).fetchall()
+        rows = session.execute(text("SELECT id, ST_AsGeoJSON(geom) as geom_json FROM grid_cells WHERE project_id = :project_id"), {'project_id': project_id}).fetchall()
         features = []
         for r in rows:
             features.append({
@@ -615,77 +806,49 @@ def get_grid(dataset_id):
                 "geometry": json.loads(r.geom_json) if r.geom_json else None
             })
         session.close()
-        return jsonify({"type": "FeatureCollection", "features": features, "dataset_id": dataset_id, "success": True})
+        return jsonify({"type": "FeatureCollection", "features": features, "project_id": project_id, "success": True})
     except Exception as e:
         import traceback
         traceback.print_exc()
         return jsonify({"success": False, "error": str(e)}), 500
 
-@app.route("/api/observations/<dataset_id>/grid", methods=["POST"])
-def calculate_grid(dataset_id):
-    print("Calculating grid for dataset:", dataset_id)
-    """Generate grid for dataset by selecting base grid cells that intersect observations."""
+@app.route("/api/observations/<int:project_id>/grid", methods=["POST"])
+def calculate_grid(project_id):
+    """Generate grid for project by selecting base grid cells that intersect observations."""
 
     session = Session()
     
     try:
-        # Delete previous grid cells for the dataset
-        session.execute(text("DELETE FROM grid_cells WHERE dataset_id = :dataset_id"), {'dataset_id': dataset_id})
-                
-        # Use base grid: select cells that intersect dataset observations
-        print("Using base grid for grid generation")
+        # Delete previous grid cells for the project
+        session.execute(text("DELETE FROM grid_cells WHERE project_id = :project_id"), {'project_id': project_id})
+
+        # Use base grid: select cells that intersect project observations
         generation_sql = text("""
-            INSERT INTO grid_cells (dataset_id, geom)
-            SELECT :dataset_id, bg.geom_4326
+            INSERT INTO grid_cells (project_id, geom)
+            SELECT :project_id, bg.geom_4326
             FROM base_grid_cells bg
             WHERE EXISTS (
                 SELECT 1 FROM observations o
-                WHERE o.dataset_id = :dataset_id
+                WHERE o.project_id = :project_id
                     AND o.geometry IS NOT NULL
                     AND (o.properties->>'excluded' IS NULL OR o.properties->>'excluded' = 'false' OR o.properties->>'excluded' = '0')
                     AND ST_Intersects(ST_SetSRID(o.geometry, 4326), bg.geom_4326)
             );
         """)
-        
-        session.execute(generation_sql, {'dataset_id': dataset_id})
+        session.execute(generation_sql, {'project_id': project_id})
+
         session.commit()
         
         # Count inserted cells
-        cell_count = session.execute(text("SELECT COUNT(*) FROM grid_cells WHERE dataset_id = :dataset_id"), {'dataset_id': dataset_id}).scalar()
+        cell_count = session.execute(text("SELECT COUNT(*) FROM grid_cells WHERE project_id = :project_id"), {'project_id': project_id}).scalar()
         
         session.close()
-        return jsonify({"success": True, "dataset_id": dataset_id, "message": "Grid generated", "cell_count": cell_count})
+        return jsonify({"success": True, "project_id": project_id, "message": "Grid generated", "cell_count": cell_count})
     except Exception as e:
         session.rollback()
         session.close()
         import traceback
         traceback.print_exc()
-        return jsonify({"success": False, "error": str(e)}), 500
-
-@app.route("/api/observations/<dataset_id>", methods=["DELETE"])
-def delete_observations(dataset_id):
-    """Delete a dataset and its convex hull"""
-    try:
-        session = Session()
-        
-        # Delete observations
-        obs_count = session.query(Observation).filter_by(dataset_id=dataset_id).delete()
-        
-        # Delete convex hull if exists
-        hull_count = session.query(ConvexHull).filter_by(dataset_id=dataset_id).delete()
-        
-        session.commit()
-        session.close()
-        
-        # Invalidate cache for this dataset
-        stats_cache.delete(f"stats:{dataset_id}")
-        
-        return jsonify({
-            "success": True, 
-            "deleted_observations": obs_count,
-            "deleted_convex_hull": hull_count > 0
-        })
-    except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
 if __name__ == "__main__":
