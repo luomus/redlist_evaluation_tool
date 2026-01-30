@@ -1,7 +1,7 @@
 from flask import Flask, render_template, jsonify, request
 from livereload import Server
-from config import LAJI_API_ACCESS_TOKEN, LAJI_API_BASE_URL, SIMPLIFY_IN_METERS
-from models import init_db, Session, Observation, ConvexHull, Project
+from config import LAJI_API_ACCESS_TOKEN, LAJI_API_BASE_URL
+from models import init_db, Session, Observation, ConvexHull, Project, GridCell
 from sqlalchemy import Integer, text
 import json
 from shapely.geometry import shape
@@ -174,6 +174,9 @@ def delete_project(project_id):
         # Delete convex hull if exists
         session.query(ConvexHull).filter_by(project_id=project_id).delete()
         
+        # Delete any grid cells referencing this project (some DB schemas may not have ON DELETE CASCADE)
+        session.query(GridCell).filter_by(project_id=project_id).delete(synchronize_session=False)
+        
         # Delete project (cascade will delete observations)
         session.delete(project)
         session.commit()
@@ -296,7 +299,7 @@ def save_observations():
                 # Prepare batch insert data
                 observations = []
                 for feature in chunk:
-                    # Extract geometry
+                    # Extract geometry (assume incoming GeoJSON is EPSG:4326/WGS84)
                     geom = None
                     if feature.get('geometry'):
                         geom = shape(feature['geometry']).wkt
@@ -308,7 +311,8 @@ def save_observations():
                         'dataset_url': dataset_url,
                         'created_at': current_time,
                         'properties': feature.get('properties', {}),
-                        'geometry': (f'SRID=3067;{geom}' if geom else None)
+                        # Store geometries as WGS84 (EPSG:4326)
+                        'geometry': (f'SRID=4326;{geom}' if geom else None)
                     })
                 
                 # Bulk insert chunk
@@ -360,12 +364,7 @@ def get_observations(project_id):
             'offset': offset
         }
 
-        # Parameterize SIMPLIFY_IN_METERS to avoid inlining dynamic values into SQL
-        if SIMPLIFY_IN_METERS > 0:
-            geom_sql = "ST_AsGeoJSON(ST_Simplify(geometry, :SIMPLIFY_IN_METERS))"
-            params['_SIMPLIFY_IN_METERS'] = float(SIMPLIFY_IN_METERS)
-        else:
-            geom_sql = "ST_AsGeoJSON(geometry)"
+        geom_sql = "ST_AsGeoJSON(geometry)"
 
         # Execute optimized query with window function for count
         query = text(f"""
@@ -733,7 +732,7 @@ def calculate_convex_hull(project_id):
             )
             SELECT 
                 ST_ConvexHull(geom_collection) as hull_geom,
-                ST_Area(ST_ConvexHull(geom_collection)) / 1000000.0 as area_km2
+                ST_Area(ST_Transform(ST_ConvexHull(geom_collection), 3067)) / 1000000.0 as area_km2
             FROM collected
             WHERE geom_collection IS NOT NULL
         """)
@@ -759,7 +758,7 @@ def calculate_convex_hull(project_id):
             existing_hull.geometry = hull_wkb
             existing_hull.area_km2 = area_km2
             existing_hull.calculated_at = datetime.utcnow()
-
+        else:
             # Create new via ORM
             new_hull = ConvexHull(
                 project_id=project_id,
@@ -825,15 +824,15 @@ def calculate_grid(project_id):
         # Use base grid: select cells that intersect project observations
         generation_sql = text("""
             INSERT INTO grid_cells (project_id, geom)
-            SELECT :project_id, bg.geom_4326
+            SELECT DISTINCT :project_id, bg.geom_4326
             FROM base_grid_cells bg
-            WHERE EXISTS (
-                SELECT 1 FROM observations o
-                WHERE o.project_id = :project_id
-                    AND o.geometry IS NOT NULL
-                    AND (o.properties->>'excluded' IS NULL OR o.properties->>'excluded' = 'false' OR o.properties->>'excluded' = '0')
-                    AND ST_Intersects(ST_SetSRID(o.geometry, 4326), bg.geom_4326)
-            );
+            JOIN observations o
+              ON o.project_id = :project_id
+              AND o.geometry IS NOT NULL
+              AND (o.properties->>'excluded' IS NULL OR o.properties->>'excluded' = 'false' OR o.properties->>'excluded' = '0')
+              -- bbox operator first to allow index usage, then exact check
+              AND bg.geom_4326 && o.geometry
+              AND ST_Intersects(bg.geom_4326, o.geometry)
         """)
         session.execute(generation_sql, {'project_id': project_id})
 

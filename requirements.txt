@@ -11,4 +11,3 @@ SQLAlchemy==2.0.36
 GeoAlchemy2==0.15.2
 psycopg2-binary==2.9.10
 Shapely==2.0.6
-geopandas==0.14.1

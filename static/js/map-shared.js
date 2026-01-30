@@ -357,7 +357,7 @@ function setupPolygonSelector(map, geometryLayer) {
 
         if (!confirm(`Apply ${exclude ? 'disable' : 'enable'} to ${dbIds.length} observations?`)) return;
         try {
-            const res = await window.setExcludeBatch(dbIds, exclude, 50);
+            const res = await window.setExcludeBatch(dbIds, exclude);
             map.closePopup();
             if (selectionPolygon) { map.removeLayer(selectionPolygon); selectionPolygon = null; }
             alert(`Processed ${res.processed} observations (${res.failed} failed).`);
@@ -377,7 +377,7 @@ function setupPolygonSelector(map, geometryLayer) {
             if (id) ids.push(id);
         });
         try {
-            const r = await window.setExcludeBatch(ids, true, 50);
+            const r = await window.setExcludeBatch(ids, true);
             alert(`Disabled ${r.processed} observations (${r.failed} failed).`);
         } catch (e) {
             console.error('Error disabling all:', e);
@@ -393,7 +393,7 @@ function setupPolygonSelector(map, geometryLayer) {
             if (id) ids.push(id);
         });
         try {
-            const r = await window.setExcludeBatch(ids, false, 50);
+            const r = await window.setExcludeBatch(ids, false);
             alert(`Enabled ${r.processed} observations (${r.failed} failed).`);
         } catch (e) {
             console.error('Error enabling all:', e);

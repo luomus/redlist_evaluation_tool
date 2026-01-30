@@ -9,9 +9,12 @@ if __name__ == "__main__":
     try:
         init_db()
         print("✓ Database tables created successfully!")
+        print("  - projects table")
         print("  - observations table")
         print("  - convex_hulls table")
-        print("  - All indexes created")
+        print("  - grid_cells table")
+        print("  - base_grid_cells table (base grid)")
+        print("  - Indexes and base grid created")
     except Exception as e:
         print(f"✗ Error initializing database: {e}")
         import traceback

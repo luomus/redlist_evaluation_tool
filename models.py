@@ -21,6 +21,10 @@ class Project(Base):
     # Relationship to observations
     observations = relationship('Observation', back_populates='project', cascade='all, delete-orphan')
 
+    # Relationship to grid cells and convex hull
+    grid_cells = relationship('GridCell', back_populates='project', cascade='all, delete-orphan')
+    convex_hull = relationship('ConvexHull', back_populates='project', uselist=False, cascade='all, delete-orphan')
+
 class Observation(Base):
     __tablename__ = 'observations'
     
@@ -34,31 +38,20 @@ class Observation(Base):
     # Store properties as JSONB for efficient querying
     properties = Column(JSONB, nullable=False)
     
-    # PostGIS geometry column (ETRS-TM35FIN / EPSG:3067)
-    geometry = Column(Geometry(geometry_type='GEOMETRY', srid=3067))
+    # PostGIS geometry column (WGS84 / EPSG:4326)
+    geometry = Column(Geometry(geometry_type='GEOMETRY', srid=4326))
     
     # Relationship to project
     project = relationship('Project', back_populates='observations')
-    
-    # Indexes for performance
-    __table_args__ = (
-        # GIN index for JSONB queries (fast property searches)
-        Index('idx_observations_properties', properties, postgresql_using='gin'),
-        # Spatial index for geometry queries
-        Index('idx_observations_geometry', geometry, postgresql_using='gist'),
-        # Composite index for common query patterns
-        Index('idx_observations_project_created', project_id, created_at.desc()),
-        Index('idx_observations_dataset_created', dataset_id, created_at.desc()),
-    )
 
 class ConvexHull(Base):
     __tablename__ = 'convex_hulls'
     
     id = Column(Integer, primary_key=True)
-    project_id = Column(Integer, nullable=False, unique=True, index=True)
+    project_id = Column(Integer, ForeignKey('projects.id', ondelete='CASCADE'), nullable=False, unique=True, index=True)
     
-    # PostGIS geometry column for the convex hull (ETRS-TM35FIN / EPSG:3067)
-    geometry = Column(Geometry(geometry_type='POLYGON', srid=3067))
+    # PostGIS geometry column for the convex hull (WGS84 / EPSG:4326)
+    geometry = Column(Geometry(geometry_type='POLYGON', srid=4326))
     
     # Area in square kilometers
     area_km2 = Column(Float)
@@ -66,24 +59,21 @@ class ConvexHull(Base):
     # Track when it was calculated
     calculated_at = Column(DateTime, default=datetime.utcnow, index=True)
     
-    # Spatial index for geometry queries
-    __table_args__ = (
-        Index('idx_convex_hulls_geometry', geometry, postgresql_using='gist'),
-    )
+    # Relationship back to project (one-to-one)
+    project = relationship('Project', back_populates='convex_hull')
 
 class GridCell(Base):
     __tablename__ = 'grid_cells'
 
     id = Column(Integer, primary_key=True)
-    project_id = Column(Integer, nullable=False, index=True)
+    project_id = Column(Integer, ForeignKey('projects.id', ondelete='CASCADE'), nullable=False, index=True)
     cell_row = Column(Integer)
     cell_col = Column(Integer)
     geom = Column(Geometry(geometry_type='POLYGON', srid=4326))
     created_at = Column(DateTime, default=datetime.utcnow)
 
-    __table_args__ = (
-        Index('idx_grid_cells_geom', geom, postgresql_using='gist'),
-    )
+    # Relationship to project
+    project = relationship('Project', back_populates='grid_cells')
 
 class BaseGridCell(Base):
     __tablename__ = 'base_grid_cells'
@@ -94,11 +84,6 @@ class BaseGridCell(Base):
     geom_3067 = Column(Geometry(geometry_type='POLYGON', srid=3067))
     geom_4326 = Column(Geometry(geometry_type='POLYGON', srid=4326))
     created_at = Column(DateTime, default=datetime.utcnow)
-
-    __table_args__ = (
-        Index('idx_base_grid_geom3067', geom_3067, postgresql_using='gist'),
-        Index('idx_base_grid_geom4326', geom_4326, postgresql_using='gist'),
-    )
 
 # Database connection with connection pooling
 DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql://biotools:biotools@localhost:5432/biotools')

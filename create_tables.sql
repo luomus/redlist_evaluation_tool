@@ -7,6 +7,7 @@ DROP TABLE IF EXISTS observations CASCADE;
 DROP TABLE IF EXISTS projects CASCADE;
 
 -- Create observations table
+
 CREATE TABLE observations (
     id SERIAL PRIMARY KEY,
     project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
@@ -15,14 +16,14 @@ CREATE TABLE observations (
     dataset_url TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     properties JSONB NOT NULL,
-    geometry GEOMETRY(GEOMETRY, 3067)
+    geometry GEOMETRY(GEOMETRY, 4326)
 );
 
 -- Create convex_hulls table
 CREATE TABLE convex_hulls (
     id SERIAL PRIMARY KEY,
     project_id INTEGER NOT NULL UNIQUE REFERENCES projects(id),
-    geometry GEOMETRY(POLYGON, 3067),
+    geometry GEOMETRY(POLYGON, 4326),
     area_km2 DOUBLE PRECISION,
     calculated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

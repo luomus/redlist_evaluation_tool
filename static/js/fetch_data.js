@@ -32,7 +32,7 @@ async function fetchAllPages(baseUrl, config, logElement) {
     let currentPage = 1;
     let totalRecords = 0;
     let lastPage = 1;
-    let pageSize = 1000;
+    let pageSize = 10000;
     let totalTime = 0;
     const startTime = Date.now();
     
@@ -75,8 +75,8 @@ async function fetchAllPages(baseUrl, config, logElement) {
             
             // Store first page data for metadata
             if (currentPage === 1) {
-                lastPage = data.lastPage || 1;
-                pageSize = data.pageSize || 1000;
+                lastPage = data.lastPage;
+                pageSize = data.pageSize;
                 const recordCount = data.features ? data.features.length : 0;
                 addProgressLog(`Page ${currentPage}: ${recordCount} records fetched in ${pageTime.toFixed(2)}s (Total available: ${data.total || 'unknown'})`, 'success', logElement);
             } else {
