@@ -6,24 +6,44 @@
     <title>Red List Tool Project Manager</title>
     <link rel="stylesheet" href="/static/css/search.css">
     <link rel="stylesheet" href="/static/css/simple.css">
+    <style>
+        h1 {
+            color: #2c3e50;
+            font-size: 32px;
+            margin-bottom: 10px;
+            text-align: center;
+            background: linear-gradient(135deg, #3498db, #2c3e50);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .subtitle {
+            text-align: center;
+            color: #7f8c8d;
+            font-size: 16px;
+            margin-bottom: 30px;
+        }
+    </style>
 </head>
 <body>
     <div class="container">
-        <h1>Red List Tool Project Manager</h1>
+        <h1>Red List Tool</h1>
+        <div class="subtitle">Create IUCN evaluations with data from laji.fi</div>
         
         <!-- Info Section -->
         <div class="section">
             <h2>Projects</h2>
-            <p style="color: #666; margin-bottom: 15px;">
-                Info info lorem ipsum dolor sit amet, consectetur adipiscing elit.
+            <p style="color: #7f8c8d; margin-bottom: 15px; line-height: 1.6;">
+                Organize and manage your Red List evaluation projects. Create new projects, add datasets, and track your progress all in one place.
             </p>
         </div>
         
         <!-- Projects List -->
         <div id="projects" class="section" style="display: none;">
             <h2>Your Projects</h2>
-            <div class="project-controls" style="margin-bottom:10px;">
-                <input id="projectSearch" type="search" placeholder="Search projects by name..." style="padding:8px;width:60%;max-width:360px;border:1px solid #ced4da;border-radius:4px;">
+            <div class="project-controls" style="margin-bottom:20px;">
+                <input id="projectSearch" type="search" placeholder="🔍 Search projects by name..." style="padding:12px 16px;width:60%;max-width:360px;border:2px solid #e0e6ed;border-radius:8px;font-size:15px;transition:all 0.3s ease;">
                 <button id="clearSearch" class="btn-small" style="margin-left:8px;">Clear</button>
             </div>
             <div id="projectsList"></div>

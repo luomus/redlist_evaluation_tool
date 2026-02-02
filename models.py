@@ -1,6 +1,6 @@
 from sqlalchemy import create_engine, Column, Integer, String, DateTime, Text, Index, Float, text, ForeignKey, Boolean
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, relationship
+from sqlalchemy.orm import sessionmaker, relationship, backref
 from sqlalchemy.dialects.postgresql import JSONB
 from geoalchemy2 import Geometry
 from datetime import datetime
@@ -15,10 +15,16 @@ class Project(Base):
     id = Column(Integer, primary_key=True)
     name = Column(String(255), nullable=False)
     description = Column(Text)
+    parent_id = Column(Integer, ForeignKey('projects.id', ondelete='CASCADE'), nullable=True, index=True)
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
-    # Relationship to observations
+    # Self-referential relationship for parent-child hierarchy
+    # Note: cascade delete is handled by the database FK constraint (ondelete='CASCADE')
+    children = relationship('Project', 
+                          backref=backref('parent', remote_side=[id]))
+    
+    # Relationship to observations (only child projects have observations)
     observations = relationship('Observation', back_populates='project', cascade='all, delete-orphan')
 
     # Relationship to grid cells and convex hull

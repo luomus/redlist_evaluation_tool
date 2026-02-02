@@ -80,34 +80,50 @@ def get_config():
 
 @app.route("/api/projects", methods=["GET"])
 def list_projects():
-    """List all projects with their dataset counts"""
+    """List all parent projects with their child projects"""
     try:
         session = Session()
         from sqlalchemy import func
+        from sqlalchemy.orm import joinedload
         
-        # Get projects with observation counts and dataset counts
-        results = session.query(
-            Project.id,
-            Project.name,
-            Project.description,
-            Project.created_at,
-            Project.updated_at,
-            func.count(Observation.id).label('observation_count'),
-            func.count(func.distinct(Observation.dataset_id)).label('dataset_count')
-        ).outerjoin(Observation).group_by(
-            Project.id, Project.name, Project.description, Project.created_at, Project.updated_at
-        ).order_by(Project.created_at.desc()).all()
+        # Get only parent projects (where parent_id is NULL) with children eagerly loaded
+        parent_projects = session.query(Project).options(joinedload(Project.children)).filter(Project.parent_id.is_(None)).order_by(Project.created_at.desc()).all()
         
         projects = []
-        for row in results:
+        for parent in parent_projects:
+            # Count total observations and datasets across all child projects
+            total_obs = 0
+            total_datasets = 0
+            children_data = []
+            
+            # Safely iterate over children (handle None case)
+            for child in (parent.children or []):
+                obs_count = session.query(func.count(Observation.id)).filter_by(project_id=child.id).scalar() or 0
+                dataset_count = session.query(func.count(func.distinct(Observation.dataset_id))).filter_by(project_id=child.id).scalar() or 0
+                
+                total_obs += obs_count
+                total_datasets += dataset_count
+                
+                children_data.append({
+                    "id": child.id,
+                    "name": child.name,
+                    "description": child.description,
+                    "created_at": child.created_at.isoformat() if child.created_at else None,
+                    "updated_at": child.updated_at.isoformat() if child.updated_at else None,
+                    "observation_count": obs_count,
+                    "dataset_count": dataset_count
+                })
+            
             projects.append({
-                "id": row.id,
-                "name": row.name,
-                "description": row.description,
-                "created_at": row.created_at.isoformat() if row.created_at else None,
-                "updated_at": row.updated_at.isoformat() if row.updated_at else None,
-                "observation_count": row.observation_count,
-                "dataset_count": row.dataset_count
+                "id": parent.id,
+                "name": parent.name,
+                "description": parent.description,
+                "created_at": parent.created_at.isoformat() if parent.created_at else None,
+                "updated_at": parent.updated_at.isoformat() if parent.updated_at else None,
+                "observation_count": total_obs,
+                "dataset_count": total_datasets,
+                "children": children_data,
+                "child_count": len(children_data)
             })
         
         session.close()
@@ -117,11 +133,51 @@ def list_projects():
         traceback.print_exc()
         return jsonify({"success": False, "error": str(e)}), 500
 
-# Project creation is disabled - projects are auto-created from red-list-evaluation-groups.json
-# @app.route("/api/projects", methods=["POST"])
-# def create_project():
-#     """Create a new project"""
-#     return jsonify({"success": False, "error": "Project creation is disabled. Projects are automatically created from the red-list evaluation groups."}), 403
+@app.route("/api/projects/<int:parent_id>/children", methods=["POST"])
+def create_child_project(parent_id):
+    """Create a new child project under a parent project"""
+    try:
+        data = request.json
+        name = data.get('name', '').strip()
+        description = data.get('description', '').strip()
+        
+        if not name:
+            return jsonify({"success": False, "error": "Project name is required"}), 400
+        
+        session = Session()
+        
+        # Check if parent exists
+        parent = session.query(Project).filter_by(id=parent_id).first()
+        if not parent:
+            session.close()
+            return jsonify({"success": False, "error": "Parent project not found"}), 404
+        
+        # Create child project
+        child = Project(
+            name=name,
+            description=description,
+            parent_id=parent_id
+        )
+        session.add(child)
+        session.commit()
+        
+        result = {
+            "success": True,
+            "project": {
+                "id": child.id,
+                "name": child.name,
+                "description": child.description,
+                "parent_id": child.parent_id,
+                "created_at": child.created_at.isoformat(),
+                "updated_at": child.updated_at.isoformat()
+            }
+        }
+        session.close()
+        return jsonify(result)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"success": False, "error": str(e)}), 500
 
 @app.route("/api/projects/<int:project_id>", methods=["PUT", "PATCH"])
 def update_project(project_id):
