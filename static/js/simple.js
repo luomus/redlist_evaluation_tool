@@ -4,6 +4,16 @@ let currentProject = null;
 // Initialize app on load
 document.addEventListener('DOMContentLoaded', function() {
     loadProjects();
+
+    // Wire up search input and clear button
+    const searchInput = document.getElementById('projectSearch');
+    if (searchInput) {
+        searchInput.addEventListener('input', (e) => filterProjects(e.target.value));
+        const clearBtn = document.getElementById('clearSearch');
+        if (clearBtn) {
+            clearBtn.addEventListener('click', () => { searchInput.value = ''; filterProjects(''); searchInput.focus(); });
+        }
+    }
 });
 
 // Generate unique ID
@@ -33,35 +43,37 @@ function showError(message) {
     errorDiv.style.display = 'block';
 }
 
-// Create new project
-async function createProject() {
-    const name = document.getElementById('projectName').value.trim();
-    const description = document.getElementById('projectDescription').value.trim();
-    
-    if (!name) {
-        showError('Project name is required');
-        return;
-    }
+// Update project description
+async function updateProjectDescription(projectId) {
+    const description = document.getElementById(`edit-description-${projectId}`).value.trim();
     
     try {
-        const response = await fetch('/api/projects', {
-            method: 'POST',
+        const response = await fetch(`/api/projects/${projectId}`, {
+            method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name, description })
+            body: JSON.stringify({ description })
         });
         
         const result = await response.json();
         if (result.success) {
-            showSuccess('Project created successfully!');
-            document.getElementById('projectName').value = '';
-            document.getElementById('projectDescription').value = '';
+            showSuccess('Description updated successfully!');
             loadProjects();
         } else {
-            showError('Failed to create project: ' + result.error);
+            showError('Failed to update description: ' + result.error);
         }
     } catch (error) {
-        console.error('Error creating project:', error);
-        showError('Failed to create project');
+        console.error('Error updating description:', error);
+        showError('Failed to update description');
+    }
+}
+
+// Toggle edit description form
+function toggleEditDescription(projectId) {
+    const editDiv = document.getElementById(`edit-desc-${projectId}`);
+    if (editDiv.style.display === 'none') {
+        editDiv.style.display = 'block';
+    } else {
+        editDiv.style.display = 'none';
     }
 }
 
@@ -90,15 +102,27 @@ function displayProjects(projects) {
     let html = '<div class="project-list">';
     projects.forEach(project => {
         html += `
-            <div class="project-item" id="project-${project.id}">
+            <div class="project-item" id="project-${project.id}" data-project-name="${escapeHtml(project.name).toLowerCase()}">
                 <div class="project-header">
                     <h3>${escapeHtml(project.name)}</h3>
                     <div class="project-actions">
+                        <button onclick="toggleEditDescription('${project.id}')" class="btn-small">Edit Description</button>
                         <button onclick="toggleProjectDetails('${project.id}')" class="btn-small">Details</button>
                         <button onclick="deleteProject('${project.id}')" class="btn-small btn-danger">Delete</button>
                     </div>
                 </div>
-                ${project.description ? `<p class="project-description">${escapeHtml(project.description)}</p>` : ''}
+                ${project.description ? `<p class="project-description">${escapeHtml(project.description)}</p>` : '<p class="project-description" style="color: #999;">No description set</p>'}
+                
+                <!-- Edit Description Section -->
+                <div id="edit-desc-${project.id}" style="display: none; margin: 10px 0; padding: 10px; background: #f8f9fa; border-radius: 4px;">
+                    <div class="input-group">
+                        <label>Description:</label>
+                        <textarea id="edit-description-${project.id}" style="width: 100%; min-height: 80px;">${escapeHtml(project.description || '')}</textarea>
+                    </div>
+                    <button onclick="updateProjectDescription('${project.id}')" class="btn-small">Save Description</button>
+                    <button onclick="toggleEditDescription('${project.id}')" class="btn-small">Cancel</button>
+                </div>
+                
                 <div class="project-stats">
                     <span><strong>Datasets:</strong> ${project.dataset_count}</span>
                     <span><strong>Observations:</strong> ${project.observation_count}</span>
@@ -140,7 +164,6 @@ function displayProjects(projects) {
                         <h4>Analysis Tools</h4>
                         <div class="tool-buttons">
                             <button onclick="openTool('/stats', '${project.id}')">View Stats</button>
-                            <button onclick="openTool('/raw', '${project.id}')">View Raw</button>
                             <button onclick="openTool('/map', '${project.id}')">View/Edit on Map</button>
                             <button onclick="openTool('/grid', '${project.id}')">View Grid (AOO)</button>
                             <button onclick="openTool('/convex_hull', '${project.id}')">View Convex Hull (EOO)</button>
@@ -155,6 +178,20 @@ function displayProjects(projects) {
     projectsList.innerHTML = html;
     projectsDiv.style.display = 'block';
 }
+
+// Filter projects by name and description (case-insensitive)
+function filterProjects(query) {
+    const q = (query || '').trim().toLowerCase();
+    document.querySelectorAll('.project-item').forEach(item => {
+        const name = item.getAttribute('data-project-name') || '';
+        const desc = (item.querySelector('.project-description')?.textContent || item.querySelector('.project-description-preview')?.textContent || '').toLowerCase();
+        if (!q || name.includes(q) || desc.includes(q)) {
+            item.style.display = '';
+        } else {
+            item.style.display = 'none';
+        }
+    });
+} 
 
 // Toggle project details
 function toggleProjectDetails(projectId) {
@@ -337,6 +374,12 @@ async function deleteDataset(projectId, datasetId) {
 // Open analysis tool
 function openTool(toolPath, projectId) {
     window.location.href = `${toolPath}?id=${encodeURIComponent(projectId)}`;
+}
+
+// Helper function to truncate text to first n characters
+function truncate(text, n) {
+    if (!text) return '';
+    return text.length > n ? text.slice(0, n) + '…' : text;
 }
 
 // Helper function to escape HTML

@@ -11,23 +11,21 @@
     <div class="container">
         <h1>Red List Tool Project Manager</h1>
         
-        <!-- Create Project Section -->
+        <!-- Info Section -->
         <div class="section">
-            <h2>Create New Project</h2>
-            <div class="input-group">
-                <label for="projectName">Project Name *</label>
-                <input type="text" id="projectName" placeholder="My Research Project" required>
-            </div>
-            <div class="input-group">
-                <label for="projectDescription">Description (optional)</label>
-                <textarea id="projectDescription" placeholder="Brief description of this project"></textarea>
-            </div>
-            <button id="createProjectBtn" onclick="createProject()">Create Project</button>
+            <h2>Projects</h2>
+            <p style="color: #666; margin-bottom: 15px;">
+                Info info lorem ipsum dolor sit amet, consectetur adipiscing elit.
+            </p>
         </div>
         
         <!-- Projects List -->
         <div id="projects" class="section" style="display: none;">
             <h2>Your Projects</h2>
+            <div class="project-controls" style="margin-bottom:10px;">
+                <input id="projectSearch" type="search" placeholder="Search projects by name..." style="padding:8px;width:60%;max-width:360px;border:1px solid #ced4da;border-radius:4px;">
+                <button id="clearSearch" class="btn-small" style="margin-left:8px;">Clear</button>
+            </div>
             <div id="projectsList"></div>
         </div>
         

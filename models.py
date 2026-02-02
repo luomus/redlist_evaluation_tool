@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, Text, Index, Float, text, ForeignKey
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, Text, Index, Float, text, ForeignKey, Boolean
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from sqlalchemy.dialects.postgresql import JSONB
@@ -34,6 +34,9 @@ class Observation(Base):
     dataset_name = Column(String(255))
     dataset_url = Column(Text)  # Store the original URL used to fetch the dataset
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    
+    # Excluded flag for quick queries and indexing
+    excluded = Column(Boolean, default=False, index=True)
     
     # Store properties as JSONB for efficient querying
     properties = Column(JSONB, nullable=False)
@@ -141,6 +144,57 @@ def create_base_grid_if_missing():
         session.close()
 
 
+def populate_projects_from_json():
+    """Populate projects from red-list-evaluation-groups.json if not already present."""
+    import json
+    import os
+    
+    session = Session()
+    try:
+        # Check if projects already exist
+        project_count = session.query(Project).count()
+        if project_count > 0:
+            print(f"Projects already exist ({project_count} projects), skipping auto-population")
+            return
+        
+        # Load the JSON file
+        json_path = os.path.join(os.path.dirname(__file__), 'static', 'resources', 'red-list-evaluation-groups.json')
+        if not os.path.exists(json_path):
+            print(f"Warning: {json_path} not found, skipping project population")
+            return
+        
+        with open(json_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        
+        # Extract project names from results
+        results = data.get('results', [])
+        if not results:
+            print("Warning: No results found in red-list-evaluation-groups.json")
+            return
+        
+        # Create projects
+        projects_to_add = []
+        for item in results:
+            name = item.get('name')
+            if name:
+                projects_to_add.append(Project(name=name, description=''))
+        
+        if projects_to_add:
+            session.bulk_save_objects(projects_to_add)
+            session.commit()
+            print(f"✓ Created {len(projects_to_add)} projects from red-list-evaluation-groups.json")
+        else:
+            print("Warning: No valid project names found in JSON")
+            
+    except Exception as e:
+        session.rollback()
+        print(f"Warning: Failed to populate projects from JSON: {e}")
+        import traceback
+        traceback.print_exc()
+    finally:
+        session.close()
+
+
 def init_db():
     """Initialize database tables with retry logic"""
     max_retries = 3
@@ -167,6 +221,26 @@ def init_db():
                         create_base_grid_if_missing()
                     except Exception as e:
                         print(f"Warning: Base grid creation failed: {e}")
+                    # Populate projects from JSON if not already present (idempotent)
+                    try:
+                        populate_projects_from_json()
+                    except Exception as e:
+                        print(f"Warning: Failed to populate projects from JSON: {e}")
+                    # Ensure 'excluded' column exists, create index and backfill from properties if present
+                    try:
+                        s = Session()
+                        s.execute(text("ALTER TABLE observations ADD COLUMN IF NOT EXISTS excluded BOOLEAN DEFAULT FALSE"))
+                        s.execute(text("CREATE INDEX IF NOT EXISTS idx_observations_excluded ON observations(excluded)"))
+                        s.execute(text("""
+                            UPDATE observations
+                            SET excluded = (properties->>'excluded')::boolean
+                            WHERE properties ? 'excluded' AND (properties->>'excluded') IS NOT NULL
+                        """))
+                        s.commit()
+                        s.close()
+                        print("Schema migration applied: ensured 'excluded' column and backfilled values")
+                    except Exception as e:
+                        print(f"Warning: Failed to apply schema migration for 'excluded': {e}")
                     return
                 else:
                     missing = required - existing_tables

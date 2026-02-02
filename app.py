@@ -56,10 +56,6 @@ def simple():
 @app.route("/stats")
 def stats():
     return render_template("stats.html")
-
-@app.route("/raw")
-def raw():
-    return render_template("raw.html")
     
 @app.route("/convex_hull")
 def convex_hull():
@@ -121,33 +117,38 @@ def list_projects():
         traceback.print_exc()
         return jsonify({"success": False, "error": str(e)}), 500
 
-@app.route("/api/projects", methods=["POST"])
-def create_project():
-    """Create a new project"""
+# Project creation is disabled - projects are auto-created from red-list-evaluation-groups.json
+# @app.route("/api/projects", methods=["POST"])
+# def create_project():
+#     """Create a new project"""
+#     return jsonify({"success": False, "error": "Project creation is disabled. Projects are automatically created from the red-list evaluation groups."}), 403
+
+@app.route("/api/projects/<int:project_id>", methods=["PUT", "PATCH"])
+def update_project(project_id):
+    """Update project description (name cannot be changed)"""
     try:
         data = request.json
-        name = data.get('name', '').strip()
         description = data.get('description', '').strip()
         
-        if not name:
-            return jsonify({"success": False, "error": "Project name is required"}), 400
-        
         session = Session()
-        new_project = Project(
-            name=name,
-            description=description
-        )
-        session.add(new_project)
+        project = session.query(Project).filter_by(id=project_id).first()
+        
+        if not project:
+            session.close()
+            return jsonify({"success": False, "error": "Project not found"}), 404
+        
+        # Only allow updating description, not name
+        project.description = description
         session.commit()
         
         result = {
             "success": True,
             "project": {
-                "id": new_project.id,
-                "name": new_project.name,
-                "description": new_project.description,
-                "created_at": new_project.created_at.isoformat(),
-                "updated_at": new_project.updated_at.isoformat()
+                "id": project.id,
+                "name": project.name,
+                "description": project.description,
+                "created_at": project.created_at.isoformat(),
+                "updated_at": project.updated_at.isoformat()
             }
         }
         session.close()
@@ -452,12 +453,59 @@ def set_observation_excluded(obs_id):
         props = dict(obs.properties or {})
         props['excluded'] = excluded
         obs.properties = props
+        # Also set the indexed excluded boolean column for fast queries
+        try:
+            obs.excluded = excluded
+        except Exception:
+            pass
         session.add(obs)
         session.commit()
         session.close()
 
         return jsonify({"success": True, "excluded": excluded})
     except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route("/api/observations/exclude", methods=["POST"])
+def set_observations_excluded():
+    """Set or unset 'excluded' for many observations in a single batch."""
+    try:
+        data = request.get_json() or {}
+        ids = data.get('ids') or []
+        excluded = bool(data.get('excluded', True))
+        if not ids or not isinstance(ids, list):
+            return jsonify({"success": False, "error": "ids must be a non-empty list"}), 400
+        # Sanitize and coerce to integers
+        try:
+            ids = [int(i) for i in ids]
+        except Exception:
+            return jsonify({"success": False, "error": "ids must be a list of integers"}), 400
+        session = Session()
+        try:
+            sql = text("""
+                WITH updated AS (
+                    UPDATE observations
+                    SET properties = jsonb_set(properties, '{excluded}', to_jsonb(CAST(:excluded AS boolean)), true),
+                        excluded = CAST(:excluded AS boolean)
+                    WHERE id = ANY(:ids)
+                    RETURNING id
+                )
+                SELECT id FROM updated
+            """)
+            # Pass excluded as a boolean to avoid casting issues
+            result = session.execute(sql, {'excluded': bool(excluded), 'ids': ids})
+            updated = [row[0] for row in result.fetchall()]
+            processed = len(updated)
+            failed = len(ids) - processed
+            session.commit()
+            return jsonify({"success": True, "processed": processed, "failed": failed, "updated_ids": updated})
+        except Exception as e:
+            session.rollback()
+            raise e
+        finally:
+            session.close()
+    except Exception as e:
+        import traceback; traceback.print_exc()
         return jsonify({"success": False, "error": str(e)}), 500
 
 @app.route("/api/datasets", methods=["GET"])
@@ -722,9 +770,7 @@ def calculate_convex_hull(project_id):
                 FROM observations
                 WHERE project_id = :project_id
                   AND geometry IS NOT NULL
-                  AND (properties->>'excluded' IS NULL 
-                       OR properties->>'excluded' = 'false' 
-                       OR properties->>'excluded' = '0')
+                  AND (excluded IS NULL OR excluded = FALSE)
             ),
             collected AS (
                 SELECT ST_Collect(geometry) as geom_collection
@@ -829,7 +875,7 @@ def calculate_grid(project_id):
             JOIN observations o
               ON o.project_id = :project_id
               AND o.geometry IS NOT NULL
-              AND (o.properties->>'excluded' IS NULL OR o.properties->>'excluded' = 'false' OR o.properties->>'excluded' = '0')
+              AND (o.excluded IS NULL OR o.excluded = FALSE)
               -- bbox operator first to allow index usage, then exact check
               AND bg.geom_4326 && o.geometry
               AND ST_Intersects(bg.geom_4326, o.geometry)

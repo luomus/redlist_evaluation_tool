@@ -532,23 +532,6 @@ button:disabled {
     background: #138496;
 }
 
-.view-raw-btn {
-    background: #6f42c1;
-    color: white;
-    padding: 8px 16px;
-    border: none;
-    border-radius: 4px;
-    font-size: 14px;
-    cursor: pointer;
-    transition: background-color 0.2s;
-    text-decoration: none;
-    text-align: center;
-}
-
-.view-raw-btn:hover {
-    background: #5a32a3;
-}
-
 .view-heatmap-btn {
     background: #28a745;
     color: white;
