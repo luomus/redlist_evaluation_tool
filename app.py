@@ -4,6 +4,8 @@ from config import LAJI_API_ACCESS_TOKEN, LAJI_API_BASE_URL
 from models import init_db, Session, Observation, ConvexHull, Project, GridCell
 from sqlalchemy import Integer, text
 import json
+import csv
+import io
 from shapely.geometry import shape
 from datetime import datetime, timedelta
 
@@ -394,6 +396,115 @@ def save_observations():
             session.close()
             
     except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route("/api/projects/<int:project_id>/upload_csv", methods=["POST"])
+def upload_csv_to_project(project_id):
+    """Upload CSV file and insert observations for the project.
+    Expected CSV: rows with latitude/longitude (field names case-insensitive: lat, latitude; lon, lng, longitude) and any other properties will be stored in properties JSON.
+    Minimal fields: latitude,longitude
+    """
+    try:
+        if 'file' not in request.files:
+            return jsonify({"success": False, "error": "No file provided"}), 400
+        f = request.files.get('file')
+        if not f or f.filename == '':
+            return jsonify({"success": False, "error": "Empty file"}), 400
+
+        dataset_name = request.form.get('dataset_name') or request.form.get('dataset') or f.filename
+        dataset_id = request.form.get('dataset_id') or generate_id()
+
+        content = f.stream.read().decode('utf-8', errors='replace')
+        reader = csv.DictReader(io.StringIO(content))
+
+        features = []
+        for row in reader:
+            lat = None
+            lon = None
+            for k, v in (row or {}).items():
+                if k is None:
+                    continue
+                kl = k.strip().lower()
+                if kl in ('lat', 'latitude', 'y') and v:
+                    lat = v
+                if kl in ('lon', 'lng', 'longitude', 'x') and v:
+                    lon = v
+            try:
+                latf = float(lat) if lat is not None else None
+                lonf = float(lon) if lon is not None else None
+            except Exception:
+                latf = None
+                lonf = None
+
+            if latf is None or lonf is None:
+                # Skip rows without valid coordinates
+                continue
+
+            props = {}
+            for k, v in (row or {}).items():
+                if k is None:
+                    continue
+                kl = k.strip().lower()
+                if kl in ('lat', 'latitude', 'lon', 'lng', 'longitude', 'x', 'y'):
+                    continue
+                props[k] = v
+
+            feature = {"type": "Feature", "properties": props, "geometry": {"type": "Point", "coordinates": [lonf, latf]}}
+            features.append(feature)
+
+        if not features:
+            return jsonify({"success": False, "error": "No valid rows with coordinates found in CSV"}), 400
+
+        # Insert observations similar to /api/observations
+        session = Session()
+        project = session.query(Project).filter_by(id=project_id).first()
+        if not project:
+            session.close()
+            return jsonify({"success": False, "error": "Project not found"}), 404
+
+        from sqlalchemy import insert
+        current_time = datetime.utcnow()
+
+        observations = []
+        for feature in features:
+            geom = None
+            if feature.get('geometry'):
+                geom = shape(feature['geometry']).wkt
+            observations.append({
+                'project_id': project_id,
+                'dataset_id': str(dataset_id),
+                'dataset_name': dataset_name,
+                'dataset_url': '',
+                'created_at': current_time,
+                'properties': feature.get('properties', {}),
+                'geometry': (f'SRID=4326;{geom}' if geom else None)
+            })
+
+        chunk_size = 1000
+        total_inserted = 0
+        try:
+            for i in range(0, len(observations), chunk_size):
+                chunk = observations[i:i+chunk_size]
+                session.execute(insert(Observation), chunk)
+                session.commit()
+                total_inserted += len(chunk)
+
+            project.updated_at = datetime.utcnow()
+            session.commit()
+
+            # Invalidate cache
+            stats_cache.delete(f"stats:{project_id}")
+
+            session.close()
+            return jsonify({"success": True, "count": total_inserted, "dataset_id": str(dataset_id)})
+        except Exception as e:
+            session.rollback()
+            session.close()
+            raise e
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
         return jsonify({"success": False, "error": str(e)}), 500
 
 @app.route("/api/observations/<int:project_id>", methods=["GET"])

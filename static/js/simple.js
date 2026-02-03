@@ -208,6 +208,16 @@ function displayChildProjects(children) {
                             <input type="text" id="url-${child.id}" placeholder="https://laji.fi/observation/list?time=-1%2F0">
                         </div>
                         <button onclick="fetchDataForProject(${child.id})" class="btn-fetch">Fetch Data</button>
+
+                        <!-- Upload CSV from computer -->
+                        <div style="margin-top:12px; padding:8px; background:#fafafa; border-radius:4px;">
+                            <div class="input-group">
+                                <label>Or upload CSV from your computer (requires lat & lon columns):</label>
+                                <input type="file" id="file-${child.id}" accept=".csv">
+                            </div>
+                            <button onclick="uploadCsvToProject(${child.id})" class="btn-small">Upload CSV</button>
+                            <div id="upload-progress-${child.id}" style="display:none; margin-top:8px; color:#555;"></div>
+                        </div>
                         
                         <div id="fetch-progress-${child.id}" class="fetch-progress" style="display: none;">
                             <h4>Fetching Progress:</h4>
@@ -468,6 +478,47 @@ async function saveDataToProject(projectId) {
     } catch (error) {
         console.error('Error saving data:', error);
         showError('Failed to save data');
+    }
+}
+
+// Upload CSV file and add observations to a project
+async function uploadCsvToProject(projectId) {
+    const fileInput = document.getElementById(`file-${projectId}`);
+    if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
+        showError('Please select a CSV file to upload');
+        return;
+    }
+    const file = fileInput.files[0];
+    const datasetName = document.getElementById(`dataset-name-${projectId}`).value.trim();
+
+    const form = new FormData();
+    form.append('file', file);
+    if (datasetName) form.append('dataset_name', datasetName);
+
+    const uploadProgress = document.getElementById(`upload-progress-${projectId}`);
+    if (uploadProgress) { uploadProgress.style.display = 'block'; uploadProgress.textContent = 'Uploading...'; }
+
+    try {
+        const resp = await fetch(`/api/projects/${projectId}/upload_csv`, {
+            method: 'POST',
+            body: form
+        });
+        const result = await resp.json();
+        if (result.success) {
+            showSuccess(`Uploaded ${result.count} observations`);
+            fileInput.value = '';
+            document.getElementById(`dataset-name-${projectId}`).value = '';
+            loadProjectDatasets(projectId);
+            loadProjects();
+            if (uploadProgress) uploadProgress.style.display = 'none';
+        } else {
+            showError('Upload failed: ' + result.error);
+            if (uploadProgress) uploadProgress.style.display = 'none';
+        }
+    } catch (e) {
+        console.error('Upload error', e);
+        showError('Upload failed');
+        if (uploadProgress) uploadProgress.style.display = 'none';
     }
 }
 
