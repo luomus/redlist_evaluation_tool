@@ -107,10 +107,10 @@ function displayProjects(projects) {
                     <h3>
                         <span class="toggle-children ${project.child_count > 0 ? '' : 'disabled'}" onclick="${project.child_count > 0 ? `toggleChildren(${project.id})` : 'return false;'}">${project.child_count > 0 ? '▶' : '○'}</span>
                         ${escapeHtml(project.name)}
-                        <span class="child-count">(${project.child_count} subproject${project.child_count !== 1 ? 's' : ''})</span>
+                        <span class="child-count">(${project.child_count} species${project.child_count !== 1 ? 's' : ''})</span>
                     </h3>
                     <div class="project-actions">
-                        <button onclick="showAddChildForm(${project.id})" class="btn-small btn-primary">+ Add Subproject</button>
+                        <button onclick="showAddChildForm(${project.id})" class="btn-small btn-primary">+ Add Species</button>
                         <button onclick="toggleEditDescription(${project.id})" class="btn-small">Edit Description</button>
                         <button onclick="deleteProject(${project.id})" class="btn-small btn-danger">Delete</button>
                     </div>
@@ -129,16 +129,16 @@ function displayProjects(projects) {
                 
                 <!-- Add Child Project Form -->
                 <div id="add-child-${project.id}" style="display: none; margin: 10px 0; padding: 10px; background: #e8f4f8; border-radius: 4px;">
-                    <h4>Add New Subproject</h4>
+                    <h4>Add New Species</h4>
                     <div class="input-group">
-                        <label>Subproject Name:</label>
-                        <input type="text" id="child-name-${project.id}" placeholder="Enter subproject name">
+                        <label>Species Name:</label>
+                        <input type="text" id="child-name-${project.id}" placeholder="Enter Species name">
                     </div>
                     <div class="input-group">
                         <label>Description (optional):</label>
                         <textarea id="child-description-${project.id}" style="width: 100%; min-height: 60px;"></textarea>
                     </div>
-                    <button onclick="createChildProject(${project.id})" class="btn-small">Create Subproject</button>
+                    <button onclick="createChildProject(${project.id})" class="btn-small">Create Species</button>
                     <button onclick="hideAddChildForm(${project.id})" class="btn-small">Cancel</button>
                 </div>
                 
@@ -150,7 +150,7 @@ function displayProjects(projects) {
                 
                 <!-- Child Projects -->
                 <div id="children-${project.id}" class="child-projects" style="display: none;">
-                    ${project.children && project.children.length > 0 ? displayChildProjects(project.children) : '<p style="padding: 10px; color: #999;">No subprojects yet.</p>'}
+                    ${project.children && project.children.length > 0 ? displayChildProjects(project.children) : '<p style="padding: 10px; color: #999;">No Species yet.</p>'}
                 </div>
             </div>
         `;
@@ -202,7 +202,7 @@ function displayChildProjects(children) {
                 <div class="project-details" id="details-${child.id}" style="display: none;">
                     <!-- Add data section -->
                     <div class="add-data-section">
-                        <h4>Add Data to Subproject</h4>
+                        <h4>Add Species Data</h4>
                         <div class="input-group">
                             <label>Enter Laji.fi observation search URL:</label>
                             <input type="text" id="url-${child.id}" placeholder="https://laji.fi/observation/list?time=-1%2F0">
@@ -219,13 +219,13 @@ function displayChildProjects(children) {
                                 <label>Dataset Name (optional):</label>
                                 <input type="text" id="dataset-name-${child.id}" maxlength="256">
                             </div>
-                            <button onclick="saveDataToProject(${child.id})" class="btn-save">Save to Subproject</button>
+                            <button onclick="saveDataToProject(${child.id})" class="btn-save">Save to Species</button>
                         </div>
                     </div>
                     
                     <!-- Datasets list -->
                     <div class="datasets-section">
-                        <h4>Datasets in Subproject</h4>
+                        <h4>Species Datasets</h4>
                         <div id="datasets-${child.id}">Loading...</div>
                     </div>
                 </div>
@@ -284,7 +284,7 @@ async function createChildProject(parentId) {
     const description = document.getElementById(`child-description-${parentId}`).value.trim();
     
     if (!name) {
-        showError('Subproject name is required');
+        showError('Species name is required');
         return;
     }
     
@@ -297,7 +297,7 @@ async function createChildProject(parentId) {
         
         const result = await response.json();
         if (result.success) {
-            showSuccess('Subproject created successfully!');
+            showSuccess('Species created successfully!');
             hideAddChildForm(parentId);
             await loadProjects();
             // Auto-expand the parent to show the new child
@@ -310,11 +310,11 @@ async function createChildProject(parentId) {
                 }
             }, 100);
         } else {
-            showError('Failed to create subproject: ' + result.error);
+            showError('Failed to create Species: ' + result.error);
         }
     } catch (error) {
-        console.error('Error creating subproject:', error);
-        showError('Failed to create subproject');
+        console.error('Error creating species:', error);
+        showError('Failed to create pecies');
     }
 } 
 
@@ -371,13 +371,17 @@ function displayProjectDatasets(projectId, datasets) {
     let html = '<div class="dataset-list">';
     datasets.forEach(dataset => {
         html += `
-            <div class="dataset-item">
+            <div class="dataset-item" id="dataset-${dataset.dataset_id}">
                 <div class="dataset-info">
                     <div><strong>Name:</strong> ${escapeHtml(dataset.dataset_name || 'Unnamed')}</div>
                     <div><strong>Records:</strong> ${dataset.count}</div>
                     <div><strong>Added:</strong> ${new Date(dataset.created_at).toLocaleString()}</div>
+                    ${dataset.dataset_url ? `<div><strong>Source:</strong> <a href="${escapeHtml(dataset.dataset_url)}" target="_blank" style="word-break: break-all;">${escapeHtml(dataset.dataset_url)}</a></div>` : ''}
                 </div>
-                <button onclick="deleteDataset('${projectId}', '${dataset.dataset_id}')" class="btn-small btn-danger">Remove</button>
+                <div class="dataset-actions">
+                    ${dataset.dataset_url ? `<button onclick="reloadDatasetEncoded(${projectId}, '${dataset.dataset_id}', '${encodeURIComponent(dataset.dataset_url)}')" class="btn-small btn-primary">Reload</button>` : ''}
+                    <button onclick="deleteDataset('${projectId}', '${dataset.dataset_id}')" class="btn-small btn-danger">Remove</button>
+                </div>
             </div>
         `;
     });
@@ -464,6 +468,94 @@ async function saveDataToProject(projectId) {
     } catch (error) {
         console.error('Error saving data:', error);
         showError('Failed to save data');
+    }
+}
+
+// Helper: decode encoded URL and call reload
+function reloadDatasetEncoded(projectId, datasetId, encodedUrl) {
+    try {
+        const url = decodeURIComponent(encodedUrl || '');
+        reloadDataset(projectId, datasetId, url);
+    } catch (e) {
+        console.error('Failed to decode dataset URL:', e);
+        showError('Invalid dataset URL');
+    }
+}
+
+// Reload dataset: deletes existing dataset, fetches using the stored URL and saves with same dataset_id
+async function reloadDataset(projectId, datasetId, url) {
+    if (!url) {
+        showError('No source URL available for this dataset');
+        return;
+    }
+
+    if (!confirm('Reloading will replace the existing dataset. Continue?')) {
+        return;
+    }
+
+    currentProject = projectId;
+
+    // Show progress section
+    const progressDiv = document.getElementById(`fetch-progress-${projectId}`);
+    const progressLog = document.getElementById(`progress-log-${projectId}`);
+    if (progressDiv && progressLog) {
+        progressDiv.style.display = 'block';
+        progressLog.innerHTML = '';
+    }
+
+    try {
+        // Re-fetch data
+        await window.parseUrl(url, projectId, progressLog);
+
+        // Fetch dataset name (to preserve it) from server
+        let datasetName = `Dataset ${new Date().toLocaleString()}`;
+        try {
+            const resp = await fetch(`/api/projects/${projectId}/datasets`);
+            const res = await resp.json();
+            const ds = (res.datasets || []).find(d => d.dataset_id === datasetId);
+            if (ds && ds.dataset_name) datasetName = ds.dataset_name;
+        } catch (e) {
+            console.warn('Could not fetch existing dataset name, will use default');
+        }
+
+        // Delete existing dataset (replace without prompt)
+        const delResp = await fetch(`/api/projects/${projectId}/datasets/${encodeURIComponent(datasetId)}`, { method: 'DELETE' });
+        const delResult = await delResp.json();
+        if (!delResult.success) {
+            showError('Failed to delete existing dataset before reload: ' + (delResult.error || 'unknown'));
+            return;
+        }
+
+        // Save new data with the same dataset_id
+        const response = await fetch('/api/observations', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                project_id: projectId,
+                dataset_id: datasetId,
+                dataset_name: datasetName || `Dataset ${new Date().toLocaleString()}`,
+                dataset_url: url,
+                features: window.currentFetchedData ? window.currentFetchedData.features : []
+            })
+        });
+
+        const result = await response.json();
+        if (result.success) {
+            showSuccess(`Dataset reloaded successfully! ${result.count} observations stored.`);
+            // Refresh datasets and projects
+            loadProjectDatasets(projectId);
+            loadProjects();
+            // Hide progress
+            if (progressDiv) progressDiv.style.display = 'none';
+            // Clear fetched data
+            window.currentFetchedData = null;
+            window.currentFetchedUrl = null;
+        } else {
+            showError('Failed to save reloaded data: ' + result.error);
+        }
+    } catch (error) {
+        console.error('Error reloading dataset:', error);
+        showError('Failed to reload dataset: ' + (error.message || error));
     }
 }
 

@@ -38,9 +38,9 @@ function displayDatasetInfo(statsData) {
         <div class="info-item">
             <strong>ID:</strong> <code>${statsData.dataset_id}</code>
         </div>
-        ${statsData.created_at ? `
+        ${ (statsData.dataset_created_at || statsData.created_at) ? `
         <div class="info-item">
-            <strong>Created:</strong> ${new Date(statsData.created_at).toLocaleString()}
+            <strong>Created:</strong> ${new Date(statsData.dataset_created_at || statsData.created_at).toLocaleString()}
         </div>
         ` : ''}
         ${statsData.dataset_url ? `

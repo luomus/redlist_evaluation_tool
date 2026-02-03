@@ -20,7 +20,6 @@ class Project(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Self-referential relationship for parent-child hierarchy
-    # Note: cascade delete is handled by the database FK constraint (ondelete='CASCADE')
     children = relationship('Project', 
                           backref=backref('parent', remote_side=[id]))
     

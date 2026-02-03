@@ -740,6 +740,17 @@ def get_dataset_stats(project_id):
         """
         unique_observers = session.execute(text(unique_observers_query), {'project_id': project_id}).scalar() or 0
         
+        # Get latest dataset info (most recent observation) so we can show dataset name/url on the stats page
+        latest_obs = session.query(Observation).filter_by(project_id=project_id).order_by(Observation.created_at.desc()).first()
+        latest_dataset = None
+        if latest_obs:
+            latest_dataset = {
+                'dataset_id': latest_obs.dataset_id,
+                'dataset_name': latest_obs.dataset_name,
+                'dataset_url': latest_obs.dataset_url,
+                'created_at': latest_obs.created_at.isoformat() if latest_obs.created_at else None
+            }
+        
         session.close()
         
         result = {
@@ -748,6 +759,10 @@ def get_dataset_stats(project_id):
             "project_name": project.name,
             "project_description": project.description,
             "created_at": project.created_at.isoformat() if project.created_at else None,
+            "dataset_id": latest_dataset['dataset_id'] if latest_dataset else None,
+            "dataset_name": latest_dataset['dataset_name'] if latest_dataset else None,
+            "dataset_url": latest_dataset['dataset_url'] if latest_dataset else None,
+            "dataset_created_at": latest_dataset['created_at'] if latest_dataset else None,
             "stats": {
                 "totalRecords": total,
                 "uniqueSpecies": unique_species,

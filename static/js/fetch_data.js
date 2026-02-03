@@ -32,7 +32,7 @@ async function fetchAllPages(baseUrl, config, logElement) {
     let currentPage = 1;
     let totalRecords = 0;
     let lastPage = 1;
-    let pageSize = 10000;
+    let pageSize = 1000;
     let totalTime = 0;
     const startTime = Date.now();
     
