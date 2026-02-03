@@ -170,7 +170,7 @@ function displayChildProjects(children) {
                 <div class="project-header">
                     <h4>${escapeHtml(child.name)}</h4>
                     <div class="project-actions">
-                        <button class="btn-small" onclick="toggleProjectDetails(${child.id})">show or edit data sets</button>
+                        <button class="btn-small btn-primary toggle-details-btn" onclick="toggleProjectDetails(${child.id})" aria-expanded="false"><span class="caret">▶</span> <span class="btn-label">Show datasets</span></button>
                         <select class="tool-select" onchange="handleActionSelect(this, ${child.id})">
                             <option value="" selected disabled>Actions ▾</option>
                             <option value="/stats">View Stats</option>
@@ -200,6 +200,12 @@ function displayChildProjects(children) {
                 </div>
                 
                 <div class="project-details" id="details-${child.id}" style="display: none;">
+                    <!-- Datasets list -->
+                    <div class="datasets-section">
+                        <h4>Species Datasets</h4>
+                        <div id="datasets-${child.id}">Loading...</div>
+                    </div>
+
                     <!-- Add data section -->
                     <div class="add-data-section">
                         <h4>Add Species Data</h4>
@@ -232,13 +238,7 @@ function displayChildProjects(children) {
                             <button onclick="saveDataToProject(${child.id})" class="btn-save">Save to Species</button>
                         </div>
                     </div>
-                    
-                    <!-- Datasets list -->
-                    <div class="datasets-section">
-                        <h4>Species Datasets</h4>
-                        <div id="datasets-${child.id}">Loading...</div>
-                    </div>
-                </div>
+                </div> 
             </div>
         `;
     });
@@ -331,11 +331,44 @@ async function createChildProject(parentId) {
 // Toggle project details
 function toggleProjectDetails(projectId) {
     const detailsDiv = document.getElementById(`details-${projectId}`);
+    const btn = document.querySelector(`#child-project-${projectId} .toggle-details-btn`);
+    // If closed, open and close others
     if (detailsDiv.style.display === 'none') {
+        // Close other open details and reset their buttons
+        document.querySelectorAll('.project-details').forEach(d => {
+            if (d !== detailsDiv) {
+                d.style.display = 'none';
+                const pid = d.id.replace('details-','');
+                const otherBtn = document.querySelector(`#child-project-${pid} .toggle-details-btn`);
+                if (otherBtn) {
+                    otherBtn.setAttribute('aria-expanded','false');
+                    const c = otherBtn.querySelector('.caret'); if (c) c.textContent = '▶';
+                    const l = otherBtn.querySelector('.btn-label'); if (l) l.textContent = 'Show datasets';
+                }
+            }
+        });
+
         detailsDiv.style.display = 'block';
+        if (btn) {
+            btn.setAttribute('aria-expanded','true');
+            const c = btn.querySelector('.caret'); if (c) c.textContent = '▼';
+            const l = btn.querySelector('.btn-label'); if (l) l.textContent = 'Hide datasets';
+        }
         loadProjectDatasets(projectId);
+        // Smoothly bring the opened datasets list into view for clarity (prefer datasets list)
+        const ds = document.getElementById(`datasets-${projectId}`);
+        if (ds) {
+            ds.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        } else {
+            detailsDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
     } else {
         detailsDiv.style.display = 'none';
+        if (btn) {
+            btn.setAttribute('aria-expanded','false');
+            const c = btn.querySelector('.caret'); if (c) c.textContent = '▶';
+            const l = btn.querySelector('.btn-label'); if (l) l.textContent = 'Show datasets';
+        }
     }
 }
 
