@@ -7,6 +7,7 @@ import json
 import csv
 import io
 from shapely.geometry import shape
+from shapely import wkt as shapely_wkt
 from datetime import datetime, timedelta
 
 app = Flask(__name__)
@@ -401,8 +402,10 @@ def save_observations():
 @app.route("/api/projects/<int:project_id>/upload_csv", methods=["POST"])
 def upload_csv_to_project(project_id):
     """Upload CSV file and insert observations for the project.
-    Expected CSV: rows with latitude/longitude (field names case-insensitive: lat, latitude; lon, lng, longitude) and any other properties will be stored in properties JSON.
-    Minimal fields: latitude,longitude
+    Expected CSV: rows with latitude/longitude (field names case-insensitive: lat, latitude; lon, lng, longitude)
+    OR a geometry WKT column (case-insensitive: wkt, geometry, wgs84wkt, geometry_wkt).
+    Any other properties will be stored in properties JSON.
+    Minimal fields: latitude,longitude OR a WKT column with a valid WKT string (e.g., "POINT(lon lat)").
     """
     try:
         if 'file' not in request.files:
@@ -419,6 +422,16 @@ def upload_csv_to_project(project_id):
 
         features = []
         for row in reader:
+            # Prefer WKT column when present
+            wkt_str = None
+            for k, v in (row or {}).items():
+                if k is None or v is None:
+                    continue
+                kl = k.strip().lower()
+                if kl in ('wkt', 'geometry', 'wgs84wkt', 'geometry_wkt', 'geom', 'geom_wkt') and v:
+                    wkt_str = v.strip()
+                    break
+
             lat = None
             lon = None
             for k, v in (row or {}).items():
@@ -429,27 +442,42 @@ def upload_csv_to_project(project_id):
                     lat = v
                 if kl in ('lon', 'lng', 'longitude', 'x') and v:
                     lon = v
-            try:
-                latf = float(lat) if lat is not None else None
-                lonf = float(lon) if lon is not None else None
-            except Exception:
-                latf = None
-                lonf = None
 
-            if latf is None or lonf is None:
-                # Skip rows without valid coordinates
-                continue
+            # Try to parse WKT geometry if available
+            geom_obj = None
+            if wkt_str:
+                try:
+                    geom_obj = shapely_wkt.loads(wkt_str)
+                except Exception:
+                    geom_obj = None
+
+            if geom_obj is None:
+                try:
+                    latf = float(lat) if lat is not None else None
+                    lonf = float(lon) if lon is not None else None
+                except Exception:
+                    latf = None
+                    lonf = None
+
+                if latf is None or lonf is None:
+                    # Skip rows without valid coordinates or WKT
+                    continue
+
+                feature_geometry = {"type": "Point", "coordinates": [lonf, latf]}
+            else:
+                # Convert shapely geometry to GeoJSON-like mapping
+                feature_geometry = geom_obj.__geo_interface__
 
             props = {}
             for k, v in (row or {}).items():
                 if k is None:
                     continue
                 kl = k.strip().lower()
-                if kl in ('lat', 'latitude', 'lon', 'lng', 'longitude', 'x', 'y'):
+                if kl in ('lat', 'latitude', 'lon', 'lng', 'longitude', 'x', 'y', 'wkt', 'geometry', 'wgs84wkt', 'geometry_wkt', 'geom', 'geom_wkt'):
                     continue
                 props[k] = v
 
-            feature = {"type": "Feature", "properties": props, "geometry": {"type": "Point", "coordinates": [lonf, latf]}}
+            feature = {"type": "Feature", "properties": props, "geometry": feature_geometry}
             features.append(feature)
 
         if not features:

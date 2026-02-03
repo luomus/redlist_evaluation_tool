@@ -1,0 +1,4 @@
+id,name,wkt
+1,Sample Point 1,"POINT(25.012345 60.123456)"
+2,Sample Point 2,"POINT(24.935450 60.169520)"
+3,Sample Point 3,"POINT(21.473000 62.241000)"

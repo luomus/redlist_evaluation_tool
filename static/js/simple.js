@@ -218,7 +218,7 @@ function displayChildProjects(children) {
                         <!-- Upload CSV from computer -->
                         <div style="margin-top:12px; padding:8px; background:#fafafa; border-radius:4px;">
                             <div class="input-group">
-                                <label>Or upload CSV from your computer (requires lat & lon columns):</label>
+                                <label>Or upload CSV from your computer (requires lat & lon columns or a WKT geometry column, e.g. "wkt"):</label>
                                 <input type="file" id="file-${child.id}" accept=".csv">
                             </div>
                             <button onclick="uploadCsvToProject(${child.id})" class="btn-small">Upload CSV</button>

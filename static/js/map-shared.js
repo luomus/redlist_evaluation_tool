@@ -34,6 +34,10 @@ window.createSharedMap = function(containerId = 'map', center = [60.1699, 24.938
     // Setup polygon selector and bulk enable/disable controls
     try { setupPolygonSelector(map, geometryLayer); } catch (e) { console.warn('Polygon selector initialization failed:', e); }
 
+    // Initialize dataset layers mapping and attempt to create the legend control
+    window.datasetLayers = window.datasetLayers || {}; // dataset_id -> { group: L.LayerGroup, name, count }
+    try { if (typeof window.createLegendControl === 'function') { window.createLegendControl(); } } catch (e) { console.warn('Legend control initialization failed:', e); }
+
     return { map, geometryLayer, stats, updateStatus };
 };
 
@@ -681,6 +685,7 @@ function addGeometryToLayer(geometry, properties, targetLayer) {
             marker.feature.properties = properties || {};
             marker.feature.geometry = geom;
             targetLayer.addLayer(marker);
+            try { addToDataset(marker, properties); } catch (e) {}
         } else if (geom.type === 'LineString') {
             const latLngs = geom.coordinates.map(c => [c[1], c[0]]);
             const line = L.polyline(latLngs, { className: className, weight: 7, opacity: 0.8 });
@@ -689,6 +694,7 @@ function addGeometryToLayer(geometry, properties, targetLayer) {
             line.feature.properties = properties || {};
             line.feature.geometry = geom;
             targetLayer.addLayer(line);
+            try { addToDataset(line, properties); } catch (e) {}
         } else if (geom.type === 'Polygon') {
             const rings = geom.coordinates.map(r => r.map(c => [c[1], c[0]]));
             const polygon = L.polygon(rings, { className: className, weight: 7, opacity: 0.8, fillOpacity: 0.5 });
@@ -697,6 +703,7 @@ function addGeometryToLayer(geometry, properties, targetLayer) {
             polygon.feature.properties = properties || {};
             polygon.feature.geometry = geom;
             targetLayer.addLayer(polygon);
+            try { addToDataset(polygon, properties); } catch (e) {}
         } else if (geom.type === 'MultiPoint') {
             geom.coordinates.forEach(coord => {
                 const lat = coord[1], lon = coord[0];
@@ -705,6 +712,7 @@ function addGeometryToLayer(geometry, properties, targetLayer) {
                 marker.feature.properties = properties || {};
                 marker.feature.geometry = { type: 'Point', coordinates: [coord[0], coord[1]] };
                 targetLayer.addLayer(marker);
+                try { addToDataset(marker, properties); } catch (e) {}
             });
         } else if (geom.type === 'MultiLineString') {
             geom.coordinates.forEach(lineCoords => {
@@ -714,6 +722,7 @@ function addGeometryToLayer(geometry, properties, targetLayer) {
                 line.feature = line.feature || {};
                 line.feature.properties = properties || {};
                 targetLayer.addLayer(line);
+                try { addToDataset(line, properties); } catch (e) {}
             });
         } else if (geom.type === 'MultiPolygon') {
             geom.coordinates.forEach(polygonCoords => {
@@ -723,6 +732,7 @@ function addGeometryToLayer(geometry, properties, targetLayer) {
                 polygon.feature = polygon.feature || {};
                 polygon.feature.properties = properties || {};
                 targetLayer.addLayer(polygon);
+                try { addToDataset(polygon, properties); } catch (e) {}
             });
         } else if (geom.type === 'GeometryCollection') {
             if (geom.geometries && Array.isArray(geom.geometries)) {
@@ -832,6 +842,168 @@ window.toggleExclude = async function(obsId, btn) {
             if (statsObj) statsObj.skipped++;
         }
     };
+
+// Helper: sanitize DOM id for dataset entry
+function sanitizeDomId(s) {
+    return 'ds-' + String(s || '').replace(/[^a-z0-9_-]/ig, '_');
+}
+
+// Ensure dataset layer exists and return it
+function ensureDatasetLayer(dsId, dsName) {
+    window.datasetLayers = window.datasetLayers || {};
+    if (!window.datasetLayers[dsId]) {
+        const g = L.layerGroup().addTo(window.sharedMap);
+        window.datasetLayers[dsId] = { group: g, name: dsName || dsId, count: 0 };
+    }
+    return window.datasetLayers[dsId];
+}
+
+// Add a created Leaflet layer to the dataset group and update counts/UI
+function addToDataset(layer, properties) {
+    try {
+        const dsId = (properties && (properties._dataset_id || properties.dataset_id)) || 'unknown';
+        const dsName = (properties && (properties.dataset_name || properties.dataset_name)) || dsId;
+        const dsEntry = ensureDatasetLayer(dsId, dsName);
+        dsEntry.group.addLayer(layer);
+        dsEntry.count = (dsEntry.count || 0) + 1;
+        const countEl = document.getElementById('legend-count-' + sanitizeDomId(dsId));
+        if (countEl) countEl.textContent = dsEntry.count;
+    } catch (e) {
+        console.warn('addToDataset error', e);
+    }
+}
+
+// Toggle exclude for all observations in a dataset (by dataset id)
+window.toggleDatasetExclude = async function(dsid, exclude) {
+    if (!dsid) throw new Error('No dataset id');
+    window._datasetTogglePending = window._datasetTogglePending || {};
+    if (window._datasetTogglePending[dsid]) throw new Error('Operation already in progress');
+    const entry = window.datasetLayers && window.datasetLayers[dsid];
+    if (!entry) throw new Error('Dataset not found');
+
+    // Gather DB ids from dataset group's layers
+    const ids = [];
+    try {
+        entry.group.eachLayer(function(layer) {
+            const props = (layer.feature && layer.feature.properties) || layer.feature || {};
+            const id = props && (props._db_id || props.db_id);
+            if (id) ids.push(id);
+        });
+    } catch (e) {
+        console.error('Error gathering IDs for dataset', dsid, e);
+    }
+
+    if (!ids.length) throw new Error('No DB-backed features in dataset');
+
+    window._datasetTogglePending[dsid] = true;
+    try {
+        const res = await window.setExcludeBatch(ids, exclude);
+        return res;
+    } finally {
+        window._datasetTogglePending[dsid] = false;
+    }
+};
+
+// Create a Leaflet control that lists datasets with checkboxes to toggle them
+window.createLegendControl = function() {
+    const control = L.control({ position: 'topright' });
+    control.onAdd = function() {
+        const div = L.DomUtil.create('div', 'leaflet-bar legend-control');
+        div.innerHTML = `
+            <div class="legend-header"><strong>Datasets</strong></div>
+            <div id="dataset-legend-list" class="legend-list">Loading…</div>
+        `;
+        L.DomEvent.disableClickPropagation(div);
+        return div;
+    };
+    control.addTo(window.sharedMap);
+
+    // Populate the legend from server dataset list where available
+    const projectId = window.currentProjectId || (new URLSearchParams(window.location.search)).get('id') || null;
+    const datasetsUrl = projectId ? `/api/projects/${encodeURIComponent(projectId)}/datasets` : '/api/datasets';
+    fetch(datasetsUrl).then(r => r.json()).then(data => {
+        const list = document.getElementById('dataset-legend-list');
+        list.innerHTML = '';
+        const datasets = (data && data.datasets) || [];
+        datasets.forEach(ds => {
+            // Normalize dataset id and name (both endpoints use slightly different keys)
+            const dsId = ds.dataset_id || ds.id || ds.name;
+            const dsName = ds.dataset_name || ds.name || dsId;
+            const safe = sanitizeDomId(dsId);
+            window.datasetLayers = window.datasetLayers || {};
+            if (!window.datasetLayers[dsId]) {
+                window.datasetLayers[dsId] = { group: L.layerGroup().addTo(window.sharedMap), name: dsName, count: ds.count || 0 };
+            } else {
+                window.datasetLayers[dsId].name = dsName;
+            }
+            const checked = true;
+            const item = document.createElement('div');
+            item.className = 'legend-item';
+            item.innerHTML = `<label><input type="checkbox" id="legend-cb-${safe}" ${checked ? 'checked' : ''} data-dsid="${dsId}"> ${dsName} <span class="legend-count" id="legend-count-${safe}">${window.datasetLayers[dsId].count || 0}</span></label>`;
+            list.appendChild(item);
+            document.getElementById('legend-cb-' + safe).addEventListener('change', async function () {
+                const dsid = this.getAttribute('data-dsid');
+                const entry = window.datasetLayers[dsid];
+                if (!entry) return;
+                const checked = this.checked;
+                const exclude = !checked;
+                if ((entry.count || 0) > 500) {
+                    if (!confirm(`This will ${exclude ? 'disable' : 'enable'} ${entry.count} observations. Continue?`)) { this.checked = !checked; return; }
+                }
+                this.disabled = true;
+                try {
+                    await window.toggleDatasetExclude(dsid, exclude);
+                } catch (err) {
+                    console.error('Error toggling dataset exclude:', err);
+                    alert('Error toggling dataset: ' + (err && err.message || err));
+                    this.checked = !checked;
+                } finally {
+                    this.disabled = false;
+                }
+            });
+        });
+
+        // Also list any existing datasetLayers not returned by server (e.g., unknown)
+        for (const kd in window.datasetLayers) {
+            if (!datasets.find(d => String(d.dataset_id || d.id || d.name) === String(kd))) {
+                const dsId = kd;
+                const dsName = window.datasetLayers[kd].name || kd;
+                const safe = sanitizeDomId(dsId);
+                if (document.getElementById('legend-cb-' + safe)) continue;
+                const item = document.createElement('div');
+                item.className = 'legend-item';
+                item.innerHTML = `<label><input type="checkbox" id="legend-cb-${safe}" checked data-dsid="${dsId}"> ${dsName} <span class="legend-count" id="legend-count-${safe}">${window.datasetLayers[kd].count || 0}</span></label>`;
+                list.appendChild(item);
+                document.getElementById('legend-cb-' + safe).addEventListener('change', async function () {
+                    const dsid = this.getAttribute('data-dsid');
+                    const entry = window.datasetLayers[dsid];
+                    if (!entry) return;
+                    const checked = this.checked;
+                    const exclude = !checked;
+                    if ((entry.count || 0) > 500) {
+                        if (!confirm(`This will ${exclude ? 'disable' : 'enable'} ${entry.count} observations. Continue?`)) { this.checked = !checked; return; }
+                    }
+                    this.disabled = true;
+                    try {
+                        await window.toggleDatasetExclude(dsid, exclude);
+                    } catch (err) {
+                        console.error('Error toggling dataset exclude:', err);
+                        alert('Error toggling dataset: ' + (err && err.message || err));
+                        this.checked = !checked;
+                    } finally {
+                        this.disabled = false;
+                    }
+                });
+            }
+        }
+    }).catch(err => {
+        const list = document.getElementById('dataset-legend-list');
+        if (list) list.textContent = '(Failed to load datasets)';
+        console.warn('Failed to load datasets for legend', err);
+    });
+
+    return control;
+};
 
 // Extract all points from geometries (for convex hull calculation, etc.)
 function extractAllPoints(geometries) {

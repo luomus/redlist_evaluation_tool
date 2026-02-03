@@ -127,3 +127,60 @@ header { padding: 12px 16px; border-bottom: 1px solid #eee; display: flex; gap: 
 .leaflet-interactive.geom-included, .leaflet-interactive.geom-excluded {
     transition: stroke 150ms ease, fill 150ms ease, opacity 150ms ease;
 }
+
+/* Legend control for datasets */
+.leaflet-bar.legend-control, .leaflet-control .legend-control {
+    background: rgba(255,255,255,0.98);
+    border-radius: 8px;
+    padding: 8px;
+    max-height: 320px;
+    overflow: auto;
+    width: 240px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    border: 1px solid rgba(0,0,0,0.08);
+    font-size: 13px;
+    color: #222;
+    z-index: 400;
+}
+.legend-control .legend-header {
+    font-weight: 700;
+    margin-bottom: 8px;
+    color: #111;
+}
+.legend-list {
+    font-size: 13px;
+}
+.legend-item {
+    margin: 6px 0;
+    display: flex;
+    align-items: center;
+}
+.legend-item label { width: 100%; }
+.legend-item input[type="checkbox"] { margin-right: 8px; }
+.legend-count {
+    float: right;
+    color: #666;
+    font-size: 12px;
+    margin-left: 8px;
+}
+
+/* Polygon selector buttons: make them match primary button styles */
+.polygon-selector-control button {
+    padding: 6px 10px;
+    font-size: 13px;
+    color: #212529;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    background: #fff;
+    cursor: pointer;
+    font-weight: 400;
+    margin: 2px;
+    display: inline-block;
+}
+.polygon-selector-control button:hover {
+    background: #e9ecef;
+}
+.polygon-selector-control button:focus {
+    outline: 2px solid rgba(0,123,255,0.25);
+    outline-offset: 1px;
+}

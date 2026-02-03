@@ -3,6 +3,8 @@
 // Get dataset ID from URL
 const urlParams = new URLSearchParams(window.location.search);
 const datasetId = urlParams.get('id');
+// Expose the current project id so other shared code can scope requests (legend, etc.)
+window.currentProjectId = datasetId;
 
 if (!datasetId) {
     document.getElementById('status').textContent = 'Error: No dataset ID provided';
