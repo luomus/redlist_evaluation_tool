@@ -615,9 +615,13 @@ def get_observations(project_id):
         
         total_pages = (total + per_page - 1) // per_page
         
+        # Expose dataset_name (if present) at top-level for clients to use directly
+        dataset_name = results[0].dataset_name if hasattr(results[0], 'dataset_name') else None
+
         return jsonify({
             "type": "FeatureCollection",
             "features": features,
+            "dataset_name": dataset_name,
             "project_id": project_id,
             "pagination": {
                 "page": page,

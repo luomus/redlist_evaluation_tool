@@ -156,5 +156,10 @@ fetchAllObservationsGeneric(projectId,
         updateStatus(statusMessage);
         // Fetch grid after observations loaded
         fetchAndDisplayGrid(true);
+        
+        // Sync legend with actual feature exclusion state after all features are loaded
+        if (typeof window.syncLegendWithFeatures === 'function') {
+            try { window.syncLegendWithFeatures(); } catch (e) { console.warn('Legend sync failed:', e); }
+        }
     }
 );
