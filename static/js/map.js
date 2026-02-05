@@ -14,14 +14,46 @@ if (!datasetId) {
 // Create shared map and helpers
 const { map, geometryLayer, stats, updateStatus } = createSharedMap();
 
+// Collect all features before rendering for optimal performance
+const allFeaturesToRender = [];
+
 // Use the generic fetcher and provide callbacks
 fetchAllObservationsGeneric(datasetId,
     (feature) => {
-        if (feature.geometry) addGeometryToMap(feature.geometry, feature.properties || {}, geometryLayer, stats);
-        else stats.skipped++;
+        // Just collect features without drawing yet
+        allFeaturesToRender.push(feature);
     },
     updateStatus,
     ({ datasetName, total }) => {
+        // Now render all features at once
+        updateStatus(`Rendering ${allFeaturesToRender.length} observations...`);
+        
+        const layers = [];
+        
+        // Create all layers
+        allFeaturesToRender.forEach(feature => {
+            if (feature.geometry) {
+                try {
+                    const layer = createGeometryLayers(feature.geometry, feature.properties || {});
+                    if (layer) {
+                        if (Array.isArray(layer)) layers.push(...layer);
+                        else layers.push(layer);
+                        stats.total++;
+                    }
+                } catch (err) {
+                    console.error('Error creating layer:', err);
+                    stats.skipped++;
+                }
+            } else {
+                stats.skipped++;
+            }
+        });
+        
+        // Add all layers to map in a single operation
+        if (layers.length > 0) {
+            layers.forEach(layer => geometryLayer.addLayer(layer));
+        }
+        
         stats.total = total || stats.total;
         const bounds = geometryLayer.getBounds();
         if (bounds.isValid()) map.fitBounds(bounds, { padding: [50, 50] });

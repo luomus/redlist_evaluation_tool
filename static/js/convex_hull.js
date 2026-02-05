@@ -1,4 +1,4 @@
-/* global L, addGeometryToMap, fetchAllObservationsGeneric, createSharedMap */
+/* global L, createGeometryLayers, fetchAllObservationsGeneric, createSharedMap */
 
 // Get dataset ID from URL
 const urlParams = new URLSearchParams(window.location.search);
@@ -157,17 +157,48 @@ async function calculateConvexHull(fitMap = true) {
 window.createConvexHull = calculateConvexHull;
 window.fetchAndDisplayConvexHull = fetchAndDisplayConvexHull;
 
+// Collect all features before rendering for optimal performance
+const allFeaturesToRender = [];
+
 // Start loading data when page loads
 // Use generic fetcher and then fetch hull from backend
 fetchAllObservationsGeneric(datasetId,
     (feature) => {
-        if (feature.geometry) {
-            allFeatures.push(feature); // Store complete feature with properties
-            addGeometryToMap(feature.geometry, feature.properties || {}, geometryLayer, stats);
-        }
+        // Just collect features without drawing yet
+        allFeaturesToRender.push(feature);
     },
     updateStatus,
     ({ datasetName, total }) => {
+        // Now render all features at once
+        updateStatus(`${datasetName}: Rendering ${allFeaturesToRender.length} observations...`);
+        
+        const layers = [];
+        
+        // Create all layers
+        allFeaturesToRender.forEach(feature => {
+            if (feature.geometry) {
+                allFeatures.push(feature); // Store complete feature with properties
+                try {
+                    const layer = createGeometryLayers(feature.geometry, feature.properties || {});
+                    if (layer) {
+                        if (Array.isArray(layer)) layers.push(...layer);
+                        else layers.push(layer);
+                        stats.total++;
+                    }
+                } catch (err) {
+                    console.error('Error creating layer:', err);
+                    stats.skipped++;
+                }
+            } else {
+                stats.skipped++;
+            }
+        });
+        
+        // Add all layers to map in a single operation
+        if (layers.length > 0) {
+            layers.forEach(layer => geometryLayer.addLayer(layer));
+        }
+        
         stats.total = total || stats.total;
         
         // Fetch pre-calculated convex hull from backend instead of calculating client-side

@@ -1,4 +1,4 @@
-/* global L, addGeometryToMap, fetchAllObservationsGeneric, createSharedMap */
+/* global L, createGeometryLayers, fetchAllObservationsGeneric, createSharedMap */
 
 // Get project ID from URL
 const urlParamsGrid = new URLSearchParams(window.location.search);
@@ -142,16 +142,47 @@ async function calculateGrid(fitMap = true) {
 window.createGrid = calculateGrid;
 window.fetchAndDisplayGrid = fetchAndDisplayGrid;
 
+// Collect all features before rendering for optimal performance
+const allFeaturesToRender = [];
+
 // Start loading data when page loads and then fetch grid
 fetchAllObservationsGeneric(projectId,
     (feature) => {
-        if (feature.geometry) {
-            addGeometryToMap(feature.geometry, feature.properties || {}, geometryLayer, stats);
-        }
+        // Just collect features without drawing yet
+        allFeaturesToRender.push(feature);
     },
     updateStatus,
     ({ datasetName, total }) => {
+        // Now render all features at once
         const nameForStatus = projectNameGrid || datasetName || `Project ${projectId}`;
+        updateStatus(`${nameForStatus}: Rendering ${allFeaturesToRender.length} observations...`);
+        
+        const layers = [];
+        
+        // Create all layers
+        allFeaturesToRender.forEach(feature => {
+            if (feature.geometry) {
+                try {
+                    const layer = createGeometryLayers(feature.geometry, feature.properties || {});
+                    if (layer) {
+                        if (Array.isArray(layer)) layers.push(...layer);
+                        else layers.push(layer);
+                        stats.total++;
+                    }
+                } catch (err) {
+                    console.error('Error creating layer:', err);
+                    stats.skipped++;
+                }
+            } else {
+                stats.skipped++;
+            }
+        });
+        
+        // Add all layers to map in a single operation
+        if (layers.length > 0) {
+            layers.forEach(layer => geometryLayer.addLayer(layer));
+        }
+        
         const statusMessage = `${nameForStatus}: ${stats.total} observations loaded` + (stats.skipped > 0 ? ` | Skipped: ${stats.skipped}` : '');
         updateStatus(statusMessage);
         // Fetch grid after observations loaded

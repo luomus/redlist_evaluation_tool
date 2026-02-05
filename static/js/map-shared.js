@@ -154,7 +154,7 @@ window.setExcludeBatch = async function(obsIds, excluded, batchSize = 100) {
 window.fetchAllObservationsGeneric = async function(datasetId, perFeature, updateStatus, onComplete) {
     updateStatus('Loading observations...');
     try {
-        const firstResponse = await fetch(`/api/observations/${datasetId}?page=1&per_page=5000&`);
+        const firstResponse = await fetch(`/api/observations/${datasetId}?page=1&per_page=1000&`);
         if (!firstResponse.ok) throw new Error(`HTTP error! status: ${firstResponse.status}`);
         const firstData = await firstResponse.json();
 
@@ -189,7 +189,7 @@ window.fetchAllObservationsGeneric = async function(datasetId, perFeature, updat
 
                     try {
                         updateStatus(`Loading ${datasetName} (page ${p} of ${totalPages})...`);
-                        const res = await fetch(`/api/observations/${datasetId}?page=${p}&per_page=5000`);
+                        const res = await fetch(`/api/observations/${datasetId}?page=${p}&per_page=1000`);
                         if (!res.ok) {
                             console.warn(`Page ${p} fetch failed with status ${res.status}`);
                             continue;
@@ -216,19 +216,17 @@ window.fetchAllObservationsGeneric = async function(datasetId, perFeature, updat
     }
 };
 
-// Function to add a geometry to a Leaflet feature group
-// Returns the created layer(s)
-function addGeometryToLayer(geometry, properties, targetLayer) {
+// Function to create geometry layers without adding to map (for batch processing)
+// Returns the created layer(s) or array of layers
+window.createGeometryLayers = function(geometry, properties) {
     if (!geometry || !geometry.type) return null;
 
     const popupContent = createPopupContent(properties || {});
+    const excluded = properties && (properties.excluded === true || properties.excluded === '1' || properties.excluded === 1);
+    const className = excluded ? 'geom-excluded' : 'geom-included';
 
-    function addGeometry(geom) {
-        const excluded = properties && (properties.excluded === true || properties.excluded === '1' || properties.excluded === 1);
-        const className = excluded ? 'geom-excluded' : 'geom-included';
-
+    function createLayer(geom) {
         if (geom.type === 'Point') {
-            // Server returns WGS84 [lon, lat]; Leaflet expects [lat, lon]
             const lat = geom.coordinates[1], lon = geom.coordinates[0];
             const marker = L.circleMarker([lat, lon], {
                 radius: 7,
@@ -240,8 +238,8 @@ function addGeometryToLayer(geometry, properties, targetLayer) {
             marker.feature = marker.feature || {};
             marker.feature.properties = properties || {};
             marker.feature.geometry = geom;
-            targetLayer.addLayer(marker);
             try { addToDataset(marker, properties); } catch (e) {}
+            return marker;
         } else if (geom.type === 'LineString') {
             const latLngs = geom.coordinates.map(c => [c[1], c[0]]);
             const line = L.polyline(latLngs, { className: className, weight: 7, opacity: 0.8 });
@@ -249,56 +247,43 @@ function addGeometryToLayer(geometry, properties, targetLayer) {
             line.feature = line.feature || {};
             line.feature.properties = properties || {};
             line.feature.geometry = geom;
-            targetLayer.addLayer(line);
             try { addToDataset(line, properties); } catch (e) {}
+            return line;
         } else if (geom.type === 'Polygon') {
-            const rings = geom.coordinates.map(r => r.map(c => [c[1], c[0]]));
-            const polygon = L.polygon(rings, { className: className, weight: 7, opacity: 0.8, fillOpacity: 0.5 });
-            polygon.bindPopup(popupContent);
-            polygon.feature = polygon.feature || {};
-            polygon.feature.properties = properties || {};
-            polygon.feature.geometry = geom;
-            targetLayer.addLayer(polygon);
-            try { addToDataset(polygon, properties); } catch (e) {}
-        } else if (geom.type === 'MultiPoint') {
-            geom.coordinates.forEach(coord => {
-                const lat = coord[1], lon = coord[0];
-                const marker = L.circleMarker([lat, lon], { radius: 7, className: className, weight: 1, opacity: 1, fillOpacity: 0.8 });
-                marker.feature = marker.feature || {};
-                marker.feature.properties = properties || {};
-                marker.feature.geometry = { type: 'Point', coordinates: [coord[0], coord[1]] };
-                targetLayer.addLayer(marker);
-                try { addToDataset(marker, properties); } catch (e) {}
-            });
-        } else if (geom.type === 'MultiLineString') {
-            geom.coordinates.forEach(lineCoords => {
-                const latLngs = lineCoords.map(c => [c[1], c[0]]);
-                const line = L.polyline(latLngs, { className: className, weight: 7, opacity: 0.8 });
-                line.bindPopup(popupContent);
-                line.feature = line.feature || {};
-                line.feature.properties = properties || {};
-                targetLayer.addLayer(line);
-                try { addToDataset(line, properties); } catch (e) {}
-            });
-        } else if (geom.type === 'MultiPolygon') {
-            geom.coordinates.forEach(polygonCoords => {
-                const rings = polygonCoords.map(r => r.map(c => [c[1], c[0]]));
-                const polygon = L.polygon(rings, { className: className, weight: 7, opacity: 0.8, fillOpacity: 0.5 });
-                polygon.bindPopup(popupContent);
-                polygon.feature = polygon.feature || {};
-                polygon.feature.properties = properties || {};
-                targetLayer.addLayer(polygon);
-                try { addToDataset(polygon, properties); } catch (e) {}
-            });
-        } else if (geom.type === 'GeometryCollection') {
-            if (geom.geometries && Array.isArray(geom.geometries)) {
-                geom.geometries.forEach(g => addGeometry(g));
+            const latLngs = geom.coordinates.map(ring => ring.map(c => [c[1], c[0]]));
+            const poly = L.polygon(latLngs, { className: className, weight: 2, opacity: 0.8, fillOpacity: 0.3 });
+            poly.bindPopup(popupContent);
+            poly.feature = poly.feature || {};
+            poly.feature.properties = properties || {};
+            poly.feature.geometry = geom;
+            try { addToDataset(poly, properties); } catch (e) {}
+            return poly;
+        } else if (geom.type === 'MultiPoint' || geom.type === 'MultiLineString' || geom.type === 'MultiPolygon') {
+            const subType = geom.type.replace('Multi', '');
+            const layers = [];
+            if (geom.coordinates && Array.isArray(geom.coordinates)) {
+                geom.coordinates.forEach(coords => {
+                    const subLayer = createLayer({ type: subType, coordinates: coords });
+                    if (subLayer) layers.push(subLayer);
+                });
             }
+            return layers;
+        } else if (geom.type === 'GeometryCollection' && geom.geometries && Array.isArray(geom.geometries)) {
+            const layers = [];
+            geom.geometries.forEach(g => {
+                const subLayer = createLayer(g);
+                if (subLayer) {
+                    if (Array.isArray(subLayer)) layers.push(...subLayer);
+                    else layers.push(subLayer);
+                }
+            });
+            return layers;
         }
+        return null;
     }
 
-    addGeometry(geometry);
-}
+    return createLayer(geometry);
+};
 
 // Toggle excluded flag for an observation by DB id. Button element passed as `btn`.
 // Uses `setExclude` (which routes through the efficient batch path) and only updates UI
@@ -345,7 +330,8 @@ window.toggleExclude = async function(obsId, btn) {
 };
 
     // Shared per-feature handler that updates stats and adds geometry to a target layer.
-    // Call as: `addGeometryToMap(geometry, properties, targetLayer, stats)`.
+    // Kept for backward compatibility - creates and adds layer immediately (not batched).
+    // For better performance, use createGeometryLayers() with batch processing instead.
     window.addGeometryToMap = function(geometry, properties, targetLayer, statsObj) {
         if (!geometry || !geometry.type) {
             if (statsObj) statsObj.skipped++;
@@ -359,7 +345,14 @@ window.toggleExclude = async function(obsId, btn) {
             }
 
             if (statsObj) statsObj.total++;
-            addGeometryToLayer(geometry, properties, targetLayer);
+            const layers = window.createGeometryLayers(geometry, properties);
+            if (layers) {
+                if (Array.isArray(layers)) {
+                    layers.forEach(layer => targetLayer.addLayer(layer));
+                } else {
+                    targetLayer.addLayer(layers);
+                }
+            }
         } catch (err) {
             console.error('Error adding geometry to layer:', err, geometry);
             if (statsObj) statsObj.skipped++;
@@ -490,51 +483,3 @@ window.toggleDatasetExclude = async function(dsid, exclude) {
         window._datasetTogglePending[dsid] = false;
     }
 };
-
-// Extract all points from geometries (for convex hull calculation, etc.)
-function extractAllPoints(geometries) {
-    const points = [];
-    
-    function processGeometry(geom) {
-        if (geom.type === 'Point') {
-            // Server returns WGS84 [lon, lat]; we store as [lat, lon]
-            points.push([geom.coordinates[1], geom.coordinates[0]]);
-        } else if (geom.type === 'LineString') {
-            geom.coordinates.forEach(coord => {
-                points.push([coord[1], coord[0]]);
-            });
-        } else if (geom.type === 'Polygon') {
-            geom.coordinates.forEach(ring => {
-                ring.forEach(coord => {
-                    points.push([coord[1], coord[0]]);
-                });
-            });
-        } else if (geom.type === 'MultiPoint') {
-            geom.coordinates.forEach(coord => {
-                points.push([coord[1], coord[0]]);
-            });
-        } else if (geom.type === 'MultiLineString') {
-            geom.coordinates.forEach(lineCoords => {
-                lineCoords.forEach(coord => {
-                    points.push([coord[1], coord[0]]);
-                });
-            });
-        } else if (geom.type === 'MultiPolygon') {
-            geom.coordinates.forEach(polygonCoords => {
-                polygonCoords.forEach(ring => {
-                    ring.forEach(coord => {
-                        points.push([coord[1], coord[0]]);
-                    });
-                });
-            });
-        } else if (geom.type === 'GeometryCollection') {
-            if (geom.geometries && Array.isArray(geom.geometries)) {
-                geom.geometries.forEach(g => processGeometry(g));
-            }
-        }
-    }
-    
-    geometries.forEach(geom => processGeometry(geom));
-    
-    return points;
-}
