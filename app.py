@@ -1,6 +1,5 @@
-from flask import Flask, render_template, jsonify, request
+from flask import Flask, render_template, jsonify, request, session, redirect, url_for
 from livereload import Server
-from config import LAJI_API_ACCESS_TOKEN, LAJI_API_BASE_URL
 from models import init_db, Session, Observation, ConvexHull, Project, GridCell
 from sqlalchemy import Integer, text
 import json
@@ -9,9 +8,29 @@ import io
 from shapely.geometry import shape
 from shapely import wkt as shapely_wkt
 from datetime import datetime, timedelta
+from pathlib import Path
+import os
+from dotenv import load_dotenv
+from functools import wraps
+from urllib.parse import urlencode
+import requests
+
 
 app = Flask(__name__)
 app.debug = True
+
+# Load .env file from project root (if present)
+env_path = Path(__file__).parent / ".env"
+load_dotenv(dotenv_path=env_path)
+
+# Session configuration
+app.secret_key = os.getenv("SECRET_KEY")
+
+LAJI_API_ACCESS_TOKEN = os.getenv("LAJI_API_ACCESS_TOKEN", "")
+LAJI_API_BASE_URL = os.getenv("LAJI_API_BASE_URL", "")
+TARGET = os.getenv("TARGET", "")
+LAJIAUTH_URL = os.getenv("LAJIAUTH_URL", "")
+SECRET_TIMEOUT_PERIOD = int(os.getenv("SECRET_TIMEOUT_PERIOD", "10"))
 
 # Simple in-memory cache for stats
 class SimpleCache:
@@ -40,6 +59,16 @@ class SimpleCache:
 
 stats_cache = SimpleCache(ttl_seconds=300)  # 5 minutes TTL
 
+# Authentication decorator
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'token' not in session:
+            # Store the original URL to redirect back after login
+            return redirect(url_for('login', next=request.url))
+        return f(*args, **kwargs)
+    return decorated_function
+
 # Initialize database on startup
 with app.app_context():
     init_db()
@@ -53,35 +82,101 @@ def generate_id():
 
 @app.route("/")
 @app.route("/simple")
+@login_required
 def simple():
     return render_template("simple.html")
 
 @app.route("/stats")
+@login_required
 def stats():
     return render_template("stats.html")
     
 @app.route("/convex_hull")
+@login_required
 def convex_hull():
     return render_template("convex_hull.html")
 
 @app.route("/grid")
+@login_required
 def grid():
     return render_template("grid.html")
 
 @app.route("/map")
+@login_required
 def map():
     return render_template("map.html")
 
-@app.route("/api/config")
-def get_config():
-    return jsonify({
-        "access_token": LAJI_API_ACCESS_TOKEN,
-        "base_url": LAJI_API_BASE_URL
-    })
+@app.route("/login")
+def login():
+    """Redirect to laji-auth login with callback URL"""
+    next_url = request.args.get('next', '/')
+    # Build callback URL that includes the next parameter
+    callback_url = url_for('login_callback', next=next_url, _external=True)
+    
+    # Build laji-auth login URL
+    params = {
+        'target': TARGET,
+        'next': '/'
+    }
+    laji_auth_login_url = f"{LAJIAUTH_URL}login?{urlencode(params)}"
+    
+    return redirect(laji_auth_login_url)
 
+@app.route("/login/callback", methods=["POST"])
+def login_callback():
+    """Handle callback from laji-auth system"""
+    # Get data from POST body (form data or JSON)
+    token = request.form.get('token') or (request.get_json(silent=True) or {}).get('token')
+    next_url = request.form.get('next') or (request.get_json(silent=True) or {}).get('next', '/')
+    
+    if not token:
+        return jsonify({"success": False, "error": "No token provided"}), 400
+    
+    # Store token in session
+    session['token'] = token
+    session.permanent = True  # Make session persistent
+    
+    # Redirect to the original page or home
+    return redirect(next_url or '/')
+
+def _delete_authentication_token(token):
+    """
+    Logs the user out by deleting the authentication token
+    :param token: LajiAuth token
+    :return: true if user was successfully logged out
+    """
+    try:
+        url = LAJIAUTH_URL + "token/" + token
+        response = requests.delete(url, timeout=SECRET_TIMEOUT_PERIOD)
+        return response.status_code == 200
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return False
+
+@app.route("/logout")
+def logout():
+    """Clear session and redirect to login"""
+    # Delete token from laji-auth if it exists
+    token = session.get('token')
+    if token:
+        _delete_authentication_token(token)
+    
+    session.clear()
+    return redirect(url_for('login'))
+
+@app.route("/api/config", methods=["GET"])
+@login_required
+def get_config():
+    """Return client-side configuration including API base URL and access token"""
+    return jsonify({
+        "base_url": LAJI_API_BASE_URL,
+        "access_token": LAJI_API_ACCESS_TOKEN
+    })
 # ===== PROJECT ENDPOINTS =====
 
 @app.route("/api/projects", methods=["GET"])
+@login_required
 def list_projects():
     """List all parent projects with their child projects"""
     try:
@@ -137,6 +232,7 @@ def list_projects():
         return jsonify({"success": False, "error": str(e)}), 500
 
 @app.route("/api/projects/<int:parent_id>/children", methods=["POST"])
+@login_required
 def create_child_project(parent_id):
     """Create a new child project under a parent project"""
     try:
@@ -183,6 +279,7 @@ def create_child_project(parent_id):
         return jsonify({"success": False, "error": str(e)}), 500
 
 @app.route("/api/projects/<int:project_id>", methods=["PUT", "PATCH"])
+@login_required
 def update_project(project_id):
     """Update project description (name cannot be changed)"""
     try:
@@ -218,6 +315,7 @@ def update_project(project_id):
         return jsonify({"success": False, "error": str(e)}), 500
 
 @app.route("/api/projects/<int:project_id>", methods=["DELETE"])
+@login_required
 def delete_project(project_id):
     """Delete a project and all its observations"""
     try:
@@ -255,6 +353,7 @@ def delete_project(project_id):
         return jsonify({"success": False, "error": str(e)}), 500
 
 @app.route("/api/projects/<int:project_id>/datasets", methods=["GET"])
+@login_required
 def list_project_datasets(project_id):
     """List all datasets within a project"""
     try:
@@ -294,6 +393,7 @@ def list_project_datasets(project_id):
         return jsonify({"success": False, "error": str(e)}), 500
 
 @app.route("/api/projects/<int:project_id>/datasets/<dataset_id>", methods=["DELETE"])
+@login_required
 def delete_dataset_from_project(project_id, dataset_id):
     """Delete a specific dataset from a project"""
     try:
@@ -321,6 +421,7 @@ def delete_dataset_from_project(project_id, dataset_id):
         return jsonify({"success": False, "error": str(e)}), 500
 
 @app.route("/api/observations", methods=["POST"])
+@login_required
 def save_observations():
     """Save observations to database using batched inserts for scalability"""
     try:
@@ -400,6 +501,7 @@ def save_observations():
         return jsonify({"success": False, "error": str(e)}), 500
 
 @app.route("/api/projects/<int:project_id>/upload_csv", methods=["POST"])
+@login_required
 def upload_csv_to_project(project_id):
     """Upload CSV file and insert observations for the project.
     Expected CSV: rows with latitude/longitude (field names case-insensitive: lat, latitude; lon, lng, longitude)
@@ -536,6 +638,7 @@ def upload_csv_to_project(project_id):
         return jsonify({"success": False, "error": str(e)}), 500
 
 @app.route("/api/observations/<int:project_id>", methods=["GET"])
+@login_required
 def get_observations(project_id):
     """Get observations for a project with pagination and spatial filtering
     
@@ -635,8 +738,8 @@ def get_observations(project_id):
         traceback.print_exc()
         return jsonify({"success": False, "error": str(e)}), 500
 
-
 @app.route("/api/observation/<int:obs_id>/exclude", methods=["POST"])
+@login_required
 def set_observation_excluded(obs_id):
     """Set or unset the 'excluded' flag on an observation's properties JSONB."""
     try:
@@ -666,6 +769,7 @@ def set_observation_excluded(obs_id):
         return jsonify({"success": False, "error": str(e)}), 500
 
 @app.route("/api/observations/exclude", methods=["POST"])
+@login_required
 def set_observations_excluded():
     """Set or unset 'excluded' for many observations in a single batch."""
     try:
@@ -708,6 +812,7 @@ def set_observations_excluded():
         return jsonify({"success": False, "error": str(e)}), 500
 
 @app.route("/api/datasets", methods=["GET"])
+@login_required
 def list_datasets():
     """List all available datasets"""
     try:
@@ -740,6 +845,7 @@ def list_datasets():
         return jsonify({"success": False, "error": str(e)}), 500
 
 @app.route("/api/observations/<int:project_id>/stats", methods=["GET"])
+@login_required
 def get_dataset_stats(project_id):
     """Calculate project statistics in the database for scalability"""
     try:
@@ -930,6 +1036,7 @@ def get_dataset_stats(project_id):
         return jsonify({"success": False, "error": str(e)}), 500
 
 @app.route("/api/observations/<int:project_id>/convex_hull", methods=["GET"])
+@login_required
 def get_convex_hull(project_id):
     """Get the pre-calculated convex hull for a project"""
     try:
@@ -965,6 +1072,7 @@ def get_convex_hull(project_id):
         return jsonify({"success": False, "error": str(e)}), 500
 
 @app.route("/api/observations/<int:project_id>/convex_hull", methods=["POST"])
+@login_required
 def calculate_convex_hull(project_id):
     """Calculate convex hull for a project using PostGIS and store in database"""
     try:
@@ -1052,6 +1160,7 @@ def calculate_convex_hull(project_id):
         return jsonify({"success": False, "error": str(e)}), 500
 
 @app.route("/api/observations/<int:project_id>/grid", methods=["GET"])
+@login_required
 def get_grid(project_id):
     """Get the stored grid cells for a project as a GeoJSON FeatureCollection"""
     try:
@@ -1072,6 +1181,7 @@ def get_grid(project_id):
         return jsonify({"success": False, "error": str(e)}), 500
 
 @app.route("/api/observations/<int:project_id>/grid", methods=["POST"])
+@login_required
 def calculate_grid(project_id):
     """Generate grid for project by selecting base grid cells that intersect observations."""
 

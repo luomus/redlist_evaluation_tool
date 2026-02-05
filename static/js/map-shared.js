@@ -329,36 +329,6 @@ window.toggleExclude = async function(obsId, btn) {
     }
 };
 
-    // Shared per-feature handler that updates stats and adds geometry to a target layer.
-    // Kept for backward compatibility - creates and adds layer immediately (not batched).
-    // For better performance, use createGeometryLayers() with batch processing instead.
-    window.addGeometryToMap = function(geometry, properties, targetLayer, statsObj) {
-        if (!geometry || !geometry.type) {
-            if (statsObj) statsObj.skipped++;
-            return;
-        }
-
-        try {
-            if (geometry.type === 'GeometryCollection' && geometry.geometries && Array.isArray(geometry.geometries)) {
-                geometry.geometries.forEach(g => window.addGeometryToMap(g, properties, targetLayer, statsObj));
-                return;
-            }
-
-            if (statsObj) statsObj.total++;
-            const layers = window.createGeometryLayers(geometry, properties);
-            if (layers) {
-                if (Array.isArray(layers)) {
-                    layers.forEach(layer => targetLayer.addLayer(layer));
-                } else {
-                    targetLayer.addLayer(layers);
-                }
-            }
-        } catch (err) {
-            console.error('Error adding geometry to layer:', err, geometry);
-            if (statsObj) statsObj.skipped++;
-        }
-    };
-
 // Helper: sanitize DOM id for dataset entry
 function sanitizeDomId(s) {
     return 'ds-' + String(s || '').replace(/[^a-z0-9_-]/ig, '_');
