@@ -136,8 +136,34 @@ def login_callback():
     session['token'] = token
     session.permanent = True  # Make session persistent
     
+    # Fetch and store user information
+    authentication_info = _get_authentication_info(token)
+    if authentication_info and 'user' in authentication_info:
+        session['user_id'] = authentication_info['user'].get('qname', '')
+        session['user_name'] = authentication_info['user'].get('name', '')
+        session['user_email'] = authentication_info['user'].get('email', '')
+    
     # Redirect to the original page or home
     return redirect(next_url or '/')
+
+def _get_authentication_info(token):
+    """
+    Get authentication info for the token.
+    :param token: The token returned by LajiAuth.
+    :return: Authentication info content.
+    """
+    try:
+        url = LAJIAUTH_URL + "token/" + token
+        response = requests.get(url, timeout=SECRET_TIMEOUT_PERIOD)
+        if response.status_code != 200:
+            return None
+        else:
+            content = json.loads(response.content.decode('utf-8'))
+            return content
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return None
 
 def _delete_authentication_token(token):
     """
@@ -164,6 +190,16 @@ def logout():
     
     session.clear()
     return redirect(url_for('login'))
+
+@app.route("/api/user", methods=["GET"])
+@login_required
+def get_user_info():
+    """Return current user information from session"""
+    return jsonify({
+        "user_id": session.get('user_id', ''),
+        "user_name": session.get('user_name', ''),
+        "user_email": session.get('user_email', '')
+    })
 
 @app.route("/api/config", methods=["GET"])
 @login_required

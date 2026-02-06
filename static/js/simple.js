@@ -3,6 +3,7 @@ let currentProject = null;
 
 // Initialize app on load
 document.addEventListener('DOMContentLoaded', function() {
+    loadUserInfo();
     loadProjects();
 
     // Wire up search input and clear button
@@ -15,6 +16,32 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 });
+
+// Load and display user information
+async function loadUserInfo() {
+    try {
+        const response = await fetch('/api/user');
+        if (response.ok) {
+            const data = await response.json();
+            const userInfoDiv = document.getElementById('userInfo');
+            if (userInfoDiv) {
+                let userInfoHTML = '';
+                if (data.user_name) {
+                    userInfoHTML += `<strong>👤 ${data.user_name}</strong>`;
+                }
+                if (data.user_email) {
+                    userInfoHTML += `<br><small>${data.user_email}</small>`;
+                }
+                if (data.user_id) {
+                    userInfoHTML += `<br><small>${data.user_id}</small>`;
+                }
+                userInfoDiv.innerHTML = userInfoHTML || 'User info not available';
+            }
+        }
+    } catch (error) {
+        console.error('Failed to load user info:', error);
+    }
+}
 
 // Generate unique ID
 function generateId() {
