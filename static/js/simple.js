@@ -134,7 +134,7 @@ function displayProjects(projects) {
                     <h3>
                         <span class="toggle-children ${project.child_count > 0 ? '' : 'disabled'}" onclick="${project.child_count > 0 ? `toggleChildren(${project.id})` : 'return false;'}">${project.child_count > 0 ? '▶' : '○'}</span>
                         ${escapeHtml(project.name)}
-                        <span class="child-count">(${project.child_count} species${project.child_count !== 1 ? 's' : ''})</span>
+                        <span class="child-count">(${project.child_count} species)</span>
                     </h3>
                     <div class="project-actions">
                         <button onclick="showAddChildForm(${project.id})" class="btn-small btn-primary">+ Add Species</button>
