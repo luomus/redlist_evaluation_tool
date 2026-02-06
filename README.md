@@ -16,6 +16,7 @@ The application will load variables from `.env` automatically. Do not commit sec
 The app uses PostgreSQL/PostGIS for data storage. Use docker-compose to run both the database and web app:
 
 ```bash
+chmod +x docker-entrypoint.sh
 docker-compose up --build
 ```
 
