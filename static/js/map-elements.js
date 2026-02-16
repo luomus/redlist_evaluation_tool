@@ -419,19 +419,85 @@ window.toggleFeatureDetails = function(index, element) {
     }
 };
 
+// Basemap definitions with popular open-source options
+window.basemaps = {
+    osm: {
+        name: 'OpenStreetMap',
+        tileLayers: [
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+                maxZoom: 19
+            })
+        ]
+    },
+    cartodark: {
+        name: 'CartoDB Positron',
+        tileLayers: [
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+                subdomains: 'abcd',
+                maxZoom: 20
+            })
+        ]
+    }
+};
+
+// Track current basemap
+window.currentBasemap = 'osm';
+
+// Function to switch basemap
+window.switchBasemap = function(basemapKey) {
+    if (!window.basemaps[basemapKey] || !window.sharedMap) return;
+    
+    const basemap = window.basemaps[basemapKey];
+    
+    // Remove existing tile layers
+    window.sharedMap.eachLayer(function(layer) {
+        if (layer instanceof L.TileLayer) {
+            window.sharedMap.removeLayer(layer);
+        }
+    });
+    
+    // Add new tile layer
+    basemap.tileLayers[0].addTo(window.sharedMap);
+    window.currentBasemap = basemapKey;
+    
+    // Update UI
+    document.querySelectorAll('[data-basemap-id]').forEach(el => {
+        el.classList.toggle('active', el.getAttribute('data-basemap-id') === basemapKey);
+    });
+};
+
 // Create a Leaflet control that lists datasets with checkboxes to toggle them
 window.createLegendControl = function() {
     const control = L.control({ position: 'topright' });
     control.onAdd = function() {
         const div = L.DomUtil.create('div', 'leaflet-bar legend-control');
         div.innerHTML = `
-            <div class="legend-header"><strong>Datasets</strong></div>
+            <div class="legend-header"><strong>Map Controls</strong></div>
+            <div class="basemap-section">
+                <div class="basemap-label">Basemap:</div>
+                <div id="basemap-selector" class="basemap-selector"></div>
+            </div>
+            <div class="legend-divider"></div>
+            <div class="legend-header" style="margin-top: 8px;"><strong>Datasets</strong></div>
             <div id="dataset-legend-list" class="legend-list">Loading…</div>
         `;
         L.DomEvent.disableClickPropagation(div);
         return div;
     };
     control.addTo(window.sharedMap);
+
+    // Populate basemap selector
+    const basemapSelector = document.getElementById('basemap-selector');
+    for (const [key, basemap] of Object.entries(window.basemaps)) {
+        const btn = document.createElement('button');
+        btn.className = 'basemap-btn' + (key === 'osm' ? ' active' : '');
+        btn.setAttribute('data-basemap-id', key);
+        btn.textContent = basemap.name;
+        btn.addEventListener('click', () => window.switchBasemap(key));
+        basemapSelector.appendChild(btn);
+    }
 
     // Populate the legend from server dataset list where available
     const projectId = window.currentProjectId || (new URLSearchParams(window.location.search)).get('id') || null;

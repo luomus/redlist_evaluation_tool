@@ -120,6 +120,20 @@ function displayProjects(projects) {
     const projectsDiv = document.getElementById('projects');
     const projectsList = document.getElementById('projectsList');
     
+    // Save state of expanded details sections and parent children before re-rendering
+    const expandedDetails = new Set();
+    const expandedParents = new Set();
+    
+    document.querySelectorAll('.project-details[style*="display: block"]').forEach(details => {
+        const projectId = details.id.replace('details-', '');
+        expandedDetails.add(projectId);
+    });
+    
+    document.querySelectorAll('.child-projects[style*="display: block"]').forEach(children => {
+        const projectId = children.id.replace('children-', '');
+        expandedParents.add(projectId);
+    });
+    
     if (projects.length === 0) {
         projectsList.innerHTML = '<p>No projects yet. Create one above!</p>';
         projectsDiv.style.display = 'block';
@@ -131,8 +145,8 @@ function displayProjects(projects) {
         html += `
             <div class="project-item parent-project" id="project-${project.id}" data-project-name="${escapeHtml(project.name).toLowerCase()}">
                 <div class="project-header">
-                    <h3>
-                        <span class="toggle-children ${project.child_count > 0 ? '' : 'disabled'}" onclick="${project.child_count > 0 ? `toggleChildren(${project.id})` : 'return false;'}">${project.child_count > 0 ? '▶' : '○'}</span>
+                    <h3 class="${project.child_count > 0 ? 'clickable' : ''}" ${project.child_count > 0 ? `onclick="toggleChildren(${project.id})" role="button" aria-expanded="false" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){ toggleChildren(${project.id}); event.preventDefault(); }"` : ''}>
+                        <span class="toggle-children ${project.child_count > 0 ? '' : 'disabled'}">${project.child_count > 0 ? '▶' : '○'}</span>
                         ${escapeHtml(project.name)}
                         <span class="child-count">(${project.child_count} species)</span>
                     </h3>
@@ -186,6 +200,33 @@ function displayProjects(projects) {
     
     projectsList.innerHTML = html;
     projectsDiv.style.display = 'block';
+    
+    // Restore expanded parent children sections after re-rendering
+    expandedParents.forEach(projectId => {
+        const childrenDiv = document.getElementById(`children-${projectId}`);
+        const toggle = document.querySelector(`#project-${projectId} .toggle-children`);
+        const projectItem = document.getElementById(`project-${projectId}`);
+        const header = projectItem?.querySelector('h3.clickable');
+        
+        if (childrenDiv && toggle && projectItem) {
+            childrenDiv.style.display = 'block';
+            toggle.textContent = '▼';
+            projectItem.classList.add('open');
+            if (header) header.setAttribute('aria-expanded','true');
+        }
+    });
+    
+    // Restore expanded details sections after re-rendering
+    expandedDetails.forEach(projectId => {
+        const detailsDiv = document.getElementById(`details-${projectId}`);
+        const btn = document.querySelector(`#child-project-${projectId} .toggle-details-btn`);
+        if (detailsDiv && btn) {
+            detailsDiv.style.display = 'block';
+            btn.setAttribute('aria-expanded','true');
+            const c = btn.querySelector('.caret'); if (c) c.textContent = '▼';
+            const l = btn.querySelector('.btn-label'); if (l) l.textContent = 'Hide datasets';
+        }
+    });
 }
 
 // Display child projects
@@ -290,15 +331,26 @@ function filterProjects(query) {
 function toggleChildren(parentId) {
     const childrenDiv = document.getElementById(`children-${parentId}`);
     const toggle = document.querySelector(`#project-${parentId} .toggle-children`);
-    
-    if (childrenDiv.style.display === 'none') {
+    const projectItem = document.getElementById(`project-${parentId}`);
+    const header = projectItem?.querySelector('h3.clickable');
+
+    // If no children container, nothing to toggle
+    if (!childrenDiv) return;
+
+    const isHidden = childrenDiv.style.display === 'none' || childrenDiv.style.display === '';
+
+    if (isHidden) {
         childrenDiv.style.display = 'block';
         if (toggle) toggle.textContent = '▼';
+        projectItem?.classList.add('open');
+        if (header) header.setAttribute('aria-expanded','true');
     } else {
         childrenDiv.style.display = 'none';
         if (toggle) toggle.textContent = '▶';
+        projectItem?.classList.remove('open');
+        if (header) header.setAttribute('aria-expanded','false');
     }
-}
+} 
 
 // Show add child form
 function showAddChildForm(parentId) {
@@ -341,9 +393,13 @@ async function createChildProject(parentId) {
             setTimeout(() => {
                 const childrenDiv = document.getElementById(`children-${parentId}`);
                 const toggle = document.querySelector(`#project-${parentId} .toggle-children`);
-                if (childrenDiv && toggle) {
+                const projectItem = document.getElementById(`project-${parentId}`);
+                const header = projectItem?.querySelector('h3.clickable');
+                if (childrenDiv && toggle && projectItem) {
                     childrenDiv.style.display = 'block';
                     toggle.textContent = '▼';
+                    projectItem.classList.add('open');
+                    if (header) header.setAttribute('aria-expanded','true');
                 }
             }, 100);
         } else {

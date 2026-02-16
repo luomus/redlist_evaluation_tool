@@ -7,6 +7,7 @@
 window.createSharedMap = function(containerId = 'map', center = [60.1699, 24.9384], zoom = 6) {
     const map = L.map(containerId).setView(center, zoom);
 
+    // Add default basemap (OpenStreetMap)
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
         maxZoom: 19
