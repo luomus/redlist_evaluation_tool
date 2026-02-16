@@ -505,6 +505,7 @@ function displayProjectDatasets(projectId, datasets) {
                     ${dataset.dataset_url ? `<div><strong>Source:</strong> <a href="${escapeHtml(dataset.dataset_url)}" target="_blank" style="word-break: break-all;">${escapeHtml(dataset.dataset_url)}</a></div>` : ''}
                 </div>
                 <div class="dataset-actions">
+                    <button onclick="downloadDatasetAsCSV(${projectId}, '${dataset.dataset_id}')" class="btn-small btn-primary">Download</button>
                     ${dataset.dataset_url ? `<button onclick="reloadDatasetEncoded(${projectId}, '${dataset.dataset_id}', '${encodeURIComponent(dataset.dataset_url)}')" class="btn-small btn-primary">Reload</button>` : ''}
                     <button onclick="deleteDataset('${projectId}', '${dataset.dataset_id}')" class="btn-small btn-danger">Remove</button>
                 </div>
@@ -635,6 +636,45 @@ async function uploadCsvToProject(projectId) {
         console.error('Upload error', e);
         showError('Upload failed');
         if (uploadProgress) uploadProgress.style.display = 'none';
+    }
+}
+
+// Download a specific dataset as CSV
+async function downloadDatasetAsCSV(projectId, datasetId) {
+    try {
+        const response = await fetch(`/api/projects/${projectId}/download_csv?dataset_id=${encodeURIComponent(datasetId)}`);
+        
+        if (!response.ok) {
+            const errorData = await response.json();
+            showError('Download failed: ' + (errorData.error || response.statusText));
+            return;
+        }
+
+        // Get the filename from Content-Disposition header
+        const contentDisposition = response.headers.get('content-disposition');
+        let filename = `dataset_${datasetId}.csv`;
+        if (contentDisposition) {
+            const filenameMatch = contentDisposition.match(/filename=([^;]+)/);
+            if (filenameMatch) {
+                filename = filenameMatch[1].replace(/"/g, '');
+            }
+        }
+
+        // Get the CSV content as blob and trigger download
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(link);
+
+        showSuccess('Dataset downloaded successfully');
+    } catch (e) {
+        console.error('Download error:', e);
+        showError('Failed to download dataset: ' + e.message);
     }
 }
 

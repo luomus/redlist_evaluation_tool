@@ -713,6 +713,116 @@ def upload_csv_to_project(project_id):
         traceback.print_exc()
         return jsonify({"success": False, "error": str(e)}), 500
 
+
+@app.route("/api/projects/<int:project_id>/download_csv", methods=["GET"])
+@login_required
+def download_csv_from_project(project_id):
+    """Download observations from a project (or specific dataset) as CSV.
+    Query parameters:
+    - dataset_id: Optional, download only this dataset. If not provided, downloads all.
+    Format uses WKT geometry column plus all property columns.
+    """
+    try:
+        session = Session()
+        project = session.query(Project).filter_by(id=project_id).first()
+        if not project:
+            session.close()
+            return jsonify({"success": False, "error": "Project not found"}), 404
+
+        # Get optional dataset_id from query parameters
+        dataset_id = request.args.get('dataset_id', None)
+
+        # Get observations for this project (and optionally filter by dataset)
+        from sqlalchemy import text
+        if dataset_id:
+            query_text = text("""
+                SELECT 
+                    id,
+                    dataset_id,
+                    dataset_name,
+                    properties,
+                    ST_AsText(geometry) as geometry_wkt
+                FROM observations
+                WHERE project_id = :project_id AND dataset_id = :dataset_id
+                ORDER BY id
+            """)
+            result = session.execute(query_text, {'project_id': project_id, 'dataset_id': dataset_id})
+        else:
+            query_text = text("""
+                SELECT 
+                    id,
+                    dataset_id,
+                    dataset_name,
+                    properties,
+                    ST_AsText(geometry) as geometry_wkt
+                FROM observations
+                WHERE project_id = :project_id
+                ORDER BY id
+            """)
+            result = session.execute(query_text, {'project_id': project_id})
+        
+        observations = result.fetchall()
+        session.close()
+
+        if not observations:
+            return jsonify({"success": False, "error": "No observations found"}), 400
+
+        # Collect all unique property keys across all observations
+        all_property_keys = set()
+        for obs in observations:
+            props = obs.properties or {}
+            if isinstance(props, dict):
+                all_property_keys.update(props.keys())
+
+        # Sort property keys for consistent column order
+        property_keys = sorted(all_property_keys)
+
+        # Create CSV output - always use wkt column for geometry
+        output = io.StringIO()
+        fieldnames = ['wkt'] + property_keys
+        writer = csv.DictWriter(output, fieldnames=fieldnames)
+        writer.writeheader()
+
+        # Write each observation
+        for obs in observations:
+            row = {}
+            
+            # Add WKT geometry (all geometry types in one column)
+            if obs.geometry_wkt:
+                row['wkt'] = obs.geometry_wkt
+            
+            # Add properties
+            props = obs.properties or {}
+            if isinstance(props, dict):
+                for key in property_keys:
+                    row[key] = props.get(key, '')
+            
+            writer.writerow(row)
+
+        # Prepare response with CSV content
+        csv_content = output.getvalue()
+        output.close()
+
+        from datetime import datetime as dt
+        timestamp = dt.utcnow().strftime('%Y%m%d_%H%M%S')
+        
+        # Generate filename based on whether it's a specific dataset or all
+        if dataset_id:
+            filename = f"project_{project_id}_dataset_{dataset_id}_{timestamp}.csv"
+        else:
+            filename = f"project_{project_id}_{timestamp}.csv"
+
+        from flask import make_response
+        response = make_response(csv_content)
+        response.headers['Content-Disposition'] = f'attachment; filename={filename}'
+        response.headers['Content-Type'] = 'text/csv'
+        return response
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"success": False, "error": str(e)}), 500
+
 @app.route("/api/observations/<int:project_id>", methods=["GET"])
 @login_required
 def get_observations(project_id):

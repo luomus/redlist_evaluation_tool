@@ -480,6 +480,10 @@ window.createLegendControl = function() {
                 <div id="basemap-selector" class="basemap-selector"></div>
             </div>
             <div class="legend-divider"></div>
+            <div class="legend-item">
+                <label><input type="checkbox" id="bioregions-toggle"> Biogeographical Regions</label>
+            </div>
+            <div class="legend-divider"></div>
             <div class="legend-header" style="margin-top: 8px;"><strong>Datasets</strong></div>
             <div id="dataset-legend-list" class="legend-list">Loading…</div>
         `;
@@ -497,6 +501,24 @@ window.createLegendControl = function() {
         btn.textContent = basemap.name;
         btn.addEventListener('click', () => window.switchBasemap(key));
         basemapSelector.appendChild(btn);
+    }
+
+    // Setup biogeographical regions toggle
+    const bioregionsToggle = document.getElementById('bioregions-toggle');
+    if (bioregionsToggle) {
+        bioregionsToggle.addEventListener('change', function() {
+            if (this.checked) {
+                if (window.bioRegionsLayer && window.sharedMap) {
+                    window.bioRegionsLayer.addTo(window.sharedMap);
+                    window.bioRegionsVisible = true;
+                }
+            } else {
+                if (window.bioRegionsLayer && window.sharedMap) {
+                    window.sharedMap.removeLayer(window.bioRegionsLayer);
+                    window.bioRegionsVisible = false;
+                }
+            }
+        });
     }
 
     // Populate the legend from server dataset list where available
