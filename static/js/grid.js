@@ -55,12 +55,22 @@ async function fetchAndDisplayGrid(fitMap = true) {
         // Convert features into Leaflet layer
         const features = data.features || [];
         const polygons = [];
+
+        // Ensure grid pane exists and sits under overlay layers (so observations remain clickable)
+        if (!map.getPane('gridPane')) {
+            map.createPane('gridPane');
+            const gp = map.getPane('gridPane');
+            // Place it under the default overlay pane (overlayPane z-index is typically 400)
+            gp.style.zIndex = 350;
+        }
+
         for (const f of features) {
             if (!f.geometry) continue;
             try {
                 const coords = f.geometry.coordinates[0];
                 const latLngs = coords.map(c => [c[1], c[0]]);
                 const poly = L.polygon(latLngs, {
+                    pane: 'gridPane',
                     color: '#3388ff',
                     weight: 1,
                     opacity: 0.8,
@@ -75,6 +85,9 @@ async function fetchAndDisplayGrid(fitMap = true) {
 
         if (polygons.length > 0) {
             gridLayer = L.featureGroup(polygons).addTo(map);
+            // Expose the raw grid features for other modules that may need them
+            window.sharedGridFeatures = features;
+
             if (fitMap) {
                 try {
                     const bounds = gridLayer.getBounds();
@@ -85,6 +98,7 @@ async function fetchAndDisplayGrid(fitMap = true) {
             }
             document.getElementById('cellsCount').textContent = `${polygons.length}`;
         } else {
+            window.sharedGridFeatures = [];
             document.getElementById('cellsCount').textContent = '0';
         }
 

@@ -127,8 +127,7 @@ def login_callback():
     """Handle callback from laji-auth system"""
     # Get data from POST body (form data or JSON)
     token = request.form.get('token') or (request.get_json(silent=True) or {}).get('token')
-    next_url = request.form.get('next') or (request.get_json(silent=True) or {}).get('next', '/')
-    
+    next_url = request.form.get('next') or (request.get_json(silent=True) or {}).get('next', '/')    
     if not token:
         return jsonify({"success": False, "error": "No token provided"}), 400
     
@@ -139,9 +138,9 @@ def login_callback():
     # Fetch and store user information
     authentication_info = _get_authentication_info(token)
     if authentication_info and 'user' in authentication_info:
-        session['user_id'] = authentication_info['user'].get('qname', '')
-        session['user_name'] = authentication_info['user'].get('name', '')
-        session['user_email'] = authentication_info['user'].get('email', '')
+        session['user_id'] = authentication_info['user'].get('qname')
+        session['user_name'] = authentication_info['user'].get('name')
+        session['user_email'] = authentication_info['user'].get('email')
     
     # Redirect to the original page or home
     return redirect(next_url or '/')
@@ -204,11 +203,52 @@ def get_user_info():
 @app.route("/api/config", methods=["GET"])
 @login_required
 def get_config():
-    """Return client-side configuration including API base URL and access token"""
+    """Return client-side configuration including API base URL and access token
+    and the current user's LajiAuth token (session token) so the client can
+    include it in requests to the API as a Person-Token header."""
     return jsonify({
         "base_url": LAJI_API_BASE_URL,
-        "access_token": LAJI_API_ACCESS_TOKEN
+        "access_token": LAJI_API_ACCESS_TOKEN,
+        "person_token": session.get('token')
     })
+
+
+@app.route('/api/laji', methods=['GET'])
+@login_required
+def laji_proxy():
+    """Proxy GET requests to the configured LAJI API base URL to avoid CORS.
+    The original query string is forwarded as-is. The server will add the
+    configured access token and the session person-token header before
+    forwarding the request to the LAJI API."""
+    try:
+        # Rebuild target URL from base and original query string
+        query = request.query_string.decode('utf-8')
+        if not LAJI_API_BASE_URL:
+            return jsonify({"success": False, "error": "LAJI_API_BASE_URL not configured on server"}), 500
+
+        target_url = f"{LAJI_API_BASE_URL}?{query}" if query else LAJI_API_BASE_URL
+
+        # Forward headers (server-side) — include server-side access token and session person token
+        forward_headers = {
+            'Api-Version': request.headers.get('Api-Version', '1'),
+            'Accept-Language': request.headers.get('Accept-Language', 'fi')
+        }
+        if LAJI_API_ACCESS_TOKEN:
+            forward_headers['Authorization'] = f'Bearer {LAJI_API_ACCESS_TOKEN}'
+        person_token = session.get('token')
+        if person_token:
+            forward_headers['Person-Token'] = person_token
+
+        resp = requests.get(target_url, headers=forward_headers, timeout=30)
+
+        # Return response content and status code with original content-type
+        content_type = resp.headers.get('Content-Type', 'application/json')
+        return (resp.content, resp.status_code, {'Content-Type': content_type})
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"success": False, "error": str(e)}), 500
+
 # ===== PROJECT ENDPOINTS =====
 
 @app.route("/api/projects", methods=["GET"])

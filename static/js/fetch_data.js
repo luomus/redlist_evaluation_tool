@@ -40,9 +40,8 @@ async function fetchAllPages(baseUrl, config, logElement) {
         while (currentPage <= 10 && totalRecords < 10000) {
             const pageStartTime = Date.now();
             
-            // Build the base query string
-            let apiQuery = `access_token=${encodeURIComponent(config.access_token)}&` +
-                `pageSize=${pageSize}&` +
+            // Build the base query string (access token moved to Authorization header)
+            let apiQuery = `pageSize=${pageSize}&` +
                 `page=${currentPage}&` +
                 `countryId=ML.206&` +
                 `individualCountMin=1&` +
@@ -51,20 +50,39 @@ async function fetchAllPages(baseUrl, config, logElement) {
                 `featureType=ORIGINAL_FEATURE&` +
                 `format=geojson`;
 
-            // Add original parameters from the input URL
+            // Add original parameters from the input URL (skip page, pageSize and access_token)
             const urlObj = new URL(baseUrl);
             urlObj.searchParams.forEach((value, key) => {
-                if (key !== "page" && key !== "pageSize") {
+                if (key !== "page" && key !== "pageSize" && key !== "access_token") {
                     apiQuery += `&${encodeURIComponent(key)}=${encodeURIComponent(value)}`;
                 }
             });
 
-            // Final API URL
-            const apiUrl = `${config.base_url}?${apiQuery}`;
+            // Final API URL (use server-side proxy to avoid CORS)
+            const apiUrl = `/api/laji?${apiQuery}`;
             
             addProgressLog(`Fetching page ${currentPage}...`, 'success', logElement);
 
-            const response = await fetch(apiUrl);
+            // We proxy through the Flask backend which injects the server-side
+            // Authorization and session Person-Token. Only pass optional
+            // forwarding headers (Api-Version / Accept-Language) from client.
+            const headers = {
+                'Api-Version': '1',
+                'Accept-Language': 'fi'
+            };
+
+            // Debugging: print URL and headers to both console and progress log
+            console.debug('LAJI API (proxied) Request', { url: apiUrl, headers });
+            addProgressLog(`Request URL: ${apiUrl}`, 'success', logElement);
+            try {
+                addProgressLog(`Request headers: ${JSON.stringify(headers)}`, 'success', logElement);
+            } catch (e) {
+                // Fallback if circular structure or other stringify error
+                addProgressLog('Request headers: <unserializable headers>', 'success', logElement);
+                console.error('Failed to stringify headers for logging', e);
+            }
+
+            const response = await fetch(apiUrl, { headers });
             if (!response.ok) {
                 let respText = '';
                 try {
@@ -140,7 +158,7 @@ async function fetchAllPages(baseUrl, config, logElement) {
 }
 
 // Parse URL and fetch data
-window.parseUrl = async function(url, projectId, logElement) {
+window.parseUrl = async function(url, logElement) {
     try {
         // Create URL object to parse the URL
         const urlObj = new URL(url);

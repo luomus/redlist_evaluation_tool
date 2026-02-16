@@ -481,7 +481,7 @@ async function fetchDataForProject(projectId) {
     // Use the existing parseUrl function from fetch_data.js
     try {
         // Call the existing fetch functionality
-        await window.parseUrl(url, projectId, progressLog);
+        await window.parseUrl(url, progressLog);
         
         // Show save section after fetch
         const saveSection = document.getElementById(`save-section-${projectId}`);
@@ -616,7 +616,7 @@ async function reloadDataset(projectId, datasetId, url) {
 
     try {
         // Re-fetch data
-        await window.parseUrl(url, projectId, progressLog);
+        await window.parseUrl(url, progressLog);
 
         // Fetch dataset name (to preserve it) from server
         let datasetName = `Dataset ${new Date().toLocaleString()}`;
