@@ -7,5 +7,6 @@
 
 static/example-data.tsv
 config.py
+.env
 
 **/secret/**
