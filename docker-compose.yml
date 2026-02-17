@@ -26,6 +26,7 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
       - DATABASE_URL=postgresql://biotools:biotools@db:5432/biotools
+      - MML_API_KEY=${MML_API_KEY}
     depends_on:
       db:
         condition: service_healthy

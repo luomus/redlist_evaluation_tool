@@ -249,6 +249,108 @@ def laji_proxy():
         traceback.print_exc()
         return jsonify({"success": False, "error": str(e)}), 500
 
+
+@app.route('/mml/taustakartta/<int:z>/<int:x>/<int:y>.png')
+def mml_taustakartta_tile(z, x, y):
+    """
+    Server-side proxy for MML `taustakartta` WMTS tiles.
+    - Preferred: set `MML_API_KEY` in server environment (sent as HTTP Basic `user-id:`).
+    - Fallback: client may call /mml/taustakartta/...?user-id=KEY which will be forwarded (less secure).
+    """
+    try:
+        # WMTS REST URL format is: /{Layer}/{Style}/{TileMatrixSet}/{TileMatrix}/{TileRow}/{TileCol}.{format}
+        # Use style='default' and TileMatrixSet='WGS84_Pseudo-Mercator'. Note TileRow comes before TileCol.
+        tile_url = f'https://avoin-karttakuva.maanmittauslaitos.fi/avoin/wmts/1.0.0/taustakartta/default/WGS84_Pseudo-Mercator/{z}/{y}/{x}.png'
+        params = {}
+        headers = {}
+
+        # Prefer server-side API key (sent as HTTP Basic `user-id:`).
+        # Also add the `user-id` query param as a fallback because some MML endpoints
+        # accept the key in the query string instead of (or in addition to) Basic auth.
+        api_key = os.getenv('MML_API_KEY')
+        if api_key:
+            import base64
+            token = base64.b64encode(f"{api_key}:".encode('utf-8')).decode('ascii')
+            headers['Authorization'] = f'Basic {token}'
+            params['user-id'] = api_key
+            app.logger.debug('MML proxy: using server-side MML_API_KEY (Authorization header + user-id param)')
+        else:
+            # Optional: forward client-provided user-id as query param; also construct
+            # a Basic Authorization header from it so MML sees both forms.
+            user_id = request.args.get('user-id')
+            if user_id:
+                params['user-id'] = user_id
+                try:
+                    import base64
+                    token = base64.b64encode(f"{user_id}:".encode('utf-8')).decode('ascii')
+                    headers['Authorization'] = f'Basic {token}'
+                except Exception:
+                    pass
+                app.logger.debug('MML proxy: forwarded client-provided user-id and built Authorization header')
+
+        resp = requests.get(tile_url, headers=headers, params=(params or None), timeout=10, stream=True)
+
+        # If the upstream MML returns a non-200 status, log helpful diagnostics
+        if resp.status_code != 200:
+            sent_auth = 'Authorization' in headers
+            app.logger.warning('MML tile fetch failed status=%s sent_auth=%s params=%s body_preview=%s',
+                               resp.status_code, sent_auth, params or {}, (resp.text or '')[:200])
+
+        content_type = resp.headers.get('Content-Type', 'image/png')
+        response = app.response_class(resp.content, status=resp.status_code, mimetype=content_type)
+        # Allow browser tile requests and enable caching
+        response.headers['Cache-Control'] = 'public, max-age=86400'
+        response.headers['Access-Control-Allow-Origin'] = '*'
+        return response
+    except Exception as e:
+        app.logger.exception('MML tile proxy failed')
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/mml/maastokartta/<int:z>/<int:x>/<int:y>.png')
+def mml_maastokartta_tile(z, x, y):
+    """
+    Server-side proxy for MML `maastokartta` WMTS tiles (same behaviour as taustakartta).
+    """
+    try:
+        # WMTS REST URL: layer/style/tileMatrixSet/z/row/col.format
+        tile_url = f'https://avoin-karttakuva.maanmittauslaitos.fi/avoin/wmts/1.0.0/maastokartta/default/WGS84_Pseudo-Mercator/{z}/{y}/{x}.png'
+        params = {}
+        headers = {}
+
+        api_key = os.getenv('MML_API_KEY')
+        if api_key:
+            import base64
+            token = base64.b64encode(f"{api_key}:".encode('utf-8')).decode('ascii')
+            headers['Authorization'] = f'Basic {token}'
+            params['user-id'] = api_key
+            app.logger.debug('MML proxy (maastokartta): using server-side MML_API_KEY')
+        else:
+            user_id = request.args.get('user-id')
+            if user_id:
+                params['user-id'] = user_id
+                try:
+                    import base64
+                    token = base64.b64encode(f"{user_id}:".encode('utf-8')).decode('ascii')
+                    headers['Authorization'] = f'Basic {token}'
+                except Exception:
+                    pass
+                app.logger.debug('MML proxy (maastokartta): forwarded client-provided user-id')
+
+        resp = requests.get(tile_url, headers=headers, params=(params or None), timeout=10, stream=True)
+        if resp.status_code != 200:
+            app.logger.warning('MML maastokartta tile fetch failed status=%s sent_auth=%s params=%s body_preview=%s',
+                               resp.status_code, 'Authorization' in headers, params or {}, (resp.text or '')[:200])
+
+        content_type = resp.headers.get('Content-Type', 'image/png')
+        response = app.response_class(resp.content, status=resp.status_code, mimetype=content_type)
+        response.headers['Cache-Control'] = 'public, max-age=86400'
+        response.headers['Access-Control-Allow-Origin'] = '*'
+        return response
+    except Exception as e:
+        app.logger.exception('MML maastokartta tile proxy failed')
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 # ===== PROJECT ENDPOINTS =====
 
 @app.route("/api/projects", methods=["GET"])

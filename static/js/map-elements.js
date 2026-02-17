@@ -420,6 +420,12 @@ window.toggleFeatureDetails = function(index, element) {
 };
 
 // Basemap definitions with popular open-source options
+// Simple MML WMTS template for `taustakartta` (WGS84_Pseudo-Mercator).
+// Correct WMTS REST ordering: layer / style / tileMatrixSet / z / row / col
+// If you have an MML API key set `window.MML_API_KEY` (it will be appended as `?user-id=`).
+const _mmlTaustakarttaTemplate = 'https://avoin-karttakuva.maanmittauslaitos.fi/avoin/wmts/1.0.0/taustakartta/default/WGS84_Pseudo-Mercator/{z}/{y}/{x}.png';
+const _mmlMaastokarttaTemplate = 'https://avoin-karttakuva.maanmittauslaitos.fi/avoin/wmts/1.0.0/maastokartta/default/WGS84_Pseudo-Mercator/{z}/{y}/{x}.png';
+
 window.basemaps = {
     osm: {
         name: 'OpenStreetMap',
@@ -438,6 +444,39 @@ window.basemaps = {
                 subdomains: 'abcd',
                 maxZoom: 20
             })
+        ]
+    },
+    taustakartta: {
+        name: 'Taustakartta (MML)',
+        tileLayers: [
+            // Prefer server-side proxy to avoid CORS / opaque responses; if client provides a key, use direct WMTS URL.
+            (function(){
+                const _mmlProxyTemplate = '/mml/taustakartta/{z}/{x}/{y}.png';
+                const _taustakarttaTileUrl = window.MML_API_KEY
+                    ? (_mmlTaustakarttaTemplate + '?user-id=' + encodeURIComponent(window.MML_API_KEY))
+                    : _mmlProxyTemplate;
+                return L.tileLayer(_taustakarttaTileUrl, {
+                    attribution: '&copy; <a href="https://www.maanmittauslaitos.fi/">Maanmittauslaitos</a>',
+                    maxZoom: 20,
+                    crossOrigin: true
+                });
+            })()
+        ]
+    },
+    maastokartta: {
+        name: 'Maastokartta (MML)',
+        tileLayers: [
+            (function(){
+                const _mmlProxyTemplate = '/mml/maastokartta/{z}/{x}/{y}.png';
+                const _maastoTileUrl = window.MML_API_KEY
+                    ? (_mmlMaastokarttaTemplate + '?user-id=' + encodeURIComponent(window.MML_API_KEY))
+                    : _mmlProxyTemplate;
+                return L.tileLayer(_maastoTileUrl, {
+                    attribution: '&copy; <a href="https://www.maanmittauslaitos.fi/">Maanmittauslaitos</a>',
+                    maxZoom: 20,
+                    crossOrigin: true
+                });
+            })()
         ]
     }
 };
