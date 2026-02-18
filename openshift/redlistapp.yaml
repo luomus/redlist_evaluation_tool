@@ -9,13 +9,10 @@ parameters:
     description: Name prefix for resources
     required: true
     value: redlist
-  - name: GIT_URI
-    description: Git repository URL containing the Dockerfile (required for Build)
-    required: false
-    value: 'https://github.com/luomus/redlist_evaluation_tool.git'
-  - name: CONTEXT_DIR
-    description: Context directory in the repo for the Docker build
-    value: '.'
+  - name: APP_IMAGE
+    description: Docker image for the web app
+    required: true
+    value: 'yourusername/redlist:latest'
   - name: POSTGRES_IMAGE
     description: PostGIS image to use for the database
     value: postgis/postgis:16-3.4
@@ -24,7 +21,6 @@ parameters:
     value: redlist
   - name: POSTGRES_PASSWORD
     description: Postgres password
-    value: redlist
   - name: POSTGRES_DB
     description: Postgres database name
     value: redlist
@@ -33,27 +29,6 @@ parameters:
     value: 1Gi
 
 objects:
-  - apiVersion: image.openshift.io/v1
-    kind: ImageStream
-    metadata:
-      name: ${NAME}
-
-  - apiVersion: build.openshift.io/v1
-    kind: Build
-    metadata:
-      name: ${NAME}
-    spec:
-      source:
-        type: Git
-        git:
-          uri: "${GIT_URI}"
-        contextDir: "${CONTEXT_DIR}"
-      strategy:
-        type: Docker
-      output:
-        to:
-          kind: ImageStreamTag
-          name: "${NAME}:latest"
 
   - apiVersion: v1
     kind: PersistentVolumeClaim
@@ -96,6 +71,8 @@ objects:
                   value: "${POSTGRES_USER}"
                 - name: POSTGRES_PASSWORD
                   value: "${POSTGRES_PASSWORD}"
+                - name: PGDATA
+                  value: "/var/lib/postgresql/data/pgdata"
               volumeMounts:
                 - name: pgdata
                   mountPath: /var/lib/postgresql/data
@@ -138,13 +115,10 @@ objects:
           labels:
             app: ${NAME}
             role: web
-          annotations:
-            image.openshift.io/triggers: >-
-              [{"from":{"kind":"ImageStreamTag","name":"${NAME}:latest"},"fieldPath":"spec.template.spec.containers[?(@.name==\"${NAME}\")].image"}]
         spec:
           containers:
             - name: ${NAME}
-              image: ${NAME}:latest
+              image: ${APP_IMAGE}
               ports:
                 - containerPort: 5000
               env:
@@ -182,4 +156,4 @@ objects:
       port:
         targetPort: 5000
 
-objectsCount: 9
+objectsCount: 7
