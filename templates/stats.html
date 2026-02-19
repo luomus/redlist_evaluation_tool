@@ -3,39 +3,39 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Project Statistics</title>
+    <title>Eliöryhmän tilastot</title>
     <link rel="stylesheet" href="/static/css/search.css">
     <link rel="stylesheet" href="/static/css/stats.css">
 </head>
 <body>
     <div class="container">
         <header>
-            <h1>Project Statistics</h1>
+            <h1>Eliöryhmän tilastot</h1>
             <nav style="margin-bottom: 20px;">
-                <a href="/simple" class="back-btn">← Back to Projects</a>
+                <a href="/simple" class="back-btn">← Takaisin etusivulle</a>
             </nav>
         </header>
         
         <div id="loading" class="loading" style="display: none;">
             <div class="spinner"></div>
-            <span>Loading project...</span>
+            <span>Ladataan eliöryhmää…</span>
         </div>
         
         <div id="error" class="error" style="display: none;"></div>
         
         <div id="datasetInfo" class="dataset-info-section" style="display: none;">
-            <h3>Project Information</h3>
+            <h3>Eliöryhmän tiedot</h3>
             <div id="datasetDetails"></div>
         </div>
         
         <div id="statistics" class="statistics-section" style="display: none;">
-            <h3>Statistics</h3>
+            <h3>Tilastot</h3>
             <div id="statsContent"></div>
         </div>
         
         <div id="noData" class="no-data" style="display: none;">
-            <p>No project found with the specified ID.</p>
-            <a href="/simple">Go back to projects</a>
+            <p>Annetulla tunnisteella ei löytynyt eliöryhmää.</p>
+            <a href="/simple">Palaa eliöryhmiin</a>
         </div>
     </div>
 

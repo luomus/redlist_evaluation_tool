@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Dataset Grid</title>
+    <title>Lajin esiintymisalue</title>
     <link
         rel="stylesheet"
         href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
@@ -14,18 +14,18 @@
 </head>
 <body>
     <header>
-        <a href="/simple" class="back-btn">← Back to Datasets</a>
+        <a href="/simple" class="back-btn">← Takaisin etusivulle</a>
 
         <div class="info-panel">
-            <h3>Dataset Grid</h3>
+            <h3>Lajin esiintymisalue</h3>
             <div class="info-item">
-                <span class="info-label">Grid cells:</span>
+                <span class="info-label">Ruutuja yht:</span>
                 <span class="info-value" id="cellsCount">-</span>
             </div>     
-            <button id="genBtn" onclick="window.createGrid(false)" style="margin-top: 10px; padding: 8px 16px; background: #3388ff; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">↻ Generate Grid</button>
+            <button id="genBtn" onclick="window.createGrid(false)" style="margin-top: 10px; padding: 8px 16px; background: #3388ff; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">↻ Laske esiintymisalue</button>
         </div>
 
-        <div id="status" class="stats">Loading dataset...</div>
+        <div id="status" class="stats">Ladataan aineistoa…</div>
     </header>
 
     <div id="map"></div>

@@ -5,12 +5,12 @@ const urlParamsGrid = new URLSearchParams(window.location.search);
 const projectId = urlParamsGrid.get('id');
 
 if (!projectId) {
-    document.getElementById('status').textContent = 'Error: No project ID provided';
+    document.getElementById('status').textContent = 'Virhe: Eliöryhmän tunnusta ei annettu';
     throw new Error('No project ID provided');
 }
 
 // Fetch project name for nicer UI messages
-let projectNameGrid = `Project ${projectId}`;
+let projectNameGrid = `Eliöryhmä ${projectId}`;
 (async () => {
     try {
         const resp = await fetch(`/api/projects/${projectId}`);
@@ -104,15 +104,15 @@ async function fetchAndDisplayGrid(fitMap = true) {
 
     } catch (error) {
         console.error('Error fetching grid:', error);
-        updateStatus(`Error: ${error.message}`);
-        document.getElementById('cellsCount').textContent = 'Error';
+        updateStatus(`Virhe: ${error.message}`);
+        document.getElementById('cellsCount').textContent = 'Virhe';
     }
 }
 
 // Calculate/generate grid on the server
 async function calculateGrid(fitMap = true) {
     try {
-        updateStatus('Generating grid...');
+        updateStatus('Generoidaan esiintymisaluetta...');
         const genBtn = document.getElementById('genBtn');
         if (genBtn) {
             genBtn.disabled = true;
@@ -129,7 +129,7 @@ async function calculateGrid(fitMap = true) {
         const data = await response.json();
         if (!data.success) throw new Error(data.error || 'Failed to generate grid');
 
-        updateStatus('Grid generated successfully');
+        updateStatus('Esiintymisalue luotu!');
 
         // Fetch and display the newly generated grid
         await fetchAndDisplayGrid(fitMap);
@@ -142,7 +142,7 @@ async function calculateGrid(fitMap = true) {
 
     } catch (error) {
         console.error('Error generating grid:', error);
-        updateStatus(`Error: ${error.message}`);
+        updateStatus(`Virhe: ${error.message}`);
         const genBtn = document.getElementById('genBtn');
         if (genBtn) {
             genBtn.disabled = false;
@@ -168,8 +168,8 @@ fetchAllObservationsGeneric(projectId,
     updateStatus,
     ({ datasetName, total }) => {
         // Now render all features at once
-        const nameForStatus = projectNameGrid || datasetName || `Project ${projectId}`;
-        updateStatus(`${nameForStatus}: Rendering ${allFeaturesToRender.length} observations...`);
+        const nameForStatus = projectNameGrid || datasetName || `Eliöryhmä ${projectId}`;
+        updateStatus(`${nameForStatus}: Näytetään ${allFeaturesToRender.length} havaintoa...`);
         
         const layers = [];
         
@@ -197,7 +197,7 @@ fetchAllObservationsGeneric(projectId,
             layers.forEach(layer => geometryLayer.addLayer(layer));
         }
         
-        const statusMessage = `${nameForStatus}: ${stats.total} observations loaded` + (stats.skipped > 0 ? ` | Skipped: ${stats.skipped}` : '');
+        const statusMessage = `${nameForStatus}: ${stats.total} havaintoa ladattu` + (stats.skipped > 0 ? ` | Ohitettu: ${stats.skipped}` : '');
         updateStatus(statusMessage);
         // Fetch grid after observations loaded
         fetchAndDisplayGrid(true);

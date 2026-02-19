@@ -18,7 +18,7 @@ function setupPolygonSelector(map, geometryLayer) {
     control.onAdd = function() {
         const div = L.DomUtil.create('div', 'leaflet-bar polygon-selector-control');
         div.innerHTML = `
-            <button id="polySelectBtn" title="Start polygon selection">🔺 Polygon selector</button>
+            <button id="polySelectBtn" title="Aloita aluevalinta">🔺 Valitse useita aluerajauksella</button>
         `;
         L.DomEvent.disableClickPropagation(div);
         return div;
@@ -53,7 +53,7 @@ function setupPolygonSelector(map, geometryLayer) {
     // Finish drawing and create selection polygon
     function finishDrawing() {
         if (points.length < 3) {
-            alert('Draw a polygon with at least 3 points.');
+            alert('Piirrä monikulmio, jossa on vähintään 3 pistettä.');
             return;
         }
         selectionPolygon = L.polygon(points, { color: '#f39c12', weight: 2, fillOpacity: 0.15 }).addTo(map);
@@ -72,7 +72,7 @@ function setupPolygonSelector(map, geometryLayer) {
 
         // Show popup with actions
         const center = selectionPolygon.getBounds().getCenter();
-        const popupHtml = `<div class="polygon-actions"><button id="disableSelected">Disable selected</button> <button id="enableSelected">Enable selected</button> <button id="clearSelection">Clear selection</button></div>`;
+        const popupHtml = `<div class="polygon-actions"><button id="disableSelected">Poista valitut käytöstä</button> <button id="enableSelected">Ota valitut käyttöön</button> <button id="clearSelection">Tyhjennä valinta</button></div>`;
         selectionPopup = L.popup({ maxWidth: 260 }).setLatLng(center).setContent(popupHtml).openOn(map);
 
         // If the user closes the popup (clicks X or outside), remove the polygon
@@ -123,7 +123,7 @@ function setupPolygonSelector(map, geometryLayer) {
             try {
                 startMarker = L.circleMarker(e.latlng, { radius: 6, color: '#e67e22', fillColor: '#e67e22', fillOpacity: 0.9 }).addTo(map);
                 startMarker.on('click', function() { if (points.length >= 3) finishDrawing(); });
-                startMarker.bindTooltip('Click to close polygon', { permanent: false, direction: 'top' });
+                startMarker.bindTooltip('Klikkaa sulkeaksesi alueen', { permanent: false, direction: 'top' });
             } catch (e) {
                 startMarker = null;
             }
@@ -147,7 +147,7 @@ function setupPolygonSelector(map, geometryLayer) {
         markersLayer.clearLayers();
         tempLine.setLatLngs([]);
         const selBtn = document.getElementById('polySelectBtn');
-        if (selBtn) selBtn.textContent = '✖ Cancel drawing';
+        if (selBtn) selBtn.textContent = '✖ Peruuta';
         map.on('click', onMapClick);
         map.on('dblclick', onMapDblClick);
         try { map.dragging.disable(); if (map.doubleClickZoom) map.doubleClickZoom.disable(); } catch (e) { /* ignore */ }
@@ -206,24 +206,24 @@ function setupPolygonSelector(map, geometryLayer) {
 
     async function applyExcludeToSelection(exclude) {
         const layers = getLayersInSelection();
-        if (!layers.length) { alert('No features found inside selection.'); return; }
+        if (!layers.length) { alert('Valinnan sisällä ei löytynyt havaintoja.'); return; }
         const dbIds = [];
         layers.forEach(l => {
             const props = (l.feature && l.feature.properties) || l.feature || {};
             const id = props && (props._db_id || props.db_id);
             if (id) dbIds.push(id);
         });
-        if (!dbIds.length) { alert('No DB-backed features in selection.'); return; }
+        if (!dbIds.length) { alert('Valinnassa ei ole tietokantaan tallennettuja havaintoja.'); return; }
 
-        if (!confirm(`Apply ${exclude ? 'disable' : 'enable'} to ${dbIds.length} observations?`)) return;
+        if (!confirm(`Haluatko ${exclude ? 'poistaa käytöstä' : 'ottaa käyttöön'} ${dbIds.length} havaintoa?`)) return;
         try {
             const res = await window.setExcludeBatch(dbIds, exclude);
             map.closePopup();
             if (selectionPolygon) { map.removeLayer(selectionPolygon); selectionPolygon = null; }
-            alert(`Processed ${res.processed} observations (${res.failed} failed).`);
+            alert(`Käsitelty ${res.processed} havaintoa (${res.failed} epäonnistui).`);
         } catch (e) {
             console.error('Batch exclude encountered an error', e);
-            alert('Error processing selection: ' + (e && e.message));
+            alert('Valinnan käsittely epäonnistui: ' + (e && e.message));
         }
     }
 }
@@ -257,36 +257,36 @@ function createPopupContent(properties) {
     })();
 
     if (scientificName) {
-        content += `<strong>Species:</strong> ${scientificName}<br>`;
+        content += `<strong>Laji:</strong> ${scientificName}<br>`;
     }
     if (locality) {
-        content += `<strong>Locality:</strong> ${locality}<br>`;
+        content += `<strong>Paikka:</strong> ${locality}<br>`;
     }
     if (date) {
-        content += `<strong>Date:</strong> ${date}<br>`;
+        content += `<strong>Päivämäärä:</strong> ${date}<br>`;
     }
     if (individualCount) {
-        content += `<strong>Count:</strong> ${individualCount}<br>`;
+        content += `<strong>Lukumäärä:</strong> ${individualCount}<br>`;
     }
     if (recordQuality) {
-        content += `<strong>recordQuality:</strong> ${recordQuality}<br>`;
+        content += `<strong>Havainnon laatu:</strong> ${recordQuality}<br>`;
     }
     if (recordBasis) {
-        content += `<strong>Basis:</strong> ${recordBasis}<br>`;
+        content += `<strong>Havaintotapa:</strong> ${recordBasis}<br>`;
     }
     if (unitID) {
         // Make Unit ID a link to a unit page (opens in a new tab)
-        content += `<strong>Unit ID:</strong> <a href="${unitID}" target="_blank" rel="noopener noreferrer">${unitID}</a><br>`;
+        content += `<strong>Havainnon tunniste:</strong> <a href="${unitID}" target="_blank" rel="noopener noreferrer">${unitID}</a><br>`;
     }
     if (team) {
-        content += `<strong>Team:</strong> ${team}<br>`;
+        content += `<strong>Havainnoijat:</strong> ${team}<br>`;
     }
     if (coordinateAccuracy) {
-        content += `<strong>Coordinate Accuracy:</strong> ${coordinateAccuracy} meters<br>`;
+        content += `<strong>Koordinaattien tarkkuus:</strong> ${coordinateAccuracy} m<br>`;
     }
     if (collectionID) {
         // Make Collection ID a link to a collection page (opens in a new tab)
-        content += `<strong>Collection ID:</strong> <a href="${collectionID}" target="_blank" rel="noopener noreferrer">${collectionID}</a><br>`;
+        content += `<strong>Aineiston tunnus:</strong> <a href="${collectionID}" target="_blank" rel="noopener noreferrer">${collectionID}</a><br>`;
     }
     
     // Add Enable / Include button if this feature references a DB record
@@ -308,7 +308,7 @@ function createPopupContent(properties) {
     }
     const isExcluded = resolvedProps && (resolvedProps.excluded === true || resolvedProps.excluded === '1' || resolvedProps.excluded === 1);
     if (dbId) {
-        const btnLabel = isExcluded ? 'Include in analysis' : 'Exclude from analysis';
+        const btnLabel = isExcluded ? 'Sisällytä analyysiin' : 'Poista analyysista';
         const dataExcluded = isExcluded ? '1' : '0';
         content += `<div class="popup-actions"><button class="exclude-btn" data-db-id="${dbId}" data-excluded="${dataExcluded}" onclick="window.toggleExclude(${dbId}, this)">${btnLabel}</button></div>`;
     }
@@ -320,12 +320,12 @@ function createPopupContent(properties) {
 // Create popup content for multiple overlapping features
 function createMultiFeaturePopup(features) {
     let content = '<div class="multi-feature-popup">';
-    content += `<div class="popup-header"><strong>${features.length} observations at this location</strong></div>`;
+    content += `<div class="popup-header"><strong>${features.length} havaintoa tässä sijainnissa</strong></div>`;
     
     features.forEach((layer, index) => {
         const props = layer.feature.properties || {};
-        const scientificName = props['unit.linkings.taxon.scientificName'] || 'Unknown species';
-        const date = props['gathering.displayDateTime'] || 'No date';
+        const scientificName = props['unit.linkings.taxon.scientificName'] || 'Tuntematon laji';
+        const date = props['gathering.displayDateTime'] || 'Ei päivämäärää';
         const dbId = props['_db_id'] || props['db_id'];
         const isExcluded = props && (props.excluded === true || props.excluded === '1' || props.excluded === 1);
         
@@ -513,9 +513,9 @@ window.createLegendControl = function() {
     control.onAdd = function() {
         const div = L.DomUtil.create('div', 'leaflet-bar legend-control');
         div.innerHTML = `
-            <div class="legend-header"><strong>Map Controls</strong></div>
+            <div class="legend-header"><strong>Karttavalinnat</strong></div>
             <div class="basemap-section">
-                <div class="basemap-label">Basemap:</div>
+                <div class="basemap-label">Taustakartta:</div>
                 <div id="basemap-selector" class="basemap-selector"></div>
             </div>
             <div class="legend-divider"></div>
@@ -523,8 +523,8 @@ window.createLegendControl = function() {
                 <label><input type="checkbox" id="bioregions-toggle"> Biogeographical Regions</label>
             </div>
             <div class="legend-divider"></div>
-            <div class="legend-header" style="margin-top: 8px;"><strong>Datasets</strong></div>
-            <div id="dataset-legend-list" class="legend-list">Loading…</div>
+            <div class="legend-header" style="margin-top: 8px;"><strong>Aineistot:</strong></div>
+            <div id="dataset-legend-list" class="legend-list">Ladataan…</div>
         `;
         L.DomEvent.disableClickPropagation(div);
         return div;
@@ -611,13 +611,13 @@ window.createLegendControl = function() {
                 }
 
                 if (affectedCount === 0) {
-                    alert(`No observations to ${exclude ? 'disable' : 'enable'} for this dataset.`);
+                    alert(`Tässä aineistossa ei ole havaintoja, joita voisi ${exclude ? 'poistaa käytöstä' : 'ottaa käyttöön'}.`);
                     this.checked = !checked; // revert
                     return;
                 }
 
                 if (affectedCount > 500) {
-                    if (!confirm(`This will ${exclude ? 'disable' : 'enable'} ${affectedCount} observations. Continue?`)) { this.checked = !checked; return; }
+                    if (!confirm(`Haluatko ${exclude ? 'poistaa käytöstä' : 'ottaa käyttöön'} ${affectedCount} havaintoa? Jatketaanko?`)) { this.checked = !checked; return; }
                 }
 
                 this.disabled = true;
@@ -625,7 +625,7 @@ window.createLegendControl = function() {
                     await window.toggleDatasetExclude(dsid, exclude);
                 } catch (err) {
                     console.error('Error toggling dataset exclude:', err);
-                    alert('Error toggling dataset: ' + (err && err.message || err));
+                    alert('Virhe muutettaessa aineistoa: ' + (err && err.message || err));
                     this.checked = !checked;
                 } finally {
                     this.disabled = false;
@@ -672,13 +672,13 @@ window.createLegendControl = function() {
                     }
 
                     if (affectedCount === 0) {
-                        alert(`No observations to ${exclude ? 'disable' : 'enable'} for this dataset.`);
+                        alert(`Tässä aineistossa ei ole havaintoja, joita voisi ${exclude ? 'poistaa käytöstä' : 'ottaa käyttöön'}.`);
                         this.checked = !checked; // revert
                         return;
                     }
 
                     if (affectedCount > 500) {
-                        if (!confirm(`This will ${exclude ? 'disable' : 'enable'} ${affectedCount} observations. Continue?`)) { this.checked = !checked; return; }
+                        if (!confirm(`Haluatko ${exclude ? 'poistaa käytöstä' : 'ottaa käyttöön'} ${affectedCount} havaintoa? Jatketaanko?`)) { this.checked = !checked; return; }
                     }
 
                     this.disabled = true;
@@ -686,7 +686,7 @@ window.createLegendControl = function() {
                         await window.toggleDatasetExclude(dsid, exclude);
                     } catch (err) {
                         console.error('Error toggling dataset exclude:', err);
-                        alert('Error toggling dataset: ' + (err && err.message || err));
+                        alert('Virhe muutettaessa aineistoa: ' + (err && err.message || err));
                         this.checked = !checked;
                     } finally {
                         this.disabled = false;
@@ -704,7 +704,7 @@ window.createLegendControl = function() {
         }
     }).catch(err => {
         const list = document.getElementById('dataset-legend-list');
-        if (list) list.textContent = '(Failed to load datasets)';
+        if (list) list.textContent = 'Aineistojen lataus epäonnistui';
         console.warn('Failed to load datasets for legend', err);
     });
 

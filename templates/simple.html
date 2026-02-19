@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Red List Tool Project Manager</title>
+    <title>Red List Tool — Eliöryhmien hallinta</title>
     <link rel="stylesheet" href="/static/css/search.css">
     <link rel="stylesheet" href="/static/css/simple.css">
     <style>
@@ -35,25 +35,25 @@
         </div>
         <div style="text-align:right; margin-bottom:10px;">
             <div id="userInfo" style="display:inline-block; margin-right:15px; color:#555; font-size:14px; text-align:right; line-height:1.4;"></div>
-            <a href="/logout" class="btn-small" style="text-decoration:none; vertical-align:top;">Logout</a>
+            <a href="/logout" class="btn-small" style="text-decoration:none; vertical-align:top;">Kirjaudu ulos</a>
         </div>
-        <h1>Red List Tool</h1>
-        <div class="subtitle">Create IUCN evaluations with data from laji.fi</div>
+        <h1>Red List -arviointityökalu</h1>
+        <div class="subtitle">Laske levinneisyysalueita (EOO) ja esiintymisalueita (AOO) IUCN Punaisen listan eri lajeille</div>
         
         <!-- Info Section -->
         <div class="section">
-            <h2>Projects</h2>
+            <h2>Eliöryhmät</h2>
             <p style="color: #7f8c8d; margin-bottom: 15px; line-height: 1.6;">
-                Organize and manage your Red List evaluation projects. Create new projects, add datasets, and track your progress all in one place.
+                Järjestä ja hallinnoi Punaisen listan arviointien lajeja ja eliöryhmiä. Luo uusia eliöryhmiä, lisää dataa ja laske tunnuslukuja yhdestä paikasta.
             </p>
         </div>
         
         <!-- Projects List -->
         <div id="projects" class="section" style="display: none;">
-            <h2>Your Projects</h2>
+            <h2>Eliöryhmäsi</h2>
             <div class="project-controls" style="margin-bottom:20px;">
-                <input id="projectSearch" type="search" placeholder="🔍 Search projects by name..." style="padding:12px 16px;width:60%;max-width:360px;border:2px solid #e0e6ed;border-radius:8px;font-size:15px;transition:all 0.3s ease;">
-                <button id="clearSearch" class="btn-small" style="margin-left:8px;">Clear</button>
+                <input id="projectSearch" type="search" placeholder="🔍 Etsi eliöryhmiä nimen mukaan..." style="padding:12px 16px;width:60%;max-width:360px;border:2px solid #e0e6ed;border-radius:8px;font-size:15px;transition:all 0.3s ease;">
+                <button id="clearSearch" class="btn-small" style="margin-left:8px;">Tyhjennä</button>
             </div>
             <div id="projectsList"></div>
         </div>

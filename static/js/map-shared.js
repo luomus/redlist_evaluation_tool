@@ -194,24 +194,24 @@ window.setExcludeBatch = async function(obsIds, excluded, batchSize = 100) {
 // each feature and `onComplete(meta)` once all pages are processed. Expects
 // an `updateStatus` function to display progress.
 window.fetchAllObservationsGeneric = async function(datasetId, perFeature, updateStatus, onComplete) {
-    updateStatus('Loading observations...');
+    updateStatus('Ladataan havaintoja...');
     try {
         const firstResponse = await fetch(`/api/observations/${datasetId}?page=1&per_page=1000&`);
         if (!firstResponse.ok) throw new Error(`HTTP error! status: ${firstResponse.status}`);
         const firstData = await firstResponse.json();
 
         if (!firstData.features || firstData.features.length === 0) {
-            updateStatus('No observations found for this dataset');
+            updateStatus('Tälle aineistolle ei löytynyt havaintoja');
             return;
         }
 
         // Dataset name may be returned at top-level (`dataset_name`) or inside feature properties.
-        const datasetName = firstData.dataset_name || 'Unknown Dataset';
+        const datasetName = firstData.dataset_name || 'Tuntematon aineisto';
 
         const totalPages = (firstData.pagination && firstData.pagination.pages) || 1;
         const total = (firstData.pagination && firstData.pagination.total) || firstData.features.length;
 
-        updateStatus(`Loading ${datasetName} (page 1 of ${totalPages})...`);
+        updateStatus(`Ladataan ${datasetName} (sivu 1 / ${totalPages})...`);
 
         firstData.features.forEach(f => perFeature(f));
 
@@ -230,7 +230,7 @@ window.fetchAllObservationsGeneric = async function(datasetId, perFeature, updat
                     if (typeof p === 'undefined') break;
 
                     try {
-                        updateStatus(`Loading ${datasetName} (page ${p} of ${totalPages})...`);
+                        updateStatus(`Ladataan ${datasetName} (sivu ${p} / ${totalPages})...`);
                         const res = await fetch(`/api/observations/${datasetId}?page=${p}&per_page=1000`);
                         if (!res.ok) {
                             console.warn(`Page ${p} fetch failed with status ${res.status}`);
@@ -254,7 +254,7 @@ window.fetchAllObservationsGeneric = async function(datasetId, perFeature, updat
         }
     } catch (err) {
         console.error('Error fetching observations:', err);
-        updateStatus(`Error loading data: ${err.message}`);
+        updateStatus(`Virhe ladattaessa aineistoa: ${err.message}`);
     }
 };
 
@@ -337,13 +337,13 @@ window.toggleExclude = async function(obsId, btn) {
 
         const data = await window.setExclude(obsId, newValue);
         if (!data || !data.success) {
-            alert('Failed to update: ' + (data && data.error ? data.error : 'unknown error'));
+            alert('Päivitys epäonnistui: ' + (data && data.error ? data.error : 'tuntematon virhe'));
             return;
         }
 
         // Update button state
         btn.setAttribute('data-excluded', data.excluded ? '1' : '0');
-        btn.textContent = data.excluded ? 'Include in analysis' : 'Exclude from analysis';
+        btn.textContent = data.excluded ? 'Sisällytä analyysiin' : 'Poista analyysista';
 
         // If a multi-feature popup is open, update its entry class and stored properties
         try {
@@ -367,7 +367,7 @@ window.toggleExclude = async function(obsId, btn) {
         // Note: the actual layer styling and legend sync have already been handled by setExcludeBatch
     } catch (e) {
         console.error('Error toggling exclude:', e);
-        alert('Error toggling exclude: ' + e.message);
+        alert('Virhe poiston vaihtamisessa: ' + e.message);
     }
 };
 

@@ -5,7 +5,7 @@ const urlParams = new URLSearchParams(window.location.search);
 const datasetId = urlParams.get('id');
 
 if (!datasetId) {
-    document.getElementById('status').textContent = 'Error: No dataset ID provided';
+    document.getElementById('status').textContent = 'Virhe: Aineiston tunnistetta ei annettu';
     throw new Error('No dataset ID provided');
 }
 
@@ -34,9 +34,9 @@ async function fetchAndDisplayConvexHull(fitMap = true) {
         if (!response.ok) {
             if (response.status === 404) {
                 // Convex hull not calculated yet
-                document.getElementById('areaValue').textContent = 'Not calculated';
-                document.getElementById('calculated_at').textContent = 'Not calculated';
-                console.log('Convex hull not calculated yet. Click "Re-calculate Hull" button.');
+                document.getElementById('areaValue').textContent = 'Ei laskettu';
+                document.getElementById('calculated_at').textContent = 'Ei laskettu';
+                console.log('Convex hull -aluetta ei ole vielä laskettu. Käytä painiketta "Laske uudelleen".');
                 return;
             }
             throw new Error(`HTTP error! status: ${response.status}`);
@@ -92,17 +92,17 @@ async function fetchAndDisplayConvexHull(fitMap = true) {
         
     } catch (error) {
         console.error('Error fetching convex hull:', error);
-        document.getElementById('areaValue').textContent = 'Error';
-        document.getElementById('calculated_at').textContent = 'Error';
+        document.getElementById('areaValue').textContent = 'Virhe';
+        document.getElementById('calculated_at').textContent = 'Virhe';
     }
 }
 
 // Calculate convex hull on the server
 async function calculateConvexHull(fitMap = true) {
     try {
-        updateStatus('Calculating convex hull...');
-        document.getElementById('areaValue').textContent = 'Calculating...';
-        document.getElementById('calculated_at').textContent = 'Calculating...';
+        updateStatus('Levinneisyysalueen laskenta käynnissä...');
+        document.getElementById('areaValue').textContent = 'Lasketaan...';
+        document.getElementById('calculated_at').textContent = 'Lasketaan...';
         // Disable recalc button while operation runs
         let recalcBtn = document.getElementById('recalcBtn');
         if (recalcBtn) {
@@ -128,7 +128,7 @@ async function calculateConvexHull(fitMap = true) {
             throw new Error(data.error || 'Failed to calculate convex hull');
         }
         
-        updateStatus('Convex hull calculated successfully');
+        updateStatus('Levinneisyysalueen laskenta onnistui');
         
         // Fetch and display the newly calculated hull
         await fetchAndDisplayConvexHull(fitMap);
@@ -142,9 +142,9 @@ async function calculateConvexHull(fitMap = true) {
         
     } catch (error) {
         console.error('Error calculating convex hull:', error);
-        updateStatus(`Error: ${error.message}`);
-        document.getElementById('areaValue').textContent = 'Error';
-        document.getElementById('calculated_at').textContent = 'Error';
+        updateStatus(`Virhe: ${error.message}`);
+        document.getElementById('areaValue').textContent = 'Virhe';
+        document.getElementById('calculated_at').textContent = 'Virhe';
         if (recalcBtn) {
             recalcBtn.disabled = false;
             recalcBtn.style.opacity = '';
@@ -170,7 +170,7 @@ fetchAllObservationsGeneric(datasetId,
     updateStatus,
     ({ datasetName, total }) => {
         // Now render all features at once
-        updateStatus(`${datasetName}: Rendering ${allFeaturesToRender.length} observations...`);
+        updateStatus(`${datasetName}: Näytetään ${allFeaturesToRender.length} havaintoa...`);
         
         const layers = [];
         
@@ -204,8 +204,8 @@ fetchAllObservationsGeneric(datasetId,
         // Fetch pre-calculated convex hull from backend instead of calculating client-side
         fetchAndDisplayConvexHull(true);
 
-        const statusMessage = `${datasetName}: ${stats.total} observations loaded` +
-            (stats.skipped > 0 ? ` | Skipped: ${stats.skipped}` : '');
+        const statusMessage = `${datasetName}: ${stats.total} havaintoa ladattu` +
+            (stats.skipped > 0 ? ` | Skipattu: ${stats.skipped}` : '');
 
         updateStatus(statusMessage);
         

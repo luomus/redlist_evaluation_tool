@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Dataset Convex Hull</title>
+    <title>Aineiston levinneisyysalue</title>
     <link
         rel="stylesheet"
         href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
@@ -14,22 +14,22 @@
 </head>
 <body>
     <header>
-        <a href="/simple" class="back-btn">← Back to Datasets</a>
+        <a href="/simple" class="back-btn">← Takaisin etusivulle</a>
 
         <div class="info-panel">
-            <h3>Dataset Info</h3>
+            <h3>Aineiston tiedot</h3>
             <div class="info-item">
-                <span class="info-label">Area:</span>
+                <span class="info-label">Levinneisyysalue:</span>
                 <span class="info-value" id="areaValue">-</span>
             </div>     
             <div class="info-item">           
-                <span class="info-label">Calculated at:</span>
+                <span class="info-label">Laskettu:</span>
                 <span class="info-value" id="calculated_at">-</span>
             </div>
-            <button id="recalcBtn" onclick="window.createConvexHull(false)" style="margin-top: 10px; padding: 8px 16px; background: #3388ff; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">↻ Re-calculate Hull</button>
+            <button id="recalcBtn" onclick="window.createConvexHull(false)" style="margin-top: 10px; padding: 8px 16px; background: #3388ff; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">↻ Laske levinneisyysalue</button>
         </div>
 
-        <div id="status" class="stats">Loading dataset...</div>
+        <div id="status" class="stats">Ladataan aineistoa…</div>
     </header>
 
     <div id="map"></div>

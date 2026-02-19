@@ -21,7 +21,7 @@ function updateProgressSummary(pagesFetched, totalRecords, totalTime, logElement
     const summary = document.createElement('div');
     summary.className = 'progress-summary';
     summary.innerHTML = `
-        <div>Pages fetched: ${pagesFetched} | Total records: ${totalRecords} | Total time: ${totalTime.toFixed(2)}s</div>
+        <div>Haetut sivut: ${pagesFetched} | Havaintoja yhteensä: ${totalRecords} | Kokonaisaika: ${totalTime.toFixed(2)}s</div>
     `;
     logElement.appendChild(summary);
 }
@@ -61,7 +61,7 @@ async function fetchAllPages(baseUrl, config, logElement) {
             // Final API URL (use server-side proxy to avoid CORS)
             const apiUrl = `/api/laji?${apiQuery}`;
             
-            addProgressLog(`Fetching page ${currentPage}...`, 'success', logElement);
+            addProgressLog(`Haetaan sivua ${currentPage}...`, 'success', logElement);
 
             // We proxy through the Flask backend which injects the server-side
             // Authorization and session Person-Token. Only pass optional
@@ -73,12 +73,12 @@ async function fetchAllPages(baseUrl, config, logElement) {
 
             // Debugging: print URL and headers to both console and progress log
             console.debug('LAJI API (proxied) Request', { url: apiUrl, headers });
-            addProgressLog(`Request URL: ${apiUrl}`, 'success', logElement);
+            addProgressLog(`Pyynnön URL: ${apiUrl}`, 'success', logElement);
             try {
-                addProgressLog(`Request headers: ${JSON.stringify(headers)}`, 'success', logElement);
+                addProgressLog(`Pyynnön otsikot: ${JSON.stringify(headers)}`, 'success', logElement);
             } catch (e) {
                 // Fallback if circular structure or other stringify error
-                addProgressLog('Request headers: <unserializable headers>', 'success', logElement);
+                addProgressLog('Pyynnön otsikot: <ei-sarjoitettava>', 'success', logElement);
                 console.error('Failed to stringify headers for logging', e);
             }
 
@@ -165,7 +165,7 @@ window.parseUrl = async function(url, logElement) {
         const params = urlObj.searchParams;
         
         if (params.size === 0) {
-            throw new Error('No parameters found in the URL');
+            throw new Error('URL-osoitteesta ei löytynyt parametreja');
         }
         
         // Fetch config from Flask app

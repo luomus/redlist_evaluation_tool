@@ -33,14 +33,14 @@ function displayDatasetInfo(statsData) {
     
     datasetDetailsDiv.innerHTML = `
         <div class="info-item">
-            <strong>Name:</strong> ${statsData.dataset_name || 'Unnamed Dataset'}
+            <strong>Nimi:</strong> ${statsData.dataset_name || 'Nimetön aineisto'}
         </div>
         <div class="info-item">
-            <strong>ID:</strong> <code>${statsData.dataset_id}</code>
+            <strong>Tunniste:</strong> <code>${statsData.dataset_id}</code>
         </div>
         ${ (statsData.dataset_created_at || statsData.created_at) ? `
         <div class="info-item">
-            <strong>Created:</strong> ${new Date(statsData.dataset_created_at || statsData.created_at).toLocaleString()}
+            <strong>Luotu:</strong> ${new Date(statsData.dataset_created_at || statsData.created_at).toLocaleString()}
         </div>
         ` : ''}
         ${statsData.dataset_url ? `
@@ -49,7 +49,7 @@ function displayDatasetInfo(statsData) {
         </div>
         ` : ''}
         <div class="info-item">
-            <strong>Total Records:</strong> ${statsData.stats.totalRecords}
+            <strong>Havaintoja yhteensä:</strong> ${statsData.stats.totalRecords}
         </div>
     `;
     
@@ -70,33 +70,33 @@ function displayStatistics(statsData) {
     statsContentDiv.innerHTML = `
         <div class="stats-grid">
             <div class="stat-card">
-                <h4>Basic Counts</h4>
+                <h4>Perustiedot</h4>
                 <div class="stat-item">
-                    <strong>Total Records:</strong> ${stats.totalRecords.toLocaleString()}
+                    <strong>Havaintoja yhteensä:</strong> ${stats.totalRecords.toLocaleString()}
                 </div>
                 <div class="stat-item">
-                    <strong>Unique Species:</strong> ${stats.uniqueSpecies.toLocaleString()}
+                    <strong>Eri lajit:</strong> ${stats.uniqueSpecies.toLocaleString()}
                 </div>
                 <div class="stat-item">
-                    <strong>Unique Localities:</strong> ${stats.uniqueLocalities.toLocaleString()}
+                    <strong>Eri havaintopaikat:</strong> ${stats.uniqueLocalities.toLocaleString()}
                 </div>
                 <div class="stat-item">
-                    <strong>Unique Observers:</strong> ${stats.uniqueObservers.toLocaleString()}
-                </div>
-            </div>
-            
-            <div class="stat-card">
-                <h4>Date Range</h4>
-                <div class="stat-item">
-                    <strong>Earliest:</strong> ${stats.dateRange.earliest || 'N/A'}
-                </div>
-                <div class="stat-item">
-                    <strong>Latest:</strong> ${stats.dateRange.latest || 'N/A'}
+                    <strong>Eri havainnoitsijat:</strong> ${stats.uniqueObservers.toLocaleString()}
                 </div>
             </div>
             
             <div class="stat-card">
-                <h4>Record Basis</h4>
+                <h4>Ajanjakso</h4>
+                <div class="stat-item">
+                    <strong>Varhaisin:</strong> ${stats.dateRange.earliest || 'N/A'}
+                </div>
+                <div class="stat-item">
+                    <strong>Viimeisin:</strong> ${stats.dateRange.latest || 'N/A'}
+                </div>
+            </div>
+            
+            <div class="stat-card">
+                <h4>Havainnon tyyppi</h4>
                 ${sortedRecordBasis.map(([basis, count]) => `
                     <div class="stat-item">
                         <strong>${basis}:</strong> ${count.toLocaleString()}
@@ -106,21 +106,21 @@ function displayStatistics(statsData) {
             
             ${stats.individualCountStats ? `
             <div class="stat-card">
-                <h4>Individual Count Statistics</h4>
+                <h4>Yksilölukumäärän tilastot</h4>
                 <div class="stat-item">
-                    <strong>Min:</strong> ${stats.individualCountStats.min}
+                    <strong>Minimi:</strong> ${stats.individualCountStats.min}
                 </div>
                 <div class="stat-item">
-                    <strong>Max:</strong> ${stats.individualCountStats.max}
+                    <strong>Maksimi:</strong> ${stats.individualCountStats.max}
                 </div>
                 <div class="stat-item">
-                    <strong>Average:</strong> ${stats.individualCountStats.average.toFixed(2)}
+                    <strong>Keskiarvo:</strong> ${stats.individualCountStats.average.toFixed(2)}
                 </div>
                 <div class="stat-item">
-                    <strong>Sum:</strong> ${stats.individualCountStats.sum.toLocaleString()}
+                    <strong>Summa:</strong> ${stats.individualCountStats.sum.toLocaleString()}
                 </div>
                 <div class="stat-item">
-                    <strong>Records with Count:</strong> ${stats.individualCountStats.count.toLocaleString()}
+                    <strong>Havaintoja, joissa lukumäärä ilmoitettu:</strong> ${stats.individualCountStats.count.toLocaleString()}
                 </div>
             </div>
             ` : ''}
@@ -128,7 +128,7 @@ function displayStatistics(statsData) {
         
         ${stats.topSpecies && stats.topSpecies.length > 0 ? `
         <div class="chart-section">
-            <h3>Top 10 Species</h3>
+            <h3>Kymmenen yleisintä lajia</h3>
             <div class="bar-chart">
                 ${stats.topSpecies.map((item, index) => {
                     const maxCount = stats.topSpecies[0].count;
@@ -149,7 +149,7 @@ function displayStatistics(statsData) {
         
         ${stats.topObservers && stats.topObservers.length > 0 ? `
         <div class="chart-section">
-            <h3>Top 10 Observers</h3>
+            <h3>Kymmenen aktiivisinta havainnoitsijaa</h3>
             <div class="bar-chart">
                 ${stats.topObservers.map((item, index) => {
                     const maxCount = stats.topObservers[0].count;
@@ -194,7 +194,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     try {
         const datasetId = getDatasetId();
         if (!datasetId) {
-            showError('No dataset ID provided. Please select a dataset from the Simple Parser page.');
+            showError('Aineiston tunnusta ei annettu. Valitse aineisto etusivulta.');
             hideLoading();
             return;
         }
@@ -215,7 +215,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         
     } catch (error) {
         console.error('Error initializing stats page:', error);
-        showError('Failed to load dataset statistics');
+        showError('Tilastojen lataaminen epäonnistui');
         hideLoading();
     }
 });

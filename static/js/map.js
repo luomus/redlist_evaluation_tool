@@ -7,7 +7,7 @@ const datasetId = urlParams.get('id');
 window.currentProjectId = datasetId;
 
 if (!datasetId) {
-    document.getElementById('status').textContent = 'Error: No dataset ID provided';
+    document.getElementById('status').textContent = 'Virhe: Aineiston tunnusta ei annettu';
     throw new Error('No dataset ID provided');
 }
 
@@ -26,7 +26,7 @@ fetchAllObservationsGeneric(datasetId,
     updateStatus,
     ({ datasetName, total }) => {
         // Now render all features at once
-        updateStatus(`Rendering ${allFeaturesToRender.length} observations...`);
+        updateStatus(`Näytetään ${allFeaturesToRender.length} havaintoa...`);
         
         const layers = [];
         
@@ -58,8 +58,8 @@ fetchAllObservationsGeneric(datasetId,
         const bounds = geometryLayer.getBounds();
         if (bounds.isValid()) map.fitBounds(bounds, { padding: [50, 50] });
 
-        const statusMessage = `${datasetName}: ${stats.total} observations loaded` +
-            (stats.skipped > 0 ? ` | Skipped: ${stats.skipped}` : '');
+        const statusMessage = `${datasetName}: ${stats.total} havaintoa ladattu` +
+            (stats.skipped > 0 ? ` | Skipattu: ${stats.skipped}` : '');
 
         updateStatus(statusMessage);
         
