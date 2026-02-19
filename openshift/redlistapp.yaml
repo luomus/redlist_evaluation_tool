@@ -12,7 +12,7 @@ parameters:
   - name: APP_IMAGE
     description: Docker image for the web app
     required: true
-    value: 'yourusername/redlist:latest'
+    value: 'ghcr.io/luomus/redlist_evaluation_tool:latest'
   - name: POSTGRES_IMAGE
     description: PostGIS image to use for the database
     value: postgis/postgis:16-3.4
@@ -21,6 +21,7 @@ parameters:
     value: redlist
   - name: POSTGRES_PASSWORD
     description: Postgres password
+    value: your-secure-password
   - name: POSTGRES_DB
     description: Postgres database name
     value: redlist

@@ -1,41 +1,33 @@
 # OpenShift Deployment
 
+Docker images are automatically built and pushed to GitHub Container Registry (GHCR) via GitHub Actions on every push to `main` and on version tags.
+
 ## Prerequisites
 
 - OpenShift CLI (`oc`) installed and configured
 - Access to an OpenShift cluster
-- Docker installed locally
-- Docker Hub account
 
 ## Deployment Steps
 
-### 1. Build and Push Docker Image
-
-```powershell
-docker build -t yourusername/redlist:latest .
-docker login
-docker push yourusername/redlist:latest
-```
-
-Replace `yourusername` with your Docker Hub username.
-
-### 2. Create Project
+### 1. Create Project
 
 ```powershell
 oc new-project redlist-app
 ```
 
-### 3. Deploy
+### 2. Deploy
 
 ```powershell
-oc process -f openshift\redlistapp.yaml \
+oc process -f openshift/redlistapp.yaml \
   -p NAME=redlist \
-  -p APP_IMAGE=yourusername/redlist:latest \
+  -p APP_IMAGE=ghcr.io/luomus/redlist_evaluation_tool:latest \
   -p POSTGRES_PASSWORD=your-secure-password \
   | oc apply -f -
 ```
 
-### 4. Wait for Pods to Start
+Replace `yourusername` with your GitHub username and `your-secure-password` with a real password
+
+### 3. Wait for Pods to Start
 
 ```powershell
 oc get pods
@@ -43,7 +35,7 @@ oc get pods
 
 Wait for both `redlist-db` and `redlist` pods to show "Running" (1-2 minutes).
 
-### 6. Access the Application
+### 4. Access the Application
 
 ```powershell
 oc get route redlist
@@ -58,3 +50,25 @@ Edit `redlistapp.yaml` to customize:
 - `APP_IMAGE`: Docker image URL
 - `POSTGRES_PASSWORD`: Database password
 - `VOLUME_CAPACITY`: Database storage size (default: 1Gi)
+
+## Updating the Deployment
+
+1. Make changes to the code locally
+2. Commit and push to GitHub:
+
+```powershell
+git add .
+git commit -m "Your commit message"
+git push
+```
+
+3. GitHub Actions automatically builds the image and pushes to GHCR
+4. Update the OpenShift deployment to pull the latest image:
+
+```powershell
+oc rollout restart redlist
+```
+
+Or redeploy using a new image tag if you tagged a release version.
+
+
