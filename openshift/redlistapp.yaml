@@ -28,6 +28,21 @@ parameters:
   - name: VOLUME_CAPACITY
     description: PVC size for Postgres data
     value: 1Gi
+  - name: MML_API_KEY
+    description: API key for the MML API (optional)
+    value: your-mml-api-key
+  - name: LAJIAUTH_URL
+    value: https://fmnh-ws-test-24.it.helsinki.fi/laji-auth/
+  - name: TARGET
+    value: KE.1721
+  - name: SECRET_KEY
+    value: your-secret-key
+  - name: LAJI_API_BASE_URL
+    value: 'https://apitest.laji.fi/warehouse/private-query/unit/list'
+  - name: LAJI_API_ACCESS_TOKEN
+    value: your-laji-api-access-token
+
+
 
 objects:
 
@@ -127,6 +142,18 @@ objects:
                   value: "1"
                 - name: DATABASE_URL
                   value: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${NAME}-db:5432/${POSTGRES_DB}"
+                - name: MML_API_KEY
+                  value: "${MML_API_KEY}"
+                - name: LAJIAUTH_URL
+                  value: "${LAJIAUTH_URL}"
+                - name: TARGET
+                  value: "${TARGET}"
+                - name: SECRET_KEY
+                  value: "${SECRET_KEY}"
+                - name: LAJI_API_BASE_URL
+                  value: "${LAJI_API_BASE_URL}"
+                - name: LAJI_API_ACCESS_TOKEN
+                  value: "${LAJI_API_ACCESS_TOKEN}"
 
   - apiVersion: v1
     kind: Service

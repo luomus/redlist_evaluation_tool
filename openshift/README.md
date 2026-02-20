@@ -50,6 +50,14 @@ Edit `redlistapp.yaml` to customize:
 - `APP_IMAGE`: Docker image URL
 - `POSTGRES_PASSWORD`: Database password
 - `VOLUME_CAPACITY`: Database storage size (default: 1Gi)
+- `MML_API_KEY`:  Maanmittauslaitos API key used for basemaps
+- `TARGET`:  target (system identifier) parameter sent to laji-auth login
+- `SECRET_KEY`:   Flask secret key used to sign sessions
+- `LAJIAUTH_URL`:  base URL for laji-auth (default: https://fmnh-ws-test-24.it.helsinki.fi/laji-auth/)
+- `LAJI_API_BASE_URL`:Base URL for laji.fi API (default: https://api.laji.fi/warehouse/private-query/unit/list)
+- `LAJI_API_ACCESS_TOKEN`: Access token for laji.fi API
+
+
 
 ## Updating the Deployment
 
