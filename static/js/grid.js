@@ -13,7 +13,7 @@ if (!projectId) {
 let projectNameGrid = `Eliöryhmä ${projectId}`;
 (async () => {
     try {
-        const resp = await fetch(`/api/projects/${projectId}`);
+        const resp = await fetch(`/api/species/${projectId}`);
         if (resp.ok) {
             const json = await resp.json();
             if (json.success && json.project && json.project.name) {

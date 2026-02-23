@@ -1,0 +1,342 @@
+/* ===== Accordion-based taxon hierarchy ===== */
+
+.hierarchy-container {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+/* Each taxon group node */
+.taxon-node {
+    border: 1px solid #e0e6ed;
+    border-radius: 10px;
+    background: #f8fafb;
+    overflow: hidden;
+    transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.taxon-node:hover {
+    border-color: #c0cedb;
+}
+
+/* Level-based indentation */
+.taxon-children {
+    padding-left: 20px;
+    display: none;              /* collapsed by default */
+    padding-bottom: 6px;
+    padding-right: 6px;
+}
+
+.taxon-children.open {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+/* Header row for each node */
+.taxon-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    cursor: pointer;
+    user-select: none;
+    transition: background-color 0.15s ease;
+}
+
+.taxon-header:hover {
+    background-color: rgba(52, 152, 219, 0.04);
+}
+
+.taxon-header.leaf {
+    cursor: default;
+}
+
+/* Toggle caret */
+.taxon-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 6px;
+    background: linear-gradient(180deg, #f1fbff, #eaf8ff);
+    border: 1px solid #d6f0ff;
+    color: #0b74c6;
+    font-size: 12px;
+    font-weight: 700;
+    flex-shrink: 0;
+    transition: transform 0.2s ease;
+}
+
+.taxon-toggle.open {
+    transform: rotate(90deg);
+}
+
+.taxon-toggle.leaf {
+    background: transparent;
+    border: 1px dashed #d0d6dc;
+    color: #aab0b6;
+    cursor: default;
+    font-size: 10px;
+}
+
+/* Node name */
+.taxon-name {
+    font-weight: 600;
+    color: #2c3e50;
+    font-size: 15px;
+    flex: 1;
+}
+
+.taxon-scientific {
+    font-weight: 400;
+    color: #7f8c8d;
+    font-style: italic;
+    font-size: 13px;
+    margin-left: 4px;
+}
+
+/* Level-specific styles */
+.taxon-node[data-level="1"] > .taxon-header .taxon-name {
+    font-size: 17px;
+}
+
+.taxon-node[data-level="2"] > .taxon-header .taxon-name {
+    font-size: 15px;
+}
+
+.taxon-node[data-level="3"] > .taxon-header .taxon-name {
+    font-size: 14px;
+}
+
+.taxon-node[data-level="4"] > .taxon-header .taxon-name {
+    font-size: 13px;
+}
+
+/* Leaf node: "Add species" button */
+.taxon-add-btn {
+    padding: 4px 12px;
+    font-size: 13px;
+    font-weight: 500;
+    color: #fff;
+    background: linear-gradient(135deg, #27ae60, #219a52);
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.2s ease, transform 0.15s ease;
+}
+
+.taxon-add-btn:hover {
+    background: linear-gradient(135deg, #219a52, #1e8c49);
+    transform: translateY(-1px);
+}
+
+/* Species count badge */
+.taxon-badge {
+    font-size: 12px;
+    color: #7f8c8d;
+    background: #ecf0f1;
+    padding: 2px 8px;
+    border-radius: 10px;
+    white-space: nowrap;
+}
+
+/* ===== Species list inside leaf nodes ===== */
+
+.species-list {
+    padding: 0 16px 10px 42px; /* indent past caret */
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.species-card {
+    display: flex;
+    flex-direction: column;
+    padding: 10px 14px;
+    background: #fff;
+    border: 1px solid #e6eef2;
+    border-radius: 8px;
+    transition: box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+.species-header-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+}
+
+.species-card:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+    transform: translateY(-1px);
+}
+
+.species-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.species-name {
+    font-weight: 600;
+    color: #1f3b4d;
+    font-size: 14px;
+}
+
+.species-desc {
+    font-size: 12px;
+    color: #7f8c8d;
+}
+
+.species-actions {
+    display: flex;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.species-actions select {
+    padding: 5px 8px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    background: #fff;
+    font-size: 13px;
+    color: #495057;
+    cursor: pointer;
+    min-width: 150px;
+}
+
+.species-actions .btn-delete {
+    padding: 5px 10px;
+    font-size: 12px;
+    color: #dc3545;
+    border: 1px solid #dc3545;
+    border-radius: 4px;
+    background: #fff;
+    cursor: pointer;
+    font-weight: 400;
+}
+
+.species-actions .btn-delete:hover {
+    background: #dc3545;
+    color: #fff;
+}
+
+/* ===== Modal for adding species ===== */
+
+.modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-overlay.visible {
+    display: flex;
+}
+
+.modal-box {
+    background: #fff;
+    border-radius: 12px;
+    padding: 30px;
+    width: 90%;
+    max-width: 480px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+    position: relative;
+}
+
+.modal-box h3 {
+    margin-top: 0;
+    color: #2c3e50;
+    font-size: 20px;
+    margin-bottom: 6px;
+}
+
+.modal-box .modal-subtitle {
+    color: #7f8c8d;
+    font-size: 13px;
+    margin-bottom: 20px;
+}
+
+.modal-box .input-group {
+    margin-bottom: 16px;
+}
+
+.modal-box .input-group label {
+    font-size: 14px;
+}
+
+.modal-box .input-group input,
+.modal-box .input-group textarea {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.modal-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    margin-top: 20px;
+}
+
+.modal-actions .btn-cancel {
+    padding: 8px 18px;
+    border: 1px solid #ced4da;
+    border-radius: 6px;
+    background: #fff;
+    color: #495057;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.modal-actions .btn-confirm {
+    padding: 8px 18px;
+    border: none;
+    border-radius: 6px;
+    background: linear-gradient(135deg, #27ae60, #219a52);
+    color: #fff;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.modal-actions .btn-confirm:hover {
+    background: linear-gradient(135deg, #219a52, #1e8c49);
+}
+
+.modal-close {
+    position: absolute;
+    top: 12px;
+    right: 16px;
+    background: none;
+    border: none;
+    font-size: 22px;
+    color: #7f8c8d;
+    cursor: pointer;
+    padding: 4px;
+    line-height: 1;
+}
+
+.modal-close:hover {
+    color: #2c3e50;
+}
+
+/* ===== Species detail panel (datasets, add data) ===== */
+
+.species-detail-panel {
+    display: none;
+    margin-top: 8px;
+    padding: 16px;
+    background: #fff;
+    border: 1px solid #eef4f7;
+    border-radius: 8px;
+}
+
+.species-detail-panel.open {
+    display: block;
+}

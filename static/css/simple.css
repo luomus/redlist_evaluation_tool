@@ -1,3 +1,5 @@
+/* ===== Fetch progress / progress log ===== */
+
 .fetch-progress {
     background-color: #f8f9fa;
     border: 1px solid #dee2e6;
@@ -44,35 +46,8 @@
     color: #495057;
 }
 
-.tool-select {
-    padding: 8px 12px;
-    border: 1px solid #ced4da;
-    border-radius: 4px;
-    background-color: #fff;
-    font-size: 14px;
-    color: #495057;
-    cursor: pointer;
-    margin-right: 10px;
-    min-width: 180px;
-    font-weight: 400;
-} 
+/* ===== Section card ===== */
 
-.tool-select:focus {
-    outline: none;
-    border-color: #80bdff;
-    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
-}
-
-.tool-select:hover {
-    border-color: #adb5bd;
-}
-
-/* Make button text lighter to avoid bolded appearance */
-button {
-    font-weight: 400;
-}
-
-/* Project styles */
 .section {
     background: #ffffff;
     padding: 30px;
@@ -88,171 +63,11 @@ button {
     margin-top: 0;
 }
 
-.project-list {
-    display: flex;
-    flex-direction: column;
-    gap: 15px;
-}
+/* ===== Buttons ===== */
 
-.project-item {
-    border: 1px solid #e0e6ed;
-    border-radius: 10px;
-    padding: 20px;
-    background: #f8fafb;
-    transition: all 0.3s ease;
-}
-
-.project-item:hover {
-    box-shadow: 0 8px 25px rgba(52, 152, 219, 0.15);
-    transform: translateY(-2px);
-    border-color: #3498db;
-}
-
-.project-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 15px;
-}
-
-.project-header h3 {
-    margin: 0;
-    color: #2c3e50;
-    font-size: 18px;
-}
-
-/* Toggle / clickable header improvements */
-.project-header h3.clickable {
-    display: inline-flex;
-    align-items: center;
-    gap: 10px;
-    cursor: pointer;
-    padding: 4px 6px;
-    border-radius: 8px;
-    transition: background-color 0.15s ease, box-shadow 0.15s ease, transform 0.12s ease;
-}
-.project-header h3.clickable:focus {
-    outline: none;
-    box-shadow: 0 0 0 4px rgba(52,152,219,0.08);
-}
-.project-header h3.clickable:hover {
-    background: rgba(52,152,219,0.025);
-    transform: translateY(-1px);
-}
-
-.toggle-children {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 30px;
-    height: 30px;
-    margin-right: 6px;
-    border-radius: 6px;
-    background: linear-gradient(180deg,#f1fbff,#eaf8ff);
-    border: 1px solid #d6f0ff;
-    color: #0b74c6;
-    font-weight: 700;
-    transition: transform 0.18s ease, background-color 0.12s ease, box-shadow 0.12s ease;
-    box-shadow: 0 1px 0 rgba(11,116,198,0.08);
-    cursor: pointer;
-    user-select: none;
-}
-.project-item.open .toggle-children {
-    transform: rotate(90deg);
-    background: linear-gradient(180deg,#e6f4ff,#dff0ff);
-}
-.toggle-children.disabled {
-    opacity: 0.45;
-    cursor: default;
-    background: transparent;
-    border: 1px dashed #e0e6ed;
-    color: #aab0b6;
-    box-shadow: none;
-}
-
-.project-actions {
-    display: flex;
-    gap: 10px;
-}
-
-.project-description {
-    color: #7f8c8d;
-    margin: 10px 0;
-    line-height: 1.5;
-}
-
-.project-stats {
-    display: flex;
-    gap: 20px;
-    color: #34495e;
-    font-size: 14px;
-    margin: 15px 0;
-}
-
-.project-details {
-    margin-top: 20px;
-    padding-top: 20px;
-    border-top: 2px solid #ecf0f1;
-}
-
-.project-details h4 {
-    color: #2c3e50;
-    margin-top: 20px;
-    font-weight: 600;
-}
-
-.add-data-section, .datasets-section, .tools-section {
-    margin: 20px 0;
-    padding: 20px;
-    background: #f8fafb;
-    border-radius: 8px;
-    border-left: 4px solid #3498db;
-}
-
-.dataset-list {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-}
-
-.dataset-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 12px;
-    background: #ffffff;
-    border-radius: 6px;
-    border: 1px solid #e0e6ed;
-}
-
-.dataset-info {
-    flex: 1;
-}
-
-.dataset-info div {
-    margin: 5px 0;
-    font-size: 14px;
-}
-
-.tool-buttons {
-    display: flex;
-    gap: 10px;
-    flex-wrap: wrap;
-}
-
-.tool-buttons button {
-    padding: 8px 16px;
-    background: #007bff;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
+button {
     font-weight: 400;
 }
-
-.tool-buttons button:hover {
-    background: #0056b3;
-} 
 
 .btn-small {
     padding: 6px 12px;
@@ -267,7 +82,7 @@ button {
 
 .btn-small:hover {
     background: #e9ecef;
-} 
+}
 
 .btn-danger {
     color: #dc3545;
@@ -277,6 +92,16 @@ button {
 .btn-danger:hover {
     background: #dc3545;
     color: white;
+}
+
+.btn-primary {
+    color: #fff;
+    background: #1a73b8;
+    border-color: #1a73b8;
+}
+
+.btn-primary:hover {
+    background: #1669ad;
 }
 
 .btn-fetch, .btn-save {
@@ -300,76 +125,22 @@ button {
 
 .btn-save:hover {
     background: #0056b3;
-} 
-
-textarea {
-    width: 100%;
-    min-height: 60px;
-    padding: 8px;
-    border: 1px solid #ced4da;
-    border-radius: 4px;
-    font-family: inherit;
-    resize: vertical;
 }
 
-/* ----- Improvements for child/species cards and details ----- */
-.child-project-item {
-    border: 1px solid #e6eef2;
-    border-radius: 8px;
-    padding: 12px;
-    margin: 10px 0;
-    background: linear-gradient(180deg, #ffffff, #fbfeff);
-    box-shadow: 0 2px 6px rgba(0,0,0,0.03);
-    position: relative;
-    transition: transform 0.15s ease, box-shadow 0.15s ease;
-}
-.child-project-item:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 18px rgba(0,0,0,0.06);
-}
-
-.child-project-item h4 {
-    margin: 0;
-    font-size: 16px;
-    color: #1f3b4d;
-}
-
-.child-project-item + .child-project-item {
-    margin-top: 12px;
-}
-
-.toggle-details-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    padding: 6px 10px;
-    border-radius: 4px;
-    border: 1px solid #1a73b8;
-    background: linear-gradient(180deg,#1a73b8,#1669ad);
-    color: #fff;
-    cursor: pointer;
-    font-weight: 500;
-}
-
-.toggle-details-btn .caret {
-    font-weight: 700;
-    transform: translateY(-1px);
-}
-
-.project-details {
-    margin-top: 16px;
-    padding: 14px;
-    border-radius: 8px;
-    background: #ffffff;
-    border: 1px solid #eef4f7;
-}
+/* ===== Datasets section ===== */
 
 .add-data-section, .datasets-section {
     margin: 12px 0;
-    padding: 12px;
+    padding: 14px;
     background: #fbfeff;
     border-radius: 6px;
     border-left: 4px solid #27ae60;
+}
+
+.dataset-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
 }
 
 .dataset-item {
@@ -383,6 +154,20 @@ textarea {
     word-break: break-word;
 }
 
+.dataset-info {
+    flex: 1;
+}
+
+.dataset-info div {
+    margin: 5px 0;
+    font-size: 14px;
+}
+
+.dataset-actions {
+    display: flex;
+    gap: 6px;
+}
+
 .dataset-actions button.btn-primary {
     background: #218838;
     border: none;
@@ -393,8 +178,23 @@ textarea {
     background: #1e7e34;
 }
 
-/* Small visual separator to indicate distinct species */
-.species-separator {
-    border-top: 1px dashed #e1eef1;
-    margin: 10px 0 4px;
+/* ===== Textarea ===== */
+
+textarea {
+    width: 100%;
+    min-height: 60px;
+    padding: 8px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    font-family: inherit;
+    resize: vertical;
+}
+
+/* ===== Error / success messages ===== */
+
+.error {
+    margin-top: 15px;
+    padding: 12px 16px;
+    border-radius: 8px;
+    font-weight: 500;
 }

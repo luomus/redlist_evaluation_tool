@@ -161,6 +161,16 @@ window.setExcludeBatch = async function(obsIds, excluded, batchSize = 100) {
                             if (el && el.classList) {
                                 el.classList.toggle('geom-excluded', !!excluded);
                                 el.classList.toggle('geom-included', !excluded);
+                                
+                                // Also update SVG attributes directly to ensure styling persists
+                                // This handles cases where CSS classes alone don't trigger re-renders
+                                if (excluded) {
+                                    el.setAttribute('stroke', '#888888');
+                                    el.setAttribute('fill', '#acacac');
+                                } else {
+                                    el.setAttribute('stroke', '#940000');
+                                    el.setAttribute('fill', '#cc4141');
+                                }
                             }
                         } catch (e) { /* ignore styling errors */ }
                     }

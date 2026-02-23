@@ -1,13 +1,41 @@
 -- Create PostGIS extension if not exists
 CREATE EXTENSION IF NOT EXISTS postgis;
 
--- Drop existing tables if they exist (to ensure clean slate)
+-- Drop existing tables (clean slate)
+DROP TABLE IF EXISTS grid_cells CASCADE;
 DROP TABLE IF EXISTS convex_hulls CASCADE;
 DROP TABLE IF EXISTS observations CASCADE;
 DROP TABLE IF EXISTS projects CASCADE;
+DROP TABLE IF EXISTS taxons CASCADE;
+DROP TABLE IF EXISTS base_grid_cells CASCADE;
 
--- Create observations table
+-- Taxon hierarchy (static, loaded from hierarchy.json)
+CREATE TABLE taxons (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    scientific_name VARCHAR(255),
+    level INTEGER NOT NULL DEFAULT 1,
+    parent_id INTEGER REFERENCES taxons(id) ON DELETE CASCADE,
+    is_leaf BOOLEAN NOT NULL DEFAULT FALSE,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX idx_taxons_parent ON taxons(parent_id);
+CREATE INDEX idx_taxons_level ON taxons(level);
+CREATE INDEX idx_taxons_leaf ON taxons(is_leaf);
 
+-- Projects represent individual species under leaf taxons
+CREATE TABLE projects (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    description TEXT,
+    taxon_id INTEGER NOT NULL REFERENCES taxons(id) ON DELETE CASCADE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX idx_projects_taxon ON projects(taxon_id);
+
+-- Observations with spatial data
 CREATE TABLE observations (
     id SERIAL PRIMARY KEY,
     project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
@@ -15,40 +43,36 @@ CREATE TABLE observations (
     dataset_name VARCHAR(255),
     dataset_url TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    excluded BOOLEAN DEFAULT FALSE,
     properties JSONB NOT NULL,
     geometry GEOMETRY(GEOMETRY, 4326)
 );
+CREATE INDEX idx_observations_project ON observations(project_id);
+CREATE INDEX idx_observations_dataset ON observations(dataset_id);
+CREATE INDEX idx_observations_excluded ON observations(excluded);
+CREATE INDEX idx_observations_created ON observations(created_at);
 
--- Create convex_hulls table
+-- Convex hulls (EOO)
 CREATE TABLE convex_hulls (
     id SERIAL PRIMARY KEY,
-    project_id INTEGER NOT NULL UNIQUE REFERENCES projects(id),
+    project_id INTEGER NOT NULL UNIQUE REFERENCES projects(id) ON DELETE CASCADE,
     geometry GEOMETRY(POLYGON, 4326),
     area_km2 DOUBLE PRECISION,
     calculated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Create grid_cells table for WGS84 grids
-CREATE TABLE IF NOT EXISTS grid_cells (
+-- Grid cells (AOO)
+CREATE TABLE grid_cells (
     id SERIAL PRIMARY KEY,
-    project_id INTEGER NOT NULL REFERENCES projects(id),
+    project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
     cell_row INTEGER,
     cell_col INTEGER,
     geom GEOMETRY(POLYGON, 4326),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Create projects table
-CREATE TABLE IF NOT EXISTS projects (
-    id SERIAL PRIMARY KEY,
-    name VARCHAR(255) NOT NULL,
-    description TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
--- Create base_grid_cells table (Finland-wide base grid, created once)
-CREATE TABLE IF NOT EXISTS base_grid_cells (
+-- Finland-wide base grid (2km cells, created once)
+CREATE TABLE base_grid_cells (
     id SERIAL PRIMARY KEY,
     grid_x INTEGER,
     grid_y INTEGER,
@@ -56,6 +80,3 @@ CREATE TABLE IF NOT EXISTS base_grid_cells (
     geom_4326 GEOMETRY(POLYGON, 4326),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
-
--- Verify tables were created
-\dt

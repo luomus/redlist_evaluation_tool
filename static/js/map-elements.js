@@ -562,7 +562,7 @@ window.createLegendControl = function() {
 
     // Populate the legend from server dataset list where available
     const projectId = window.currentProjectId || (new URLSearchParams(window.location.search)).get('id') || null;
-    const datasetsUrl = projectId ? `/api/projects/${encodeURIComponent(projectId)}/datasets` : '/api/datasets';
+    const datasetsUrl = projectId ? `/api/species/${encodeURIComponent(projectId)}/datasets` : '/api/datasets';
     fetch(datasetsUrl).then(r => r.json()).then(data => {
         const list = document.getElementById('dataset-legend-list');
         list.innerHTML = '';
@@ -614,10 +614,6 @@ window.createLegendControl = function() {
                     alert(`Tässä aineistossa ei ole havaintoja, joita voisi ${exclude ? 'poistaa käytöstä' : 'ottaa käyttöön'}.`);
                     this.checked = !checked; // revert
                     return;
-                }
-
-                if (affectedCount > 500) {
-                    if (!confirm(`Haluatko ${exclude ? 'poistaa käytöstä' : 'ottaa käyttöön'} ${affectedCount} havaintoa? Jatketaanko?`)) { this.checked = !checked; return; }
                 }
 
                 this.disabled = true;
@@ -675,10 +671,6 @@ window.createLegendControl = function() {
                         alert(`Tässä aineistossa ei ole havaintoja, joita voisi ${exclude ? 'poistaa käytöstä' : 'ottaa käyttöön'}.`);
                         this.checked = !checked; // revert
                         return;
-                    }
-
-                    if (affectedCount > 500) {
-                        if (!confirm(`Haluatko ${exclude ? 'poistaa käytöstä' : 'ottaa käyttöön'} ${affectedCount} havaintoa? Jatketaanko?`)) { this.checked = !checked; return; }
                     }
 
                     this.disabled = true;

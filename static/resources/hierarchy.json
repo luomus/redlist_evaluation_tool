@@ -1,0 +1,799 @@
+[
+  {
+    "name": "Hyönteiset",
+    "scientific_name": null,
+    "children": [
+      {
+        "name": "Pistiäiset",
+        "scientific_name": "Hymenoptera",
+        "children": [
+          {
+            "name": "Sahapistiäiset",
+            "scientific_name": "Symphyta",
+            "children": [
+              {
+                "name": "Mailapistiäiset",
+                "scientific_name": "Argidae",
+                "children": []
+              },
+              {
+                "name": "Sylkisahapistiäiset",
+                "scientific_name": "Blasticotomidae",
+                "children": []
+              },
+              {
+                "name": "Korsipistiäiset",
+                "scientific_name": "Cephidae",
+                "children": []
+              },
+              {
+                "name": "Nuijapistiäiset",
+                "scientific_name": "Cimbicidae",
+                "children": []
+              },
+              {
+                "name": "Havupistiäiset",
+                "scientific_name": "Diprionidae",
+                "children": []
+              },
+              {
+                "name": "Loissahapistiäiset",
+                "scientific_name": "Orussidae",
+                "children": []
+              },
+              {
+                "name": "Kudospistiäiset",
+                "scientific_name": "Pamphiliidae",
+                "children": []
+              },
+              {
+                "name": "Lehtipistiäiset",
+                "scientific_name": "Tenthredinidae",
+                "children": []
+              },
+              {
+                "name": "Puupistiäiset",
+                "scientific_name": "Siricidae",
+                "children": []
+              },
+              {
+                "name": "Junkipistiäiset",
+                "scientific_name": "Xiphydriidae",
+                "children": []
+              },
+              {
+                "name": "Kääpiösahapistiäiset",
+                "scientific_name": "Xyelidae",
+                "children": []
+              },
+              {
+                "name": "Saniaispistiäiset",
+                "scientific_name": "Heptamelidae",
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "Kätköpistiäiset",
+            "scientific_name": "Parasitica",
+            "children": [
+              {
+                "name": "Ahmaspistiäiset",
+                "scientific_name": "Ichneumonidae",
+                "children": []
+              },
+              {
+                "name": "Vainopistiäiset",
+                "scientific_name": "Braconidae",
+                "children": []
+              },
+              {
+                "name": "Kiilupistiäismäiset",
+                "scientific_name": "Chalcidoidea",
+                "children": []
+              },
+              {
+                "name": "Paljepistiäismäiset",
+                "scientific_name": "Mymarommatoidea",
+                "children": []
+              },
+              {
+                "name": "Alvepistiäismäiset",
+                "scientific_name": "Trigonaloidea",
+                "children": []
+              },
+              {
+                "name": "Torakkapistiäismäiset",
+                "scientific_name": "Evanioidea",
+                "children": []
+              },
+              {
+                "name": "Nysäpistiäismäiset",
+                "scientific_name": "Ceraphronoidea",
+                "children": []
+              },
+              {
+                "name": "Keripistiäismäiset",
+                "scientific_name": "Proctotrupoidea",
+                "children": []
+              },
+              {
+                "name": "Muurupistiäismäiset",
+                "scientific_name": "Diaprioidea",
+                "children": []
+              },
+              {
+                "name": "Litupistiäismäiset",
+                "scientific_name": "Platygastroidea",
+                "children": []
+              },
+              {
+                "name": "kämäpistiäismäiset",
+                "scientific_name": "Cynipoidea",
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "Myrkkypistiäiset",
+            "scientific_name": "Aculeata",
+            "children": [
+              {
+                "name": "Mesipistiäiset",
+                "scientific_name": "Anthophila",
+                "children": []
+              },
+              {
+                "name": "Lattapistiäiset",
+                "scientific_name": "Bethylidae",
+                "children": []
+              },
+              {
+                "name": "Kultapistiäiset",
+                "scientific_name": "Chrysididae",
+                "children": []
+              },
+              {
+                "name": "Pihtipistiäiset",
+                "scientific_name": "Dryinidae",
+                "children": []
+              },
+              {
+                "name": "Vohkapistiäiset",
+                "scientific_name": "Embolemidae",
+                "children": []
+              },
+              {
+                "name": "Muurahaiset",
+                "scientific_name": "Formicidae",
+                "children": []
+              },
+              {
+                "name": "Mutipistiäiset",
+                "scientific_name": "Mutillidae",
+                "children": []
+              },
+              {
+                "name": "Tiepistiäiset",
+                "scientific_name": "Pompilidae",
+                "children": []
+              },
+              {
+                "name": "Säiläpistiäiset",
+                "scientific_name": "Sapygidae",
+                "children": []
+              },
+              {
+                "name": "Petopistiäiset",
+                "scientific_name": "Spheciformes",
+                "children": []
+              },
+              {
+                "name": "Puukkopistiäiset",
+                "scientific_name": "Tiphiidae",
+                "children": []
+              },
+              {
+                "name": "Ampiaiset",
+                "scientific_name": "Vespidae",
+                "children": []
+              },
+              {
+                "name": "Lysmypistiäiset",
+                "scientific_name": "Thynnidae",
+                "children": []
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "Kolmisukahäntäiset",
+        "scientific_name": "Thysanura",
+        "children": []
+      },
+      {
+        "name": "Päivänkorennot",
+        "scientific_name": "Ephemeroptera",
+        "children": []
+      },
+      {
+        "name": "Sudenkorennot",
+        "scientific_name": "Odonata",
+        "children": []
+      },
+      {
+        "name": "Koskikorennot",
+        "scientific_name": "Plecoptera",
+        "children": []
+      },
+      {
+        "name": "Suorasiipiset",
+        "scientific_name": "Orthoptera",
+        "children": []
+      },
+      {
+        "name": "Pihtihäntäiset",
+        "scientific_name": "Dermaptera",
+        "children": []
+      },
+      {
+        "name": "Torakat",
+        "scientific_name": "Blattodea",
+        "children": []
+      },
+      {
+        "name": "Nivelkärsäiset",
+        "scientific_name": "Hemiptera",
+        "children": [
+          {
+            "name": "Luteet",
+            "scientific_name": "Heteroptera",
+            "children": []
+          },
+          {
+            "name": "Kaskaat",
+            "scientific_name": "Auchenorrhyncha",
+            "children": []
+          },
+          {
+            "name": "Kempit",
+            "scientific_name": "Psyllomorpha",
+            "children": []
+          },
+          {
+            "name": "Kirvat",
+            "scientific_name": "Aphidomorpha",
+            "children": []
+          },
+          {
+            "name": "Kilpikirvat",
+            "scientific_name": "Coccomorpha",
+            "children": []
+          },
+          {
+            "name": "Jauhiaiset",
+            "scientific_name": "Aleyrodomorpha",
+            "children": []
+          }
+        ]
+      },
+      {
+        "name": "Verkkosiipiset",
+        "scientific_name": "Neuroptera",
+        "children": []
+      },
+      {
+        "name": "Kaislakorennot",
+        "scientific_name": "Megaloptera",
+        "children": []
+      },
+      {
+        "name": "Käärmekorennot",
+        "scientific_name": "Raphidioptera",
+        "children": []
+      },
+      {
+        "name": "Kärsäkorennot",
+        "scientific_name": "Mecoptera",
+        "children": []
+      },
+      {
+        "name": "Jäytiäiset",
+        "scientific_name": "Psocoptera",
+        "children": []
+      },
+      {
+        "name": "Ripsiäiset",
+        "scientific_name": "Thysanoptera",
+        "children": []
+      },
+      {
+        "name": "Perhoset",
+        "scientific_name": "Lepidoptera",
+        "children": [
+          {
+            "name": "Leukaperhosmaiset",
+            "scientific_name": "Micropterigoidea",
+            "children": []
+          },
+          {
+            "name": "Päistärkoimaiset",
+            "scientific_name": "Eriocranioidea",
+            "children": []
+          },
+          {
+            "name": "Juuriperhosmaiset",
+            "scientific_name": "Hepialoidea",
+            "children": []
+          },
+          {
+            "name": "Kääpiökoimaiset",
+            "scientific_name": "Nepticuloidea",
+            "children": []
+          },
+          {
+            "name": "Seulakoimaiset",
+            "scientific_name": "Adeloidea",
+            "children": []
+          },
+          {
+            "name": "Läiskäkoimaiset",
+            "scientific_name": "Tischerioidea",
+            "children": []
+          },
+          {
+            "name": "Aitokoimaiset",
+            "scientific_name": "Tineoidea",
+            "children": []
+          },
+          {
+            "name": "Miinaajakoimaiset",
+            "scientific_name": "Gracillarioidea",
+            "children": []
+          },
+          {
+            "name": "Kehrääjäkoimaiset",
+            "scientific_name": "Yponomeutoidea",
+            "children": []
+          },
+          {
+            "name": "Varsikoimaiset",
+            "scientific_name": "Douglasioidea",
+            "children": []
+          },
+          {
+            "name": "Keulakoimaiset",
+            "scientific_name": "Gelechioidea",
+            "children": []
+          },
+          {
+            "name": "Viuhkaperhosmaiset",
+            "scientific_name": "Alucitoidea",
+            "children": []
+          },
+          {
+            "name": "Sulkaperhosmaiset",
+            "scientific_name": "Pterophoroidea",
+            "children": []
+          },
+          {
+            "name": "Koverokoimaiset",
+            "scientific_name": "Schreckensteinioidea",
+            "children": []
+          },
+          {
+            "name": "Hammaskoimaiset",
+            "scientific_name": "Epermenioidea",
+            "children": []
+          },
+          {
+            "name": "Outokoimaiset",
+            "scientific_name": "Urodoidea",
+            "children": []
+          },
+          {
+            "name": "Tuikekoimaiset",
+            "scientific_name": "Choreutoidea",
+            "children": []
+          },
+          {
+            "name": "Kääriäismäiset",
+            "scientific_name": "Tortricoidea",
+            "children": []
+          },
+          {
+            "name": "Puuntuhoojamaiset",
+            "scientific_name": "Cossoidea",
+            "children": []
+          },
+          {
+            "name": "Punatäpläperhosmaiset",
+            "scientific_name": "Zygaenoidea",
+            "children": []
+          },
+          {
+            "name": "Päiväperhoset",
+            "scientific_name": "Papilionoidea",
+            "children": []
+          },
+          {
+            "name": "Koisamaiset",
+            "scientific_name": "Pyraloidea",
+            "children": []
+          },
+          {
+            "name": "Sirppisiipimäiset",
+            "scientific_name": "Drepanoidea",
+            "children": []
+          },
+          {
+            "name": "Karvakehrääjämäiset",
+            "scientific_name": "Lasiocampoidea",
+            "children": []
+          },
+          {
+            "name": "Kehrääjämäiset",
+            "scientific_name": "Bombycoidea",
+            "children": []
+          },
+          {
+            "name": "Mittarimaiset",
+            "scientific_name": "Geometroidea",
+            "children": []
+          },
+          {
+            "name": "Yökkösmäiset",
+            "scientific_name": "Noctuoidea",
+            "children": []
+          }
+        ]
+      },
+      {
+        "name": "Vesiperhoset",
+        "scientific_name": "Trichoptera",
+        "children": []
+      },
+      {
+        "name": "Kaksisiipiset",
+        "scientific_name": "Diptera",
+        "children": [
+          {
+            "name": "Sääsket",
+            "scientific_name": "Nematocera",
+            "children": [
+              {
+                "name": "Bibionomorpha (pl. Sciaroidea)",
+                "scientific_name": null,
+                "children": []
+              },
+              {
+                "name": "Sciaroidea (pl. Cecidomyiidae",
+                "scientific_name": "Sciaridae)",
+                "children": []
+              },
+              {
+                "name": "Tipulomorpha",
+                "scientific_name": null,
+                "children": []
+              },
+              {
+                "name": "Culicomorpha",
+                "scientific_name": null,
+                "children": []
+              },
+              {
+                "name": "Ptychopteromorpha",
+                "scientific_name": null,
+                "children": []
+              },
+              {
+                "name": "Psychodomorpha",
+                "scientific_name": null,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "Kärpäset",
+            "scientific_name": "Brachycera",
+            "children": []
+          }
+        ]
+      },
+      {
+        "name": "Kierresiipiset",
+        "scientific_name": "Strepsiptera",
+        "children": []
+      },
+      {
+        "name": "Kovakuoriaiset",
+        "scientific_name": "Coleoptera",
+        "children": []
+      }
+    ]
+  },
+  {
+    "name": "Sienet ja jäkälät",
+    "scientific_name": null,
+    "children": [
+      {
+        "name": "Sienet",
+        "scientific_name": "Fungi",
+        "children": [
+          {
+            "name": "Helttasienet ja tatit",
+            "scientific_name": null,
+            "children": []
+          },
+          {
+            "name": "Kääväkkäät",
+            "scientific_name": null,
+            "children": [
+              {
+                "name": "Käävät",
+                "scientific_name": null,
+                "children": []
+              },
+              {
+                "name": "Muut kääväkkäät",
+                "scientific_name": null,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "Kupusienet",
+            "scientific_name": null,
+            "children": []
+          },
+          {
+            "name": "Kotelosienet pl. jäkälät",
+            "scientific_name": null,
+            "children": []
+          }
+        ]
+      },
+      {
+        "name": "Jäkälät ja likenikoliset sienet",
+        "scientific_name": "Lichenes",
+        "children": [
+          {
+            "name": "Jäkälät",
+            "scientific_name": null,
+            "children": []
+          },
+          {
+            "name": "Likenikoliset sienet",
+            "scientific_name": null,
+            "children": []
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "Muut selkärangattomat",
+    "scientific_name": null,
+    "children": [
+      {
+        "name": "Makkaramadot",
+        "scientific_name": "Priapulida",
+        "children": []
+      },
+      {
+        "name": "Limamadot",
+        "scientific_name": "Nemertea",
+        "children": []
+      },
+      {
+        "name": "Sienieläimet",
+        "scientific_name": "Porifera",
+        "children": []
+      },
+      {
+        "name": "Sammaleläimet",
+        "scientific_name": "Bryozoa",
+        "children": []
+      },
+      {
+        "name": "Polttiaiseläimet",
+        "scientific_name": "Cnidaria",
+        "children": []
+      }
+    ]
+  },
+  {
+    "name": "Putkilokasvit",
+    "scientific_name": "Tracheophyta",
+    "children": []
+  },
+  {
+    "name": "Levät",
+    "scientific_name": "Algae",
+    "children": [
+      {
+        "name": "Näkinpartaislevät",
+        "scientific_name": "Charophyta",
+        "children": []
+      },
+      {
+        "name": "Punalevät",
+        "scientific_name": "Rhodophyta",
+        "children": []
+      },
+      {
+        "name": "Viherlevät",
+        "scientific_name": "Chlorophyta",
+        "children": []
+      },
+      {
+        "name": "Ruskeat levät",
+        "scientific_name": "Ochrophyta",
+        "children": []
+      }
+    ]
+  },
+  {
+    "name": "Sammalet",
+    "scientific_name": "Bryophyta",
+    "children": [
+      {
+        "name": "Lehtisammalet",
+        "scientific_name": "Bryophyta",
+        "children": []
+      },
+      {
+        "name": "Maksasammalet",
+        "scientific_name": "Marchantiophyta",
+        "children": []
+      },
+      {
+        "name": "Sarvisammalet",
+        "scientific_name": "Anthocerophyta",
+        "children": []
+      }
+    ]
+  },
+  {
+    "name": "Nisäkkäät",
+    "scientific_name": "Mammalia",
+    "children": []
+  },
+  {
+    "name": "Linnut",
+    "scientific_name": "Aves",
+    "children": []
+  },
+  {
+    "name": "Matelijat ja sammakkoeläimet",
+    "scientific_name": null,
+    "children": [
+      {
+        "name": "Matelijat",
+        "scientific_name": "Reptilia",
+        "children": []
+      },
+      {
+        "name": "Sammakkoeläimet",
+        "scientific_name": "Amphibia",
+        "children": []
+      }
+    ]
+  },
+  {
+    "name": "Kalat",
+    "scientific_name": "Pisces",
+    "children": []
+  },
+  {
+    "name": "Nivelmadot",
+    "scientific_name": "Annelida",
+    "children": [
+      {
+        "name": "Harvasukasmadot",
+        "scientific_name": "Oligochaeta",
+        "children": []
+      },
+      {
+        "name": "Juotikkaat",
+        "scientific_name": "Hirudinea",
+        "children": []
+      },
+      {
+        "name": "Monisukasmadot",
+        "scientific_name": "Polychaeta",
+        "children": []
+      }
+    ]
+  },
+  {
+    "name": "Nilviäiset",
+    "scientific_name": "Mollusca",
+    "children": [
+      {
+        "name": "Maakotilot ja etanat",
+        "scientific_name": null,
+        "children": []
+      },
+      {
+        "name": "Vesinilviäiset",
+        "scientific_name": null,
+        "children": []
+      }
+    ]
+  },
+  {
+    "name": "Hämähäkkieläimet",
+    "scientific_name": "Arachnida",
+    "children": [
+      {
+        "name": "Hämähäkit",
+        "scientific_name": "Araneae",
+        "children": []
+      },
+      {
+        "name": "Lukit",
+        "scientific_name": "Opiliones",
+        "children": []
+      },
+      {
+        "name": "Valeskorpionit",
+        "scientific_name": "Pseudoscorpiones",
+        "children": []
+      }
+    ]
+  },
+  {
+    "name": "Äyriäiset",
+    "scientific_name": "Crustacea",
+    "children": [
+      {
+        "name": "Maasiirat",
+        "scientific_name": "Oniscidea",
+        "children": []
+      },
+      {
+        "name": "Katkat",
+        "scientific_name": "vesisiirat ja massiäyriäiset",
+        "children": []
+      },
+      {
+        "name": "Kymmenjalkaiset",
+        "scientific_name": "Decapoda",
+        "children": []
+      },
+      {
+        "name": "Muut makroäyriäiset",
+        "scientific_name": null,
+        "children": []
+      }
+    ]
+  },
+  {
+    "name": "Tuhatjalkaiset",
+    "scientific_name": "Myriapoda",
+    "children": [
+      {
+        "name": "Juoksujalkaiset",
+        "scientific_name": "Chilopoda",
+        "children": []
+      },
+      {
+        "name": "Kaksoisjalkaiset",
+        "scientific_name": "Diplopoda",
+        "children": []
+      },
+      {
+        "name": "Harvajalkaiset",
+        "scientific_name": "Pauropoda",
+        "children": []
+      },
+      {
+        "name": "Sokkojuoksiaiset",
+        "scientific_name": "Symphyla",
+        "children": []
+      }
+    ]
+  }
+]

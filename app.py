@@ -1,7 +1,8 @@
-from flask import Flask, render_template, jsonify, request, session, redirect, url_for
+from flask import Flask, render_template, jsonify, request, session, redirect, url_for, make_response
 from livereload import Server
-from models import init_db, Session, Observation, ConvexHull, Project, GridCell
-from sqlalchemy import Integer, text
+from models import init_db, Session, Observation, ConvexHull, Project, GridCell, Taxon
+from sqlalchemy import Integer, text, func
+from sqlalchemy.orm import joinedload
 import json
 import csv
 import io
@@ -228,18 +229,32 @@ def laji_proxy():
 
         target_url = f"{LAJI_API_BASE_URL}?{query}" if query else LAJI_API_BASE_URL
 
-        # Forward headers (server-side) — include server-side access token and session person token
+        # Validate tokens
+        if not LAJI_API_ACCESS_TOKEN:
+            return jsonify({"success": False, "error": "LAJI_API_ACCESS_TOKEN not configured on server"}), 500
+        person_token = session.get('token')
+        if not person_token:
+            return jsonify({"success": False, "error": "Person token missing – please log in again"}), 401
+
+        # Forward headers — api.laji.fi uses headers for authorization
         forward_headers = {
+            'Authorization': f'Bearer {LAJI_API_ACCESS_TOKEN}',
+            'Person-Token': person_token,
             'Api-Version': request.headers.get('Api-Version', '1'),
             'Accept-Language': request.headers.get('Accept-Language', 'fi')
         }
-        if LAJI_API_ACCESS_TOKEN:
-            forward_headers['Authorization'] = f'Bearer {LAJI_API_ACCESS_TOKEN}'
-        person_token = session.get('token')
-        if person_token:
-            forward_headers['Person-Token'] = person_token
+
+        # Debug: log what we're sending (mask tokens for safety)
+        print(f"[laji_proxy] Target: {target_url}...")
+        print(f"[laji_proxy] Authorization: Bearer {LAJI_API_ACCESS_TOKEN}")
+        print(f"[laji_proxy] Person-Token: {person_token}")
 
         resp = requests.get(target_url, headers=forward_headers, timeout=30)
+
+        # Debug: log response status
+        print(f"[laji_proxy] Response status: {resp.status_code}")
+        if resp.status_code != 200:
+            print(f"[laji_proxy] Response body: {resp.text[:500]}")
 
         # Return response content and status code with original content-type
         content_type = resp.headers.get('Content-Type', 'application/json')
@@ -351,195 +366,221 @@ def mml_maastokartta_tile(z, x, y):
         app.logger.exception('MML maastokartta tile proxy failed')
         return jsonify({'success': False, 'error': str(e)}), 500
 
-# ===== PROJECT ENDPOINTS =====
+# ===== TAXON HIERARCHY ENDPOINTS =====
 
-@app.route("/api/projects", methods=["GET"])
+def _taxon_to_dict(taxon, include_children=True, include_projects=False):
+    """Convert a Taxon ORM object to a dict, optionally with children and projects."""
+    d = {
+        'id': taxon.id,
+        'name': taxon.name,
+        'scientific_name': taxon.scientific_name,
+        'level': taxon.level,
+        'parent_id': taxon.parent_id,
+        'is_leaf': taxon.is_leaf,
+    }
+    if include_children and taxon.children:
+        d['children'] = [_taxon_to_dict(c, include_children=True, include_projects=include_projects)
+                         for c in sorted(taxon.children, key=lambda t: t.sort_order)]
+    else:
+        d['children'] = []
+    if include_projects and taxon.is_leaf:
+        d['projects'] = [_project_to_dict(p) for p in (taxon.projects or [])]
+    else:
+        d['projects'] = []
+    return d
+
+
+def _project_to_dict(project):
+    """Convert a Project ORM object to a dict."""
+    return {
+        'id': project.id,
+        'name': project.name,
+        'description': project.description,
+        'taxon_id': project.taxon_id,
+        'created_at': project.created_at.isoformat() if project.created_at else None,
+        'updated_at': project.updated_at.isoformat() if project.updated_at else None,
+    }
+
+
+@app.route("/api/taxons", methods=["GET"])
 @login_required
-def list_projects():
-    """List all parent projects with their child projects"""
+def list_taxons():
+    """Return the full taxon hierarchy as a tree, optionally with projects."""
     try:
-        session = Session()
-        from sqlalchemy import func
-        from sqlalchemy.orm import joinedload
-        
-        # Get only parent projects (where parent_id is NULL) with children eagerly loaded
-        parent_projects = session.query(Project).options(joinedload(Project.children)).filter(Project.parent_id.is_(None)).order_by(Project.created_at.desc()).all()
-        
-        projects = []
-        for parent in parent_projects:
-            # Count total observations and datasets across all child projects
-            total_obs = 0
-            total_datasets = 0
-            children_data = []
-            
-            # Safely iterate over children (handle None case)
-            for child in (parent.children or []):
-                obs_count = session.query(func.count(Observation.id)).filter_by(project_id=child.id).scalar() or 0
-                dataset_count = session.query(func.count(func.distinct(Observation.dataset_id))).filter_by(project_id=child.id).scalar() or 0
-                
-                total_obs += obs_count
-                total_datasets += dataset_count
-                
-                children_data.append({
-                    "id": child.id,
-                    "name": child.name,
-                    "description": child.description,
-                    "created_at": child.created_at.isoformat() if child.created_at else None,
-                    "updated_at": child.updated_at.isoformat() if child.updated_at else None,
-                    "observation_count": obs_count,
-                    "dataset_count": dataset_count
-                })
-            
-            projects.append({
-                "id": parent.id,
-                "name": parent.name,
-                "description": parent.description,
-                "created_at": parent.created_at.isoformat() if parent.created_at else None,
-                "updated_at": parent.updated_at.isoformat() if parent.updated_at else None,
-                "observation_count": total_obs,
-                "dataset_count": total_datasets,
-                "children": children_data,
-                "child_count": len(children_data)
-            })
-        
-        session.close()
-        return jsonify({"projects": projects})
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return jsonify({"success": False, "error": str(e)}), 500
+        include_projects = request.args.get('projects', '0') == '1'
+        db = Session()
 
-@app.route("/api/projects/<int:parent_id>/children", methods=["POST"])
+        # Eagerly load the whole tree
+        roots = (db.query(Taxon)
+                 .filter(Taxon.parent_id.is_(None))
+                 .order_by(Taxon.sort_order)
+                 .all())
+
+        # If projects requested, prefetch all projects keyed by taxon_id
+        project_map = {}
+        if include_projects:
+            all_projects = db.query(Project).all()
+            for p in all_projects:
+                project_map.setdefault(p.taxon_id, []).append(p)
+
+        def build(taxon):
+            d = {
+                'id': taxon.id,
+                'name': taxon.name,
+                'scientific_name': taxon.scientific_name,
+                'level': taxon.level,
+                'parent_id': taxon.parent_id,
+                'is_leaf': taxon.is_leaf,
+                'children': [build(c) for c in sorted(taxon.children or [], key=lambda t: t.sort_order)],
+            }
+            if include_projects and taxon.is_leaf:
+                d['projects'] = [_project_to_dict(p) for p in project_map.get(taxon.id, [])]
+            else:
+                d['projects'] = []
+            return d
+
+        tree = [build(r) for r in roots]
+        db.close()
+        return jsonify({'taxons': tree})
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route("/api/taxons/<int:taxon_id>", methods=["GET"])
 @login_required
-def create_child_project(parent_id):
-    """Create a new child project under a parent project"""
+def get_taxon(taxon_id):
+    """Return a single taxon with its children and projects."""
+    try:
+        db = Session()
+        taxon = db.query(Taxon).filter_by(id=taxon_id).first()
+        if not taxon:
+            db.close()
+            return jsonify({'success': False, 'error': 'Taxon not found'}), 404
+        result = _taxon_to_dict(taxon, include_projects=True)
+        db.close()
+        return jsonify(result)
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# ===== SPECIES / PROJECT ENDPOINTS =====
+
+@app.route("/api/species", methods=["POST"])
+@login_required
+def create_species():
+    """Create a new species project under a leaf taxon."""
     try:
         data = request.json
-        name = data.get('name', '').strip()
-        description = data.get('description', '').strip()
-        
+        name = (data.get('name') or '').strip()
+        description = (data.get('description') or '').strip()
+        taxon_id = data.get('taxon_id')
+
         if not name:
-            return jsonify({"success": False, "error": "Project name is required"}), 400
-        
-        session = Session()
-        
-        # Check if parent exists
-        parent = session.query(Project).filter_by(id=parent_id).first()
-        if not parent:
-            session.close()
-            return jsonify({"success": False, "error": "Parent project not found"}), 404
-        
-        # Create child project
-        child = Project(
-            name=name,
-            description=description,
-            parent_id=parent_id
-        )
-        session.add(child)
-        session.commit()
-        
-        result = {
-            "success": True,
-            "project": {
-                "id": child.id,
-                "name": child.name,
-                "description": child.description,
-                "parent_id": child.parent_id,
-                "created_at": child.created_at.isoformat(),
-                "updated_at": child.updated_at.isoformat()
-            }
-        }
-        session.close()
+            return jsonify({'success': False, 'error': 'Species name is required'}), 400
+        if not taxon_id:
+            return jsonify({'success': False, 'error': 'taxon_id is required'}), 400
+
+        db = Session()
+        taxon = db.query(Taxon).filter_by(id=taxon_id).first()
+        if not taxon:
+            db.close()
+            return jsonify({'success': False, 'error': 'Taxon not found'}), 404
+        if not taxon.is_leaf:
+            db.close()
+            return jsonify({'success': False, 'error': 'Species can only be added to leaf taxons'}), 400
+
+        project = Project(name=name, description=description, taxon_id=taxon_id)
+        db.add(project)
+        db.commit()
+        result = _project_to_dict(project)
+        db.close()
+        return jsonify({'success': True, 'project': result})
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route("/api/species/<int:project_id>", methods=["GET"])
+@login_required
+def get_species(project_id):
+    """Get a single species project with observation/dataset counts."""
+    try:
+        db = Session()
+        project = db.query(Project).filter_by(id=project_id).first()
+        if not project:
+            db.close()
+            return jsonify({'success': False, 'error': 'Project not found'}), 404
+
+        obs_count = db.query(func.count(Observation.id)).filter_by(project_id=project_id).scalar() or 0
+        dataset_count = db.query(func.count(func.distinct(Observation.dataset_id))).filter_by(project_id=project_id).scalar() or 0
+
+        result = _project_to_dict(project)
+        result['observation_count'] = obs_count
+        result['dataset_count'] = dataset_count
+        db.close()
         return jsonify(result)
     except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return jsonify({"success": False, "error": str(e)}), 500
+        import traceback; traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
 
-@app.route("/api/projects/<int:project_id>", methods=["PUT", "PATCH"])
+
+@app.route("/api/species/<int:project_id>", methods=["PUT", "PATCH"])
 @login_required
-def update_project(project_id):
-    """Update project description (name cannot be changed)"""
+def update_species(project_id):
+    """Update species project description."""
     try:
         data = request.json
-        description = data.get('description', '').strip()
-        
-        session = Session()
-        project = session.query(Project).filter_by(id=project_id).first()
-        
+        description = (data.get('description') or '').strip()
+
+        db = Session()
+        project = db.query(Project).filter_by(id=project_id).first()
         if not project:
-            session.close()
-            return jsonify({"success": False, "error": "Project not found"}), 404
-        
-        # Only allow updating description, not name
+            db.close()
+            return jsonify({'success': False, 'error': 'Project not found'}), 404
+
         project.description = description
-        session.commit()
-        
-        result = {
-            "success": True,
-            "project": {
-                "id": project.id,
-                "name": project.name,
-                "description": project.description,
-                "created_at": project.created_at.isoformat(),
-                "updated_at": project.updated_at.isoformat()
-            }
-        }
-        session.close()
-        return jsonify(result)
+        db.commit()
+        result = _project_to_dict(project)
+        db.close()
+        return jsonify({'success': True, 'project': result})
     except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return jsonify({"success": False, "error": str(e)}), 500
+        import traceback; traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
 
-@app.route("/api/projects/<int:project_id>", methods=["DELETE"])
+
+@app.route("/api/species/<int:project_id>", methods=["DELETE"])
 @login_required
-def delete_project(project_id):
-    """Delete a project and all its observations"""
+def delete_species(project_id):
+    """Delete a species project and all its data."""
     try:
-        session = Session()
-        project = session.query(Project).filter_by(id=project_id).first()
-        
+        db = Session()
+        project = db.query(Project).filter_by(id=project_id).first()
         if not project:
-            session.close()
-            return jsonify({"success": False, "error": "Project not found"}), 404
-        
-        # Get counts before deletion
-        obs_count = session.query(Observation).filter_by(project_id=project_id).count()
-        
-        # Delete convex hull if exists
-        session.query(ConvexHull).filter_by(project_id=project_id).delete()
-        
-        # Delete any grid cells referencing this project (some DB schemas may not have ON DELETE CASCADE)
-        session.query(GridCell).filter_by(project_id=project_id).delete(synchronize_session=False)
-        
-        # Delete project (cascade will delete observations)
-        session.delete(project)
-        session.commit()
-        session.close()
-        
-        # Invalidate cache
-        stats_cache.delete(f"stats:{project_id}")
-        
-        return jsonify({
-            "success": True,
-            "deleted_observations": obs_count
-        })
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return jsonify({"success": False, "error": str(e)}), 500
+            db.close()
+            return jsonify({'success': False, 'error': 'Project not found'}), 404
 
-@app.route("/api/projects/<int:project_id>/datasets", methods=["GET"])
+        obs_count = db.query(Observation).filter_by(project_id=project_id).count()
+        db.query(ConvexHull).filter_by(project_id=project_id).delete()
+        db.query(GridCell).filter_by(project_id=project_id).delete(synchronize_session=False)
+        db.delete(project)
+        db.commit()
+        db.close()
+        stats_cache.delete(f"stats:{project_id}")
+        return jsonify({'success': True, 'deleted_observations': obs_count})
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route("/api/species/<int:project_id>/datasets", methods=["GET"])
 @login_required
-def list_project_datasets(project_id):
-    """List all datasets within a project"""
+def list_species_datasets(project_id):
+    """List all datasets within a species project."""
     try:
-        session = Session()
-        from sqlalchemy import func
-        
-        # Get distinct datasets in the project
-        results = session.query(
+        db = Session()
+        results = db.query(
             Observation.dataset_id,
             func.max(Observation.dataset_name).label('dataset_name'),
             func.max(Observation.dataset_url).label('dataset_url'),
@@ -552,51 +593,36 @@ def list_project_datasets(project_id):
         ).order_by(
             func.max(Observation.created_at).desc()
         ).all()
-        
-        datasets = []
-        for row in results:
-            datasets.append({
-                "dataset_id": row.dataset_id,
-                "dataset_name": row.dataset_name,
-                "dataset_url": row.dataset_url,
-                "created_at": row.created_at.isoformat() if row.created_at else None,
-                "count": row.count
-            })
-        
-        session.close()
-        return jsonify({"datasets": datasets, "project_id": project_id})
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return jsonify({"success": False, "error": str(e)}), 500
 
-@app.route("/api/projects/<int:project_id>/datasets/<dataset_id>", methods=["DELETE"])
-@login_required
-def delete_dataset_from_project(project_id, dataset_id):
-    """Delete a specific dataset from a project"""
-    try:
-        session = Session()
-        
-        # Delete observations with matching project_id and dataset_id
-        obs_count = session.query(Observation).filter_by(
-            project_id=project_id,
-            dataset_id=dataset_id
-        ).delete()
-        
-        session.commit()
-        session.close()
-        
-        # Invalidate cache
-        stats_cache.delete(f"stats:{project_id}")
-        
-        return jsonify({
-            "success": True,
-            "deleted_observations": obs_count
-        })
+        datasets = [{
+            'dataset_id': row.dataset_id,
+            'dataset_name': row.dataset_name,
+            'dataset_url': row.dataset_url,
+            'created_at': row.created_at.isoformat() if row.created_at else None,
+            'count': row.count
+        } for row in results]
+
+        db.close()
+        return jsonify({'datasets': datasets, 'project_id': project_id})
     except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return jsonify({"success": False, "error": str(e)}), 500
+        import traceback; traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route("/api/species/<int:project_id>/datasets/<dataset_id>", methods=["DELETE"])
+@login_required
+def delete_species_dataset(project_id, dataset_id):
+    """Delete a specific dataset from a species project."""
+    try:
+        db = Session()
+        obs_count = db.query(Observation).filter_by(project_id=project_id, dataset_id=dataset_id).delete()
+        db.commit()
+        db.close()
+        stats_cache.delete(f"stats:{project_id}")
+        return jsonify({'success': True, 'deleted_observations': obs_count})
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route("/api/observations", methods=["POST"])
 @login_required
@@ -617,13 +643,12 @@ def save_observations():
             return jsonify({"success": False, "error": "No features provided"}), 400
         
         # Verify project exists
-        session = Session()
-        project = session.query(Project).filter_by(id=project_id).first()
+        db = Session()
+        project = db.query(Project).filter_by(id=project_id).first()
         if not project:
-            session.close()
+            db.close()
             return jsonify({"success": False, "error": "Project not found"}), 404
         
-        from datetime import datetime
         from sqlalchemy import insert
         current_time = datetime.utcnow()
         
@@ -635,10 +660,8 @@ def save_observations():
             for i in range(0, len(features), chunk_size):
                 chunk = features[i:i+chunk_size]
                 
-                # Prepare batch insert data
                 observations = []
                 for feature in chunk:
-                    # Extract geometry (assume incoming GeoJSON is EPSG:4326/WGS84)
                     geom = None
                     if feature.get('geometry'):
                         geom = shape(feature['geometry']).wkt
@@ -650,37 +673,32 @@ def save_observations():
                         'dataset_url': dataset_url,
                         'created_at': current_time,
                         'properties': feature.get('properties', {}),
-                        # Store geometries as WGS84 (EPSG:4326)
                         'geometry': (f'SRID=4326;{geom}' if geom else None)
                     })
                 
-                # Bulk insert chunk
                 if observations:
-                    session.execute(insert(Observation), observations)
-                    session.commit()
+                    db.execute(insert(Observation), observations)
+                    db.commit()
                     total_inserted += len(observations)
             
-            # Update project's updated_at timestamp
             project.updated_at = datetime.utcnow()
-            session.commit()
-            
-            # Invalidate cache for this project since new data was added
+            db.commit()
             stats_cache.delete(f"stats:{project_id}")
             
             return jsonify({"success": True, "count": total_inserted})
             
         except Exception as e:
-            session.rollback()
+            db.rollback()
             raise e
         finally:
-            session.close()
+            db.close()
             
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
-@app.route("/api/projects/<int:project_id>/upload_csv", methods=["POST"])
+@app.route("/api/species/<int:project_id>/upload_csv", methods=["POST"])
 @login_required
-def upload_csv_to_project(project_id):
+def upload_csv_to_species(project_id):
     """Upload CSV file and insert observations for the project.
     Expected CSV: rows with latitude/longitude (field names case-insensitive: lat, latitude; lon, lng, longitude)
     OR a geometry WKT column (case-insensitive: wkt, geometry, wgs84wkt, geometry_wkt).
@@ -764,10 +782,10 @@ def upload_csv_to_project(project_id):
             return jsonify({"success": False, "error": "No valid rows with coordinates found in CSV"}), 400
 
         # Insert observations similar to /api/observations
-        session = Session()
-        project = session.query(Project).filter_by(id=project_id).first()
+        db = Session()
+        project = db.query(Project).filter_by(id=project_id).first()
         if not project:
-            session.close()
+            db.close()
             return jsonify({"success": False, "error": "Project not found"}), 404
 
         from sqlalchemy import insert
@@ -793,21 +811,21 @@ def upload_csv_to_project(project_id):
         try:
             for i in range(0, len(observations), chunk_size):
                 chunk = observations[i:i+chunk_size]
-                session.execute(insert(Observation), chunk)
-                session.commit()
+                db.execute(insert(Observation), chunk)
+                db.commit()
                 total_inserted += len(chunk)
 
             project.updated_at = datetime.utcnow()
-            session.commit()
+            db.commit()
 
             # Invalidate cache
             stats_cache.delete(f"stats:{project_id}")
 
-            session.close()
+            db.close()
             return jsonify({"success": True, "count": total_inserted, "dataset_id": str(dataset_id)})
         except Exception as e:
-            session.rollback()
-            session.close()
+            db.rollback()
+            db.close()
             raise e
 
     except Exception as e:
@@ -816,9 +834,9 @@ def upload_csv_to_project(project_id):
         return jsonify({"success": False, "error": str(e)}), 500
 
 
-@app.route("/api/projects/<int:project_id>/download_csv", methods=["GET"])
+@app.route("/api/species/<int:project_id>/download_csv", methods=["GET"])
 @login_required
-def download_csv_from_project(project_id):
+def download_csv_from_species(project_id):
     """Download observations from a project (or specific dataset) as CSV.
     Query parameters:
     - dataset_id: Optional, download only this dataset. If not provided, downloads all.
@@ -905,16 +923,14 @@ def download_csv_from_project(project_id):
         csv_content = output.getvalue()
         output.close()
 
-        from datetime import datetime as dt
-        timestamp = dt.utcnow().strftime('%Y%m%d_%H%M%S')
+        timestamp = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
         
         # Generate filename based on whether it's a specific dataset or all
         if dataset_id:
-            filename = f"project_{project_id}_dataset_{dataset_id}_{timestamp}.csv"
+            filename = f"species_{project_id}_dataset_{dataset_id}_{timestamp}.csv"
         else:
-            filename = f"project_{project_id}_{timestamp}.csv"
+            filename = f"species_{project_id}_{timestamp}.csv"
 
-        from flask import make_response
         response = make_response(csv_content)
         response.headers['Content-Disposition'] = f'attachment; filename={filename}'
         response.headers['Content-Type'] = 'text/csv'
@@ -1105,8 +1121,6 @@ def list_datasets():
     """List all available datasets"""
     try:
         session = Session()
-        # Get distinct dataset IDs with their names and record counts
-        from sqlalchemy import func
         
         # Get distinct datasets grouped by dataset_id
         results = session.query(
@@ -1144,8 +1158,7 @@ def get_dataset_stats(project_id):
             return jsonify(cached_result)
         
         session = Session()
-        from sqlalchemy import func, cast, String, text
-        from sqlalchemy.dialects.postgresql import ARRAY
+        from sqlalchemy import cast, String
         
         # Get project info
         project = session.query(Project).filter_by(id=project_id).first()

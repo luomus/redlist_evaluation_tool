@@ -1,12 +1,14 @@
 **/venv/**
 **/__pycache__/**
+__pycache__
 .env
+.env-prod
 
-**/results/**
-**/sampledata/**
-
-static/example-data.tsv
-config.py
-.env
 
 **/secret/**
+
+.github/instructions*
+TODO
+UHA_**
+test.csv
+taxon_hierarchy.py
