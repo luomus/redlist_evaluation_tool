@@ -102,11 +102,6 @@ def convex_hull():
 def grid():
     return render_template("grid.html")
 
-@app.route("/map")
-@login_required
-def map():
-    return render_template("map.html")
-
 @app.route("/login")
 def login():
     """Redirect to laji-auth login with callback URL"""
@@ -1301,6 +1296,73 @@ def get_dataset_stats(project_id):
                 'created_at': latest_obs.created_at.isoformat() if latest_obs.created_at else None
             }
         
+        # Temporal trends: observations per year
+        temporal_trends_query = """
+            SELECT 
+                EXTRACT(YEAR FROM 
+                    TO_DATE(SUBSTRING(properties->>'gathering.displayDateTime', 1, 10), 'YYYY-MM-DD')
+                )::INTEGER as year,
+                COUNT(*) as count
+            FROM observations
+            WHERE project_id = :project_id
+              AND properties->>'gathering.displayDateTime' IS NOT NULL
+              AND properties->>'gathering.displayDateTime' ~ '^\d{4}-\d{2}-\d{2}'
+            GROUP BY year
+            ORDER BY year ASC
+        """
+        temporal_results = session.execute(text(temporal_trends_query), {'project_id': project_id}).fetchall()
+        
+        temporal_trends = []
+        if temporal_results:
+            for row in temporal_results:
+                if row[0] is not None:  # Ensure year is valid
+                    temporal_trends.append({
+                        "year": int(row[0]),
+                        "count": int(row[1])
+                    })
+        
+        # Calculate decline percentage based on temporal trends
+        decline_percentage = None
+        trend_direction = None
+        if len(temporal_trends) >= 2:
+            # Compare first half vs second half of the time period
+            mid_point = len(temporal_trends) // 2
+            
+            # Sum counts in first and second halves
+            first_half_count = sum(t['count'] for t in temporal_trends[:mid_point]) or 1
+            second_half_count = sum(t['count'] for t in temporal_trends[mid_point:]) or 1
+            
+            # Calculate percentage change
+            decline_percentage = round(
+                ((second_half_count - first_half_count) / first_half_count) * 100, 
+                2
+            )
+            
+            # Determine trend direction
+            if decline_percentage < -5:
+                trend_direction = "declining"
+            elif decline_percentage > 5:
+                trend_direction = "increasing"
+            else:
+                trend_direction = "stable"
+            
+            # Also calculate simple linear trend (observations per year change)
+            # Get earliest and latest year counts for quick reference
+            earliest_year_count = temporal_trends[0]['count']
+            latest_year_count = temporal_trends[-1]['count']
+            earliest_year = temporal_trends[0]['year']
+            latest_year = temporal_trends[-1]['year']
+            
+            if latest_year > earliest_year:
+                annual_change = round(
+                    (latest_year_count - earliest_year_count) / (latest_year - earliest_year),
+                    2
+                )
+            else:
+                annual_change = 0
+        else:
+            annual_change = 0
+        
         session.close()
         
         result = {
@@ -1322,7 +1384,13 @@ def get_dataset_stats(project_id):
                 "recordBasisCounts": record_basis_counts,
                 "individualCountStats": individual_count_stats,
                 "topSpecies": top_species,
-                "topObservers": top_observers
+                "topObservers": top_observers,
+                "temporalTrends": {
+                    "byYear": temporal_trends,
+                    "declinePercentage": decline_percentage,
+                    "trendDirection": trend_direction,
+                    "annualChange": annual_change
+                }
             }
         }
         

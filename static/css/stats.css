@@ -71,3 +71,72 @@
 .bar-item:hover .bar-label {
     color: #007bff;
 }
+
+/* Temporal trends chart styling */
+.temporal-chart {
+    background: white;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    padding: 20px;
+}
+
+.temporal-bar-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+}
+
+.temporal-bar {
+    background: linear-gradient(180deg, #007bff, #0056b3);
+    border-radius: 4px 4px 0 0;
+    position: relative;
+    min-width: 40px;
+    transition: all 0.3s ease;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    padding-top: 5px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.temporal-bar:hover {
+    background: linear-gradient(180deg, #0056b3, #004085);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    transform: translateY(-2px);
+}
+
+.temporal-value {
+    font-weight: bold;
+    color: black;
+    font-size: 0.85em;
+    margin-bottom: 2px;
+}
+
+.temporal-year {
+    font-weight: 600;
+    color: #333;
+    font-size: 0.8em;
+}
+
+.chart-container {
+    overflow-x: auto;
+    max-width: 100%;
+}
+
+.chart-legend {
+    margin-top: 15px;
+    padding: 10px;
+    background: #f5f5f5;
+    border-radius: 4px;
+}
+
+.info-note {
+    margin-top: 30px;
+    padding: 15px;
+    background: #e8f4f8;
+    border-left: 4px solid #007bff;
+    border-radius: 4px;
+    color: #333;
+}

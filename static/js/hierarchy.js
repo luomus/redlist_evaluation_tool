@@ -120,7 +120,6 @@ function buildSpeciesList(taxonNode) {
                     <select onchange="handleSpeciesAction(this, ${p.id})">
                         <option value="" selected disabled>Työkalut ▾</option>
                         <option value="/stats">Näytä tilastot</option>
-                        <option value="/map">Näytä/muokkaa kartalla</option>
                         <option value="/grid">Laske esiintymisalue (AOO)</option>
                         <option value="/convex_hull">Laske levinneisyysalue (EOO)</option>
                         <option value="delete">Poista laji</option>

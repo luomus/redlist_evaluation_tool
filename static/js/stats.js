@@ -68,6 +68,10 @@ function displayStatistics(statsData) {
         .sort(([,a], [,b]) => b - a);
     
     statsContentDiv.innerHTML = `
+        <div class="info-note">
+            <p><strong>Huomio:</strong> Tilastot voidaan laskea myös laji.fi-palvelusta ladatuille tiedoille.</p>
+        </div>
+        
         <div class="stats-grid">
             <div class="stat-card">
                 <h4>Perustiedot</h4>
@@ -167,9 +171,46 @@ function displayStatistics(statsData) {
             </div>
         </div>
         ` : ''}
+        
+        ${stats.temporalTrends && stats.temporalTrends.byYear && stats.temporalTrends.byYear.length > 0 ? `
+        <div class="chart-section">
+            <h3>Havaintojen ajallinen kehitys (vuosittain)</h3>
+            <div class="line-chart">
+                <div class="chart-container">
+                    ${generateTemporalTrendsChart(stats.temporalTrends.byYear)}
+                </div>
+            </div>
+        </div>
+        ` : ''}
     `;
     
     statisticsDiv.style.display = 'block';
+}
+
+// Generate temporal trends chart
+function generateTemporalTrendsChart(byYear) {
+    if (!byYear || byYear.length === 0) return '';
+    
+    const maxCount = Math.max(...byYear.map(item => item.count));
+    const chartHeight = 200;
+    const bars = byYear.map(item => {
+        const height = (item.count / maxCount) * chartHeight;
+        const percentage = (item.count / maxCount) * 100;
+        return `
+            <div class="temporal-bar-wrapper">
+                <div class="temporal-bar" style="height: ${height}px;" title="${item.year}: ${item.count} havaintoa">
+                    <span class="temporal-value">${item.count}</span>
+                </div>
+                <span class="temporal-year">${item.year}</span>
+            </div>
+        `;
+    }).join('');
+    
+    return `
+        <div class="temporal-chart" style="display: flex; align-items: flex-end; justify-content: space-around; gap: 8px; height: 280px; padding: 10px 0;">
+            ${bars}
+        </div>
+    `;
 }
 
 // Show error
