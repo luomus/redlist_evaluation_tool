@@ -209,7 +209,7 @@ function handleSpeciesAction(selectElem, projectId) {
     if (v === 'delete') {
         deleteSpecies(projectId);
     } else {
-        window.location.href = `${v}?id=${encodeURIComponent(projectId)}`;
+        window.open(`${v}?id=${encodeURIComponent(projectId)}`, '_blank');
     }
 }
 

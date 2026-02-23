@@ -128,12 +128,48 @@ header { padding: 12px 16px; border-bottom: 1px solid #eee; display: flex; gap: 
     transition: stroke 150ms ease, fill 150ms ease, opacity 150ms ease;
 }
 
+/* Accuracy-based geometry styling (1-10m to 10,001-100,000m) */
+.leaflet-interactive.accuracy-1-10 {
+    stroke: #000;
+    fill: #fee5d9;
+    stroke-opacity: 0.9;
+    fill-opacity: 0.85;
+}
+
+.leaflet-interactive.accuracy-11-100 {
+    stroke: #000;
+    fill: #fcae91;
+    stroke-opacity: 0.9;
+    fill-opacity: 0.85;
+}
+
+.leaflet-interactive.accuracy-101-1000 {
+    stroke: #000;
+    fill: #fb6a4a;
+    stroke-opacity: 0.9;
+    fill-opacity: 0.85;
+}
+
+.leaflet-interactive.accuracy-1001-10000 {
+    stroke: #000;
+    fill: #de2d26;
+    stroke-opacity: 0.9;
+    fill-opacity: 0.85;
+}
+
+.leaflet-interactive.accuracy-10001-100000 {
+    stroke: #000;
+    fill: #a50f15;
+    stroke-opacity: 0.9;
+    fill-opacity: 0.85;
+}
+
 /* Legend control for datasets */
 .leaflet-bar.legend-control, .leaflet-control .legend-control {
     background: rgba(255,255,255,0.98);
     border-radius: 8px;
     padding: 8px;
-    max-height: 320px;
+    max-height: 620px;
     overflow: auto;
     width: 240px;
     box-shadow: 0 2px 8px rgba(0,0,0,0.15);
@@ -163,6 +199,27 @@ header { padding: 12px 16px; border-bottom: 1px solid #eee; display: flex; gap: 
     font-size: 12px;
     margin-left: 8px;
 }
+
+/* Accuracy legend swatches (used in the legend control)
+   colours match the corresponding map styling classes */
+.legend-accuracy {
+    font-size: 12px;
+    margin: 6px 0;
+}
+.legend-swatch {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    margin-right: 6px;
+    vertical-align: middle;
+    border: 1px solid #666;
+}
+.legend-swatch.accuracy-1-10 { background: #FFCCCC; }
+.legend-swatch.accuracy-11-100 { background: #FF9999; }
+.legend-swatch.accuracy-101-1000 { background: #FF6666; }
+.legend-swatch.accuracy-1001-10000 { background: #CC3333; }
+.legend-swatch.accuracy-10001-100000 { background: #8B0000; }
+.legend-swatch.no-accuracy { background: #fff; border-style: dashed; }
 
 /* Basemap selector styles */
 .basemap-section {

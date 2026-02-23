@@ -159,17 +159,31 @@ window.setExcludeBatch = async function(obsIds, excluded, batchSize = 100) {
                         try {
                             const el = (typeof layer.getElement === 'function') ? layer.getElement() : null;
                             if (el && el.classList) {
-                                el.classList.toggle('geom-excluded', !!excluded);
-                                el.classList.toggle('geom-included', !excluded);
-                                
-                                // Also update SVG attributes directly to ensure styling persists
-                                // This handles cases where CSS classes alone don't trigger re-renders
+                                // remove any existing accuracy-related classes so we can re-add correct one
+                                el.classList.remove('accuracy-1-10','accuracy-11-100','accuracy-101-1000','accuracy-1001-10000','accuracy-10001-100000');
+
                                 if (excluded) {
+                                    // excluded state overrides accuracy colouring
+                                    el.classList.add('geom-excluded');
+                                    el.classList.remove('geom-included');
+
+                                    // ensure grey styling persists
                                     el.setAttribute('stroke', '#888888');
                                     el.setAttribute('fill', '#acacac');
                                 } else {
-                                    el.setAttribute('stroke', '#940000');
-                                    el.setAttribute('fill', '#cc4141');
+                                    el.classList.remove('geom-excluded');
+
+                                    const accClass = window.getAccuracyClass(props && props['gathering.interpretations.coordinateAccuracy']);
+                                    if (accClass) {
+                                        el.classList.add(accClass);
+                                        // clear any explicit attributes so CSS handles color
+                                        el.removeAttribute('stroke');
+                                        el.removeAttribute('fill');
+                                    } else {
+                                        el.classList.add('geom-included');
+                                        el.setAttribute('stroke', '#940000');
+                                        el.setAttribute('fill', '#cc4141');
+                                    }
                                 }
                             }
                         } catch (e) { /* ignore styling errors */ }
@@ -268,6 +282,23 @@ window.fetchAllObservationsGeneric = async function(datasetId, perFeature, updat
     }
 };
 
+// Helper function: determine accuracy class from coordinateAccuracy value (in meters)
+// Classes: 1-10m, 11-100m, 101-1000m, 1001-10000m, 10001-100000m
+window.getAccuracyClass = function(coordinateAccuracy) {
+    if (!coordinateAccuracy) return null;
+    
+    const accuracy = parseFloat(coordinateAccuracy);
+    if (isNaN(accuracy)) return null;
+    
+    if (accuracy <= 10) return 'accuracy-1-10';
+    if (accuracy <= 100) return 'accuracy-11-100';
+    if (accuracy <= 1000) return 'accuracy-101-1000';
+    if (accuracy <= 10000) return 'accuracy-1001-10000';
+    if (accuracy <= 100000) return 'accuracy-10001-100000';
+    
+    return null;
+};
+
 // Function to create geometry layers without adding to map (for batch processing)
 // Returns the created layer(s) or array of layers
 window.createGeometryLayers = function(geometry, properties) {
@@ -275,7 +306,14 @@ window.createGeometryLayers = function(geometry, properties) {
 
     const popupContent = createPopupContent(properties || {});
     const excluded = properties && (properties.excluded === true || properties.excluded === '1' || properties.excluded === 1);
-    const className = excluded ? 'geom-excluded' : 'geom-included';
+    
+    // Determine class based on coordinate accuracy (prioritize accuracy over excluded status)
+    let className = excluded ? 'geom-excluded' : 'geom-included';
+    // accuracy stored under the same path used by createPopupContent
+    const accuracyClass = window.getAccuracyClass(properties && properties['gathering.interpretations.coordinateAccuracy']);
+    if (accuracyClass) {
+        className = accuracyClass;
+    }
 
     function createLayer(geom) {
         if (geom.type === 'Point') {

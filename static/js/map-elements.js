@@ -525,6 +525,20 @@ window.createLegendControl = function() {
             <div class="legend-divider"></div>
             <div class="legend-header" style="margin-top: 8px;"><strong>Aineistot:</strong></div>
             <div id="dataset-legend-list" class="legend-list">Ladataan…</div>
+            <div class="legend-divider"></div>
+            <div class="legend-header" style="margin-top: 8px;"><strong>Koordinaattien tarkkuus</strong></div>
+            <div class="legend-accuracy">
+                <div><span class="legend-swatch accuracy-1-10"></span>1–10 m</div>
+                <div><span class="legend-swatch accuracy-11-100"></span>11–100 m</div>
+                <div><span class="legend-swatch accuracy-101-1000"></span>101–1000 m</div>
+                <div><span class="legend-swatch accuracy-1001-10000"></span>1001–10000 m</div>
+                <div><span class="legend-swatch accuracy-10001-100000"></span>10001–100000 m</div>
+                <div><span class="legend-swatch no-accuracy"></span>Ei arvoa *</div>
+            </div>
+            <div class="legend-note" style="font-size:11px; color:#444; margin-top:4px;">
+                (*) jos havaintoa ei ole tarkkuusarvoa, se näkyy kartalla oletusvärillä (punainen/harmaa).<br>
+                punainen = analyysiin sisällytetty, harmaa = poistettu.
+            </div>
         `;
         L.DomEvent.disableClickPropagation(div);
         return div;
