@@ -105,10 +105,6 @@ def grid():
 @app.route("/login")
 def login():
     """Redirect to laji-auth login with callback URL"""
-    next_url = request.args.get('next', '/')
-    # Build callback URL that includes the next parameter
-    callback_url = url_for('login_callback', next=next_url, _external=True)
-    
     # Build laji-auth login URL
     params = {
         'target': TARGET,
@@ -127,16 +123,29 @@ def login_callback():
     if not token:
         return jsonify({"success": False, "error": "No token provided"}), 400
     
+    # Fetch and store user information
+    authentication_info = _get_authentication_info(token)
+    if not authentication_info or 'user' not in authentication_info:
+        return jsonify({"success": False, "error": "Failed to retrieve user information"}), 401
+    
+    # Check user role
+    user_info = authentication_info['user']
+    user_roles = user_info.get('roles', [])
+    
+    # Only allow users with MA.admin or MA.taxonEditorUser roles
+    allowed_roles = ['MA.admin', 'MA.taxonEditorUser']
+    if not any(role in allowed_roles for role in user_roles):
+        return jsonify({"success": False, "error": f"Access denied. Your roles {user_roles} are not authorized to use this application. Contact helpdesk@laji.fi"}), 403
+    
     # Store token in session
     session['token'] = token
     session.permanent = True  # Make session persistent
     
-    # Fetch and store user information
-    authentication_info = _get_authentication_info(token)
-    if authentication_info and 'user' in authentication_info:
-        session['user_id'] = authentication_info['user'].get('qname')
-        session['user_name'] = authentication_info['user'].get('name')
-        session['user_email'] = authentication_info['user'].get('email')
+    # Store user information
+    session['user_id'] = user_info.get('qname')
+    session['user_name'] = user_info.get('name')
+    session['user_email'] = user_info.get('email')
+    session['user_roles'] = user_roles
     
     # Redirect to the original page or home
     return redirect(next_url or '/')
