@@ -311,6 +311,21 @@ header { padding: 12px 16px; border-bottom: 1px solid #eee; display: flex; gap: 
     background: #1d4ed8;
 }
 
+.move-point-btn {
+    margin-left: 6px;
+    padding: 4px 8px;
+    font-size: 12px;
+    background: #7c3aed;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    vertical-align: middle;
+}
+.move-point-btn:hover {
+    background: #6d28d9;
+}
+
 /* Floating panel shown during conversion */
 #conversion-panel {
     position: absolute;

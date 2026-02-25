@@ -167,7 +167,19 @@ window.parseUrl = async function(url, logElement) {
         if (params.size === 0) {
             throw new Error('URL-osoitteesta ei löytynyt parametreja');
         }
-        
+
+        // Warn if coordinateAccuracy is missing from the query URL
+        if (!params.has('coordinateAccuracy')) {
+            const proceed = confirm(
+                'Varoitus: URL-osoitteessa ei ole määritelty coordinateAccuracy-parametria.\n\n' +
+                'Tämä tarkoittaa, että hakuun sisältyy havaintoja, joiden sijaintitarkkuutta ei ole rajattu.\n\n' +
+                'Haluatko silti jatkaa latauksen ilman koordinaattitarkkuuden rajausta?'
+            );
+            if (!proceed) {
+                throw new Error('Lataus peruutettu: coordinateAccuracy-parametri puuttuu URL-osoitteesta.');
+            }
+        }
+
         // Fetch config from Flask app
         const configResponse = await fetch('/api/config');
         const config = await configResponse.json();

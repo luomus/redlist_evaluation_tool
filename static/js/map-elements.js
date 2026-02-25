@@ -315,6 +315,9 @@ function createPopupContent(properties, opts) {
         if (opts && opts.showConvertBtn) {
             content += ` <button class="convert-to-point-btn" onclick="window.startPolygonToPointConversion(${dbId}); return false;">Muunna pisteeksi</button>`;
         }
+        if (opts && opts.showMoveBtn && parseFloat(resolvedProps['gathering.interpretations.coordinateAccuracy']) >= 10) {
+            content += ` <button class="move-point-btn" onclick="window.startPointMoveConversion(${dbId}); return false;">Siirrä pistettä</button>`;
+        }
         content += `</div>`;
     }
 
@@ -345,7 +348,7 @@ function createMultiFeaturePopup(features) {
         content += `</div>`;
         
         content += `<div class="feature-details" id="feature-details-${index}" style="display:none;">`;
-        content += createPopupContent(props).replace('<div class="popup-content">', '').replace('</div>', '');
+        content += createPopupContent(props, { showMoveBtn: true }).replace('<div class="popup-content">', '').replace('</div>', '');
         content += `</div>`;
         
         content += `</div>`;
@@ -399,7 +402,7 @@ function setupMultiFeatureHandler(map, geometryLayer) {
                 .setContent(popupContent)
                 .openOn(map);
         } else if (nearbyFeatures.length === 1) {
-            const popupContent = createPopupContent(nearbyFeatures[0].feature.properties || {});
+            const popupContent = createPopupContent(nearbyFeatures[0].feature.properties || {}, { showMoveBtn: true });
             L.popup()
                 .setLatLng(clickLatLng)
                 .setContent(popupContent)

@@ -12,6 +12,14 @@
 let taxonTree = [];          // full tree from API
 let expandedTaxons = new Set(); // ids of currently expanded taxons
 
+// Restore persisted accordion state from previous page visit
+(function restoreAccordionState() {
+    try {
+        const saved = localStorage.getItem('expandedTaxons');
+        if (saved) expandedTaxons = new Set(JSON.parse(saved));
+    } catch (e) { /* ignore */ }
+})();
+
 // ---------------------------------------------------------------------------
 // Public API – called from simple.js
 // ---------------------------------------------------------------------------
@@ -25,6 +33,10 @@ async function loadHierarchy() {
         const data = await resp.json();
         taxonTree = data.taxons || [];
         renderHierarchy();
+        // Restore open datasets panel from previous visit
+        if (openSpeciesDataId) {
+            loadSpeciesDatasets(openSpeciesDataId);
+        }
     } catch (err) {
         console.error('Failed to load hierarchy:', err);
         document.getElementById('hierarchy-container').innerHTML =
@@ -136,22 +148,29 @@ function buildSpeciesList(taxonNode) {
 function buildInlineDataPanel(speciesId, speciesName) {
     return `
     <div class="species-detail-panel open" id="data-panel-${speciesId}">
-        <h4>Aineistot: ${escapeHtml(speciesName)}</h4>
         <div id="datasets-${speciesId}">Ladataan…</div>
 
         <h4 style="margin-top:16px;">Hae aineistoa</h4>
         <div class="input-group">
-            <label>Liitä Laji.fi-rajausten URL:</label>
-            <input type="text" id="url-${speciesId}" placeholder="https://laji.fi/observation/list?...">
+            <label>Liitä Laji.fi-rajausten URL:
+                <span class="info-tooltip" data-tip="Avaa laji.fi-sivusto ja rajaa havainnot haluamallasi tavalla (esim. laji, alue, vuosi). Kopioi selaimen osoitepalkin URL ja liitä se tähän kenttään. Sovellus hakee rajaukseesi sopivat havainnot automaattisesti.">i</span>
+            </label>
+            <div class="input-row">
+                <input type="text" id="url-${speciesId}" placeholder="https://laji.fi/observation/list?...">
+                <button onclick="fetchDataForSpecies(${speciesId})" class="btn-fetch">Hae tiedot</button>
+            </div>
         </div>
-        <button onclick="fetchDataForSpecies(${speciesId})" class="btn-fetch">Hae tiedot</button>
 
         <div style="margin-top:12px; padding:8px; background:#fafafa; border-radius:4px;">
             <div class="input-group">
-                <label>Tai lataa CSV (lat &amp; lon tai WKT):</label>
-                <input type="file" id="file-${speciesId}" accept=".csv">
+                <label>Tai lataa CSV (lat &amp; lon tai WKT):
+                    <span class="info-tooltip" data-tip="Lataa oma havaintoaineisto CSV-tiedostona. Tiedostossa tulee olla joko 'lat' ja 'lon' sarakkeet (desimaaliasteet, WGS84) tai 'wkt' sarake WKT-muotoisilla geometrioilla (pisteet, viivat tai alueet) WGS84-koordinaattijärjestelmässä. Huom! Kaikki ominaisuudet (esim. tilastot) eivät ota huomioon custom-aineistoja, ellei sarakkeiden nimet ole täsmälleen samoja, kuin laji.fi:stä ladattavassa datassa.">i</span>
+                </label>
+                <div class="input-row">
+                    <input type="file" id="file-${speciesId}" accept=".csv">
+                    <button onclick="uploadCsvForSpecies(${speciesId})" class="btn-small">Lataa CSV</button>
+                </div>
             </div>
-            <button onclick="uploadCsvForSpecies(${speciesId})" class="btn-small">Lataa CSV</button>
         </div>
 
         <div id="fetch-progress-${speciesId}" class="fetch-progress" style="display:none;">
@@ -182,11 +201,17 @@ function toggleTaxon(id, event) {
     } else {
         expandedTaxons.add(id);
     }
+    try { localStorage.setItem('expandedTaxons', JSON.stringify([...expandedTaxons])); } catch (e) { /* ignore */ }
     renderHierarchy();
 }
 
 // Track which species has its data panel open (only one at a time)
-let openSpeciesDataId = null;
+let openSpeciesDataId = (() => {
+    try {
+        const v = localStorage.getItem('openSpeciesDataId');
+        return v ? Number(v) : null;
+    } catch (e) { return null; }
+})();
 
 function toggleSpeciesData(speciesId) {
     if (openSpeciesDataId === speciesId) {
@@ -194,6 +219,7 @@ function toggleSpeciesData(speciesId) {
     } else {
         openSpeciesDataId = speciesId;
     }
+    try { localStorage.setItem('openSpeciesDataId', openSpeciesDataId ?? ''); } catch (e) { /* ignore */ }
     renderHierarchy();
     // After render, load datasets if panel is now open
     if (openSpeciesDataId === speciesId) {
@@ -209,7 +235,7 @@ function handleSpeciesAction(selectElem, projectId) {
     if (v === 'delete') {
         deleteSpecies(projectId);
     } else {
-        window.open(`${v}?id=${encodeURIComponent(projectId)}`, '_blank');
+        window.location.href = `${v}?id=${encodeURIComponent(projectId)}`;
     }
 }
 

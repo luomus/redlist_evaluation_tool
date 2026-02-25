@@ -806,3 +806,142 @@ window._cancelPolygonToPoint = function() {
 
     window._conversionActiveObs = null;
 };
+
+// ─── Move point within uncertainty radius ────────────────────────────────────
+
+/**
+ * Enter move mode for a point observation.
+ * Shows a draggable marker constrained within a circle whose radius equals
+ * the feature's coordinateAccuracy value (metres). The original position and
+ * all properties are preserved unless the user saves.
+ */
+window.startPointMoveConversion = function(obsId) {
+    if (!obsId) return;
+
+    if (window._conversionActiveObs) {
+        alert('Muunnos on jo käynnissä. Tallenna tai peruuta se ensin.');
+        return;
+    }
+
+    // Find the CircleMarker layer
+    let foundLayer = null;
+    let savedProperties = null;
+    let savedGeometry = null;
+
+    if (window.sharedGeometryLayer) {
+        window.sharedGeometryLayer.eachLayer(function(layer) {
+            if (foundLayer) return;
+            const props = (layer.feature && layer.feature.properties) || layer.feature || {};
+            const id = props._db_id || props.db_id;
+            if (id && String(id) === String(obsId)) {
+                foundLayer = layer;
+                savedProperties = props;
+                savedGeometry = layer.feature && layer.feature.geometry;
+            }
+        });
+    }
+
+    if (!foundLayer || !savedGeometry) {
+        alert('Havaintoa ei löytynyt kartalta.');
+        return;
+    }
+
+    const accuracyMeters = parseFloat(
+        savedProperties['gathering.interpretations.coordinateAccuracy']
+    );
+    if (!accuracyMeters || isNaN(accuracyMeters) || accuracyMeters < 10) {
+        alert('Pistettä ei voi siirtää: koordinaattien tarkkuus on alle 10 metriä tai se puuttuu.');
+        return;
+    }
+
+    window.sharedMap.closePopup();
+
+    // Remove original point from both shared layer and dataset group
+    const hiddenLayers = [];
+    try { window.sharedGeometryLayer.removeLayer(foundLayer); } catch (e) {}
+    const dsId = savedProperties._dataset_id || savedProperties.dataset_id;
+    if (dsId && window.datasetLayers && window.datasetLayers[dsId]) {
+        try { window.datasetLayers[dsId].group.removeLayer(foundLayer); } catch (e) {}
+    }
+    hiddenLayers.push(foundLayer);
+
+    // Original position (Point coordinates are [lng, lat])
+    const origLng = savedGeometry.coordinates[0];
+    const origLat = savedGeometry.coordinates[1];
+    const origLatLng = L.latLng(origLat, origLng);
+    let lastValidLatLng = origLatLng;
+
+    // Show accuracy circle as boundary reference
+    const refLayer = L.circle(origLatLng, {
+        radius: accuracyMeters,
+        color: '#3b82f6',
+        weight: 2,
+        opacity: 0.8,
+        fillColor: '#3b82f6',
+        fillOpacity: 0.08,
+        dashArray: '6,4'
+    }).addTo(window.sharedMap);
+
+    // Draggable marker at original position
+    const dragIcon = L.divIcon({
+        className: 'geom-conversion-mode',
+        iconSize: [20, 20],
+        iconAnchor: [10, 10]
+    });
+
+    const dragMarker = L.marker(origLatLng, {
+        draggable: true,
+        icon: dragIcon,
+        zIndexOffset: 1000
+    }).addTo(window.sharedMap);
+
+    // Constrain drag to within the accuracy radius
+    dragMarker.on('drag', function(e) {
+        const ll = e.target.getLatLng();
+        if (ll.distanceTo(origLatLng) <= accuracyMeters) {
+            lastValidLatLng = ll;
+        } else {
+            e.target.setLatLng(lastValidLatLng);
+        }
+    });
+
+    dragMarker.on('dragend', function(e) {
+        const ll = e.target.getLatLng();
+        if (ll.distanceTo(origLatLng) > accuracyMeters) {
+            e.target.setLatLng(lastValidLatLng);
+        } else {
+            lastValidLatLng = ll;
+        }
+    });
+
+    // Conversion panel (reuses same save/cancel functions as polygon conversion)
+    const mapContainer = window.sharedMap.getContainer();
+    const existingPanel = document.getElementById('conversion-panel');
+    if (existingPanel) existingPanel.remove();
+
+    const accuracyLabel = accuracyMeters >= 1000
+        ? (accuracyMeters / 1000).toFixed(1) + ' km'
+        : Math.round(accuracyMeters) + ' m';
+
+    const panel = document.createElement('div');
+    panel.id = 'conversion-panel';
+    panel.innerHTML =
+        '<div class="conversion-panel-inner">' +
+        '<p class="conversion-instruction">Siirrä piste koordinaattien epätarkkuutta ('+ accuracyLabel +') kuvaavan ympyrän sisällä, sitten tallenna.</p>' +
+        '<div class="conversion-actions">' +
+        '<button class="conversion-save-btn" onclick="window._confirmPolygonToPoint()">Tallenna</button>' +
+        '<button class="conversion-cancel-btn" onclick="window._cancelPolygonToPoint()">Peruuta</button>' +
+        '</div></div>';
+    mapContainer.appendChild(panel);
+
+    // Shared state — _confirmPolygonToPoint and _cancelPolygonToPoint read from here
+    window._conversionActiveObs = {
+        obsId: obsId,
+        hiddenLayers: hiddenLayers,
+        dragMarker: dragMarker,
+        refLayer: refLayer,
+        savedGeometry: savedGeometry,
+        savedProperties: savedProperties,
+        getLatLng: function() { return lastValidLatLng; }
+    };
+};
