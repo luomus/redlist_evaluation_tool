@@ -183,5 +183,8 @@ objects:
         name: ${NAME}-svc
       port:
         targetPort: 5000
+      tls:
+        termination: edge
+        insecureEdgeTerminationPolicy: Redirect
 
 objectsCount: 7
