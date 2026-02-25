@@ -1119,6 +1119,36 @@ def set_observations_excluded():
         import traceback; traceback.print_exc()
         return jsonify({"success": False, "error": str(e)}), 500
 
+@app.route("/api/observation/<int:obs_id>/geometry", methods=["PATCH"])
+@login_required
+def update_observation_geometry(obs_id):
+    """Replace the geometry of a single observation. Properties are not modified."""
+    try:
+        data = request.get_json() or {}
+        geometry = data.get('geometry')
+        if not geometry or not isinstance(geometry, dict):
+            return jsonify({"success": False, "error": "geometry required"}), 400
+        try:
+            geom_shape = shape(geometry)
+            wkt_str = f'SRID=4326;{geom_shape.wkt}'
+        except Exception as e:
+            return jsonify({"success": False, "error": f"Invalid geometry: {str(e)}"}), 400
+
+        session = Session()
+        obs = session.query(Observation).get(obs_id)
+        if not obs:
+            session.close()
+            return jsonify({"success": False, "error": "Observation not found"}), 404
+
+        obs.geometry = wkt_str
+        session.add(obs)
+        session.commit()
+        session.close()
+
+        return jsonify({"success": True, "obs_id": obs_id})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
 @app.route("/api/datasets", methods=["GET"])
 @login_required
 def list_datasets():

@@ -292,3 +292,94 @@ header { padding: 12px 16px; border-bottom: 1px solid #eee; display: flex; gap: 
     outline: 2px solid rgba(0,123,255,0.25);
     outline-offset: 1px;
 }
+
+/* ── Convert polygon to point ─────────────────────────────────────────────── */
+
+/* Button in popup alongside the exclude button */
+.convert-to-point-btn {
+    margin-left: 6px;
+    padding: 4px 8px;
+    font-size: 12px;
+    background: #2563eb;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    vertical-align: middle;
+}
+.convert-to-point-btn:hover {
+    background: #1d4ed8;
+}
+
+/* Floating panel shown during conversion */
+#conversion-panel {
+    position: absolute;
+    top: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1000;
+    background: rgba(255,255,255,0.97);
+    border: 1px solid #93c5fd;
+    border-radius: 8px;
+    padding: 10px 14px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.18);
+    pointer-events: all;
+    min-width: 280px;
+    text-align: center;
+}
+.conversion-panel-inner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+}
+.conversion-instruction {
+    margin: 0;
+    font-size: 13px;
+    color: #1e3a5f;
+    line-height: 1.4;
+}
+.conversion-actions {
+    display: flex;
+    gap: 8px;
+}
+.conversion-save-btn {
+    padding: 5px 14px;
+    font-size: 13px;
+    background: #16a34a;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 600;
+}
+.conversion-save-btn:hover:not(:disabled) { background: #15803d; }
+.conversion-save-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.conversion-cancel-btn {
+    padding: 5px 14px;
+    font-size: 13px;
+    background: #dc2626;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 600;
+}
+.conversion-cancel-btn:hover:not(:disabled) { background: #b91c1c; }
+.conversion-cancel-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+/* Draggable marker icon during conversion */
+.geom-conversion-mode {
+    width: 20px !important;
+    height: 20px !important;
+    border-radius: 50%;
+    background: #2563eb;
+    border: 3px solid #fff;
+    box-shadow: 0 0 0 2px #2563eb, 0 2px 6px rgba(0,0,0,0.35);
+    cursor: grab;
+    box-sizing: border-box;
+}
+.geom-conversion-mode:active {
+    cursor: grabbing;
+}

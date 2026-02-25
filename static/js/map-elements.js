@@ -229,7 +229,8 @@ function setupPolygonSelector(map, geometryLayer) {
 }
 
 // Function to create a popup content from properties
-function createPopupContent(properties) {
+// opts: optional object; opts.showConvertBtn = true adds a "Convert to point" button (for polygons)
+function createPopupContent(properties, opts) {
     let content = '<div class="popup-content">';
     
     // Extract common important fields
@@ -310,7 +311,11 @@ function createPopupContent(properties) {
     if (dbId) {
         const btnLabel = isExcluded ? 'Sisällytä analyysiin' : 'Poista analyysista';
         const dataExcluded = isExcluded ? '1' : '0';
-        content += `<div class="popup-actions"><button class="exclude-btn" data-db-id="${dbId}" data-excluded="${dataExcluded}" onclick="window.toggleExclude(${dbId}, this)">${btnLabel}</button></div>`;
+        content += `<div class="popup-actions"><button class="exclude-btn" data-db-id="${dbId}" data-excluded="${dataExcluded}" onclick="window.toggleExclude(${dbId}, this)">${btnLabel}</button>`;
+        if (opts && opts.showConvertBtn) {
+            content += ` <button class="convert-to-point-btn" onclick="window.startPolygonToPointConversion(${dbId}); return false;">Muunna pisteeksi</button>`;
+        }
+        content += `</div>`;
     }
 
     content += '</div>';

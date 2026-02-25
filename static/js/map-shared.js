@@ -299,6 +299,49 @@ window.getAccuracyClass = function(coordinateAccuracy) {
     return null;
 };
 
+// Compute centroid [lat, lng] of a GeoJSON Polygon or MultiPolygon geometry
+window.polygonCentroid = function(geometry) {
+    let coords = [];
+    if (geometry.type === 'Polygon') {
+        coords = geometry.coordinates[0] || [];
+    } else if (geometry.type === 'MultiPolygon') {
+        geometry.coordinates.forEach(poly => {
+            (poly[0] || []).forEach(c => coords.push(c));
+        });
+    }
+    if (!coords.length) return { lat: 0, lng: 0 };
+    let sumLng = 0, sumLat = 0;
+    coords.forEach(c => { sumLng += c[0]; sumLat += c[1]; });
+    return { lat: sumLat / coords.length, lng: sumLng / coords.length };
+};
+
+// Ray-casting point-in-polygon test. point = [lng, lat], ring = [[lng,lat], ...]
+window.pointInPolygonRing = function(point, ring) {
+    const x = point[0], y = point[1];
+    let inside = false;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+        const xi = ring[i][0], yi = ring[i][1];
+        const xj = ring[j][0], yj = ring[j][1];
+        const intersect = ((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
+        if (intersect) inside = !inside;
+    }
+    return inside;
+};
+
+// Check whether point [lng, lat] is inside a GeoJSON Polygon or MultiPolygon geometry
+window.pointInPolygonGeometry = function(point, geometry) {
+    if (!geometry) return false;
+    if (geometry.type === 'Polygon') {
+        return window.pointInPolygonRing(point, geometry.coordinates[0] || []);
+    } else if (geometry.type === 'MultiPolygon') {
+        for (const poly of geometry.coordinates) {
+            if (window.pointInPolygonRing(point, poly[0] || [])) return true;
+        }
+        return false;
+    }
+    return false;
+};
+
 // Function to create geometry layers without adding to map (for batch processing)
 // Returns the created layer(s) or array of layers
 window.createGeometryLayers = function(geometry, properties) {
@@ -342,7 +385,11 @@ window.createGeometryLayers = function(geometry, properties) {
         } else if (geom.type === 'Polygon') {
             const latLngs = geom.coordinates.map(ring => ring.map(c => [c[1], c[0]]));
             const poly = L.polygon(latLngs, { className: className, weight: 2, opacity: 0.8, fillOpacity: 0.3 });
-            poly.bindPopup(popupContent);
+            const polyDbId = properties && (properties._db_id || properties.db_id);
+            const polyPopup = polyDbId
+                ? createPopupContent(properties || {}, { showConvertBtn: true })
+                : popupContent;
+            poly.bindPopup(polyPopup);
             poly.feature = poly.feature || {};
             poly.feature.properties = properties || {};
             poly.feature.geometry = geom;
@@ -542,4 +589,220 @@ window.toggleDatasetExclude = async function(dsid, exclude) {
     } finally {
         window._datasetTogglePending[dsid] = false;
     }
+};
+
+// ─── Polygon → Point conversion ─────────────────────────────────────────────
+
+/**
+ * Enter conversion mode for a polygon observation.
+ * Hides the polygon, shows a draggable point at the centroid constrained to
+ * stay inside the original polygon boundary, and shows Save/Cancel controls.
+ */
+window.startPolygonToPointConversion = function(obsId) {
+    if (!obsId) return;
+
+    // Prevent two concurrent conversions
+    if (window._conversionActiveObs) {
+        alert('Muunnos on jo käynnissä. Tallenna tai peruuta se ensin.');
+        return;
+    }
+
+    // Find all layers belonging to this observation
+    const foundLayers = [];
+    let savedGeometry = null;
+    let savedProperties = null;
+
+    if (window.sharedGeometryLayer) {
+        window.sharedGeometryLayer.eachLayer(function(layer) {
+            const props = (layer.feature && layer.feature.properties) || layer.feature || {};
+            const id = props._db_id || props.db_id;
+            if (id && String(id) === String(obsId)) {
+                foundLayers.push(layer);
+                if (!savedGeometry && layer.feature && layer.feature.geometry) {
+                    savedGeometry = layer.feature.geometry;
+                    savedProperties = props;
+                }
+            }
+        });
+    }
+
+    if (!foundLayers.length || !savedGeometry) {
+        alert('Havaintoa ei löytynyt kartalta.');
+        return;
+    }
+
+    // Close any open popup
+    window.sharedMap.closePopup();
+
+    // Remove polygon layers temporarily (keep reference for cancel)
+    const hiddenLayers = [];
+    foundLayers.forEach(function(l) {
+        try { window.sharedGeometryLayer.removeLayer(l); } catch (e) {}
+        const dsId = savedProperties && (savedProperties._dataset_id || savedProperties.dataset_id);
+        if (dsId && window.datasetLayers && window.datasetLayers[dsId]) {
+            try { window.datasetLayers[dsId].group.removeLayer(l); } catch (e) {}
+        }
+        hiddenLayers.push(l);
+    });
+
+    // Show original polygon outline as a reference overlay so the user can see the boundary
+    const refLayer = L.geoJSON({ type: 'Feature', geometry: savedGeometry, properties: {} }, {
+        style: {
+            color: '#3b82f6',
+            weight: 2,
+            opacity: 0.8,
+            fillColor: '#3b82f6',
+            fillOpacity: 0.08,
+            dashArray: '6,4'
+        }
+    }).addTo(window.sharedMap);
+
+    // Compute centroid as starting position
+    const centroid = window.polygonCentroid(savedGeometry);
+    let lastValidLatLng = L.latLng(centroid.lat, centroid.lng);
+
+    // Draggable marker using a divIcon styled as a circle
+    const dragIcon = L.divIcon({
+        className: 'geom-conversion-mode',
+        iconSize: [20, 20],
+        iconAnchor: [10, 10]
+    });
+
+    const dragMarker = L.marker([centroid.lat, centroid.lng], {
+        draggable: true,
+        icon: dragIcon,
+        zIndexOffset: 1000
+    }).addTo(window.sharedMap);
+
+    // During drag: validate position against polygon boundary and snap back if outside
+    dragMarker.on('drag', function(e) {
+        const ll = e.target.getLatLng();
+        if (window.pointInPolygonGeometry([ll.lng, ll.lat], savedGeometry)) {
+            lastValidLatLng = ll;
+        } else {
+            e.target.setLatLng(lastValidLatLng);
+        }
+    });
+
+    dragMarker.on('dragend', function(e) {
+        const ll = e.target.getLatLng();
+        if (!window.pointInPolygonGeometry([ll.lng, ll.lat], savedGeometry)) {
+            e.target.setLatLng(lastValidLatLng);
+        } else {
+            lastValidLatLng = ll;
+        }
+    });
+
+    // Inject conversion panel into the map container
+    const mapContainer = window.sharedMap.getContainer();
+    const existingPanel = document.getElementById('conversion-panel');
+    if (existingPanel) existingPanel.remove();
+
+    const panel = document.createElement('div');
+    panel.id = 'conversion-panel';
+    panel.innerHTML =
+        '<div class="conversion-panel-inner">' +
+        '<p class="conversion-instruction">Siirrä piste haluamaasi sijaintiin sinisen alueen sisällä, sitten tallenna.</p>' +
+        '<div class="conversion-actions">' +
+        '<button class="conversion-save-btn" onclick="window._confirmPolygonToPoint()">Tallenna</button>' +
+        '<button class="conversion-cancel-btn" onclick="window._cancelPolygonToPoint()">Peruuta</button>' +
+        '</div></div>';
+    mapContainer.appendChild(panel);
+
+    // Store conversion state globally so confirm/cancel can access it
+    window._conversionActiveObs = {
+        obsId: obsId,
+        hiddenLayers: hiddenLayers,
+        dragMarker: dragMarker,
+        refLayer: refLayer,
+        savedGeometry: savedGeometry,
+        savedProperties: savedProperties,
+        getLatLng: function() { return lastValidLatLng; }
+    };
+};
+
+/**
+ * Save the converted point position to the database and swap the polygon layer.
+ */
+window._confirmPolygonToPoint = async function() {
+    const state = window._conversionActiveObs;
+    if (!state) return;
+
+    const ll = state.getLatLng();
+    const newGeometry = { type: 'Point', coordinates: [ll.lng, ll.lat] };
+
+    // Disable buttons while saving
+    const panel = document.getElementById('conversion-panel');
+    if (panel) panel.querySelectorAll('button').forEach(function(b) { b.disabled = true; b.textContent = b.className.includes('save') ? 'Tallennetaan...' : b.textContent; });
+
+    try {
+        const res = await fetch('/api/observation/' + state.obsId + '/geometry', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ geometry: newGeometry })
+        });
+
+        if (!res.ok) {
+            const err = await res.json().catch(function() { return {}; });
+            alert('Muunnos epäonnistui: ' + (err.error || res.statusText));
+            if (panel) panel.querySelectorAll('button').forEach(function(b) { b.disabled = false; });
+            return;
+        }
+
+        // Clean up conversion UI
+        try { window.sharedMap.removeLayer(state.dragMarker); } catch (e) {}
+        try { window.sharedMap.removeLayer(state.refLayer); } catch (e) {}
+        if (panel) panel.remove();
+
+        // Create new point layer with original properties (geometry updated in-memory too)
+        const newProps = Object.assign({}, state.savedProperties);
+        const newLayers = window.createGeometryLayers(newGeometry, newProps);
+        if (newLayers) {
+            (function addLayer(l) {
+                if (Array.isArray(l)) { l.forEach(addLayer); return; }
+                window.sharedGeometryLayer.addLayer(l);
+            })(newLayers);
+        }
+
+        if (typeof window.syncLegendWithFeatures === 'function') {
+            try { window.syncLegendWithFeatures(); } catch (e) {}
+        }
+        if (typeof window.recalculateGrid === 'function') {
+            try { window.recalculateGrid(); } catch (e) {}
+        }
+
+    } catch (e) {
+        console.error('Error confirming polygon to point conversion:', e);
+        alert('Virhe muunnoksen tallennuksessa: ' + e.message);
+        if (panel) panel.querySelectorAll('button').forEach(function(b) { b.disabled = false; });
+        return;
+    }
+
+    window._conversionActiveObs = null;
+};
+
+/**
+ * Cancel the conversion and restore the original polygon on the map.
+ */
+window._cancelPolygonToPoint = function() {
+    const state = window._conversionActiveObs;
+    if (!state) return;
+
+    try { window.sharedMap.removeLayer(state.dragMarker); } catch (e) {}
+    try { window.sharedMap.removeLayer(state.refLayer); } catch (e) {}
+
+    // Restore hidden polygon layers
+    state.hiddenLayers.forEach(function(l) {
+        try { window.sharedGeometryLayer.addLayer(l); } catch (e) {}
+        const props = (l.feature && l.feature.properties) || l.feature || {};
+        const dsId = props._dataset_id || props.dataset_id;
+        if (dsId && window.datasetLayers && window.datasetLayers[dsId]) {
+            try { window.datasetLayers[dsId].group.addLayer(l); } catch (e) {}
+        }
+    });
+
+    const panel = document.getElementById('conversion-panel');
+    if (panel) panel.remove();
+
+    window._conversionActiveObs = null;
 };
