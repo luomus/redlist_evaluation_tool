@@ -166,7 +166,7 @@
 .result-header-row {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    justify-content: flex-start;
     width: 100%;
     cursor: pointer;
     gap: 8px;
@@ -244,6 +244,7 @@
     display: flex;
     gap: 6px;
     flex-shrink: 0;
+    margin-left: auto;
 }
 
 .species-actions select {

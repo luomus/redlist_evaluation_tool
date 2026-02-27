@@ -109,8 +109,8 @@ function buildNodes(nodes) {
             html += `</div>`;
         }
 
-        // Species list for leaf nodes
-        if (isLeaf && isOpen) {
+        // Species list (for both leaf and non-leaf nodes)
+        if (isOpen) {
             html += buildSpeciesList(node);
         }
 

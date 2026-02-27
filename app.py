@@ -387,7 +387,7 @@ def _taxon_to_dict(taxon, include_children=True, include_projects=False):
                          for c in sorted(taxon.children, key=lambda t: t.sort_order)]
     else:
         d['children'] = []
-    if include_projects and taxon.is_leaf:
+    if include_projects:
         d['projects'] = [_project_to_dict(p) for p in (taxon.projects or [])]
     else:
         d['projects'] = []
@@ -439,7 +439,7 @@ def list_taxons():
                 'is_leaf': taxon.is_leaf,
                 'children': [build(c) for c in sorted(taxon.children or [], key=lambda t: t.sort_order)],
             }
-            if include_projects and taxon.is_leaf:
+            if include_projects:
                 d['projects'] = [_project_to_dict(p) for p in project_map.get(taxon.id, [])]
             else:
                 d['projects'] = []
@@ -493,9 +493,6 @@ def create_species():
         if not taxon:
             db.close()
             return jsonify({'success': False, 'error': 'Taxon not found'}), 404
-        if not taxon.is_leaf:
-            db.close()
-            return jsonify({'success': False, 'error': 'Species can only be added to leaf taxons'}), 400
 
         project = Project(name=name, description=description, taxon_id=taxon_id)
         db.add(project)

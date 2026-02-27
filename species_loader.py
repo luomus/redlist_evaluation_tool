@@ -6,13 +6,13 @@ TSV columns:
     Laji        – Finnish name + scientific name (used as project name)
     Luokka 2019 – IUCN red-list category (e.g. "LC – Elinvoimaiset")
     Eliöryhmä   – Taxon group label, format "FinnishName, ScientificName"
-                  or just "FinnishName".  Must match a leaf taxon in the DB.
+                  or just "FinnishName".  Can match any taxon in the DB.
 
 Behaviour:
   - Idempotent: if any projects already exist, loading is skipped.
   - Duplicate guard: if a project with the same name already exists under
     the same taxon_id, the row is skipped (logged in the summary).
-  - Non-leaf / unknown group: row is skipped and listed in the summary.
+  - Unknown group: row is skipped and listed in the summary.
 """
 
 import csv
@@ -45,29 +45,19 @@ def load_species_to_db(session_factory, filepath=None):
         # Build lookup: normalised_name → taxon row  (for all taxons)
         # We match species group by the Finnish name portion (before the comma)
         # and fall back to scientific name if needed.
-        leaf_taxons = session.execute(
-            sa_text("SELECT id, name, scientific_name FROM taxons WHERE is_leaf = TRUE")
+        all_taxons_for_lookup = session.execute(
+            sa_text("SELECT id, name, scientific_name FROM taxons")
         ).mappings().all()
 
         # Primary: Finnish name → id   (lower-cased)
         by_finnish = {}
         # Secondary: scientific name → id  (lower-cased)
         by_scientific = {}
-        for t in leaf_taxons:
+        for t in all_taxons_for_lookup:
             if t['name']:
                 by_finnish[t['name'].strip().lower()] = t['id']
             if t['scientific_name']:
                 by_scientific[t['scientific_name'].strip().lower()] = t['id']
-
-        # Also build a lookup that includes ALL taxons (non-leaf) so we can
-        # warn when a group exists but is not a leaf.
-        all_taxons = session.execute(
-            sa_text("SELECT id, name, scientific_name, is_leaf FROM taxons")
-        ).mappings().all()
-        all_by_finnish = {}
-        for t in all_taxons:
-            if t['name']:
-                all_by_finnish[t['name'].strip().lower()] = dict(t)
 
         # Parse TSV
         rows = _parse_tsv(filepath)
@@ -75,7 +65,6 @@ def load_species_to_db(session_factory, filepath=None):
         to_insert = []
         skipped_duplicate = []
         skipped_no_match = []
-        skipped_not_leaf = []
 
         # Track (name_lower, taxon_id) combos within this batch to catch
         # duplicates even when the DB is freshly empty.
@@ -96,8 +85,8 @@ def load_species_to_db(session_factory, filepath=None):
 
             # Resolve taxon_id from group label
             taxon_id = _resolve_taxon_id(
-                group_raw, by_finnish, by_scientific, all_by_finnish,
-                name, skipped_no_match, skipped_not_leaf
+                group_raw, by_finnish, by_scientific,
+                name, skipped_no_match
             )
             if taxon_id is None:
                 continue  # already appended to skipped list
@@ -131,13 +120,7 @@ def load_species_to_db(session_factory, filepath=None):
         print(f"\nSpecies loader summary:")
         print(f"  Inserted  : {len(to_insert)}")
         print(f"  Skipped (duplicate)  : {len(skipped_duplicate)}")
-        print(f"  Skipped (group not found / not a leaf): "
-              f"{len(skipped_no_match) + len(skipped_not_leaf)}")
-
-        if skipped_not_leaf:
-            print("\n  WARNING – group exists but is NOT a leaf taxon (species not added):")
-            for s in skipped_not_leaf:
-                print(f"    • {s}")
+        print(f"  Skipped (group not found): {len(skipped_no_match)}")
 
         if skipped_no_match:
             print("\n  WARNING – group not found in taxon table (species not added):")
@@ -178,16 +161,15 @@ def _parse_tsv(filepath):
 
 
 def _resolve_taxon_id(group_raw, by_finnish, by_scientific,
-                       all_by_finnish, species_name,
-                       skipped_no_match, skipped_not_leaf):
-    """Look up the leaf taxon id for a group label.
+                       species_name, skipped_no_match):
+    """Look up the taxon id for a group label.
 
     group_raw format examples:
         "Kolmisukahäntäiset, Thysanura"
         "Päiväperhoset"
 
     Returns the taxon id (int) or None if not resolved.
-    Side-effects: appends to skipped_no_match or skipped_not_leaf.
+    Side-effects: appends to skipped_no_match.
     """
     if not group_raw:
         skipped_no_match.append(f"{species_name} [empty group]")
@@ -198,22 +180,13 @@ def _resolve_taxon_id(group_raw, by_finnish, by_scientific,
     finnish_key = parts[0].strip().lower()
     sci_key = parts[1].strip().lower() if len(parts) > 1 else None
 
-    # 1. Try leaf taxons by Finnish name
+    # 1. Try taxons by Finnish name
     if finnish_key in by_finnish:
         return by_finnish[finnish_key]
 
-    # 2. Try leaf taxons by scientific name
+    # 2. Try taxons by scientific name
     if sci_key and sci_key in by_scientific:
         return by_scientific[sci_key]
-
-    # 3. Check if it exists as a non-leaf (warn differently)
-    if finnish_key in all_by_finnish:
-        t = all_by_finnish[finnish_key]
-        if not t['is_leaf']:
-            skipped_not_leaf.append(
-                f"{species_name} → group '{group_raw}' found but is NOT a leaf taxon"
-            )
-            return None
 
     skipped_no_match.append(
         f"{species_name} → group '{group_raw}' not found in taxons table"
