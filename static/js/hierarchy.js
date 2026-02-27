@@ -17,6 +17,11 @@ let searchQuery = '';         // current search string
 let renderHierarchyTimeout = null;  // debounce timer
 let searchMemoCache = {};           // { queryLower: { groupMatches, speciesMatches } }
 
+// Cache management
+const CACHE_KEY = 'hierarchyCache';
+const CACHE_TIMESTAMP_KEY = 'hierarchyCacheTimestamp';
+const CACHE_TTL_MINUTES = 30; // Cache valid for 30 minutes
+
 // Restore persisted accordion state from previous page visit
 (function restoreAccordionState() {
     try {
@@ -25,27 +30,101 @@ let searchMemoCache = {};           // { queryLower: { groupMatches, speciesMatc
     } catch (e) { /* ignore */ }
 })();
 
+// Check if cached hierarchy is still valid
+function isCacheValid() {
+    try {
+        const timestamp = localStorage.getItem(CACHE_TIMESTAMP_KEY);
+        if (!timestamp) return false;
+        const age = Date.now() - parseInt(timestamp);
+        return age < (CACHE_TTL_MINUTES * 60 * 1000);
+    } catch (e) {
+        return false;
+    }
+}
+
+// Get cached hierarchy
+function getCachedHierarchy() {
+    try {
+        if (!isCacheValid()) return null;
+        const cached = localStorage.getItem(CACHE_KEY);
+        return cached ? JSON.parse(cached) : null;
+    } catch (e) {
+        return null;
+    }
+}
+
+// Store hierarchy in cache
+function cacheHierarchy(data) {
+    try {
+        localStorage.setItem(CACHE_KEY, JSON.stringify(data));
+        localStorage.setItem(CACHE_TIMESTAMP_KEY, Date.now().toString());
+    } catch (e) {
+        // Silently fail if localStorage is unavailable or full
+        console.warn('Failed to cache hierarchy:', e);
+    }
+}
+
+// Clear cached hierarchy (call this when hierarchy is modified)
+function clearHierarchyCache() {
+    try {
+        localStorage.removeItem(CACHE_KEY);
+        localStorage.removeItem(CACHE_TIMESTAMP_KEY);
+        console.log('Hierarchy cache cleared');
+    } catch (e) {
+        console.warn('Failed to clear hierarchy cache:', e);
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Public API – called from simple.js
 // ---------------------------------------------------------------------------
 
 /**
  * Fetch taxon hierarchy from the backend and render it.
+ * Uses localStorage cache for instant display on repeat visits.
+ * Fetches fresh data in the background.
  */
 async function loadHierarchy() {
     try {
+        // Try to load from cache first for instant display
+        const cachedData = getCachedHierarchy();
+        if (cachedData) {
+            taxonTree = cachedData.taxons || [];
+            renderHierarchy();
+            // Restore open datasets panel from previous visit
+            if (openSpeciesDataId) {
+                loadSpeciesDatasets(openSpeciesDataId);
+            }
+        } else {
+            // Show loading state if no cache
+            document.getElementById('hierarchy-container').innerHTML = '<p style="color:#7f8c8d;">Ladataan…</p>';
+        }
+        
+        // Fetch fresh data from server in the background
         const resp = await fetch('/api/taxons?projects=1');
         const data = await resp.json();
         taxonTree = data.taxons || [];
-        renderHierarchy();
-        // Restore open datasets panel from previous visit
-        if (openSpeciesDataId) {
-            loadSpeciesDatasets(openSpeciesDataId);
+        
+        // Cache the fresh data
+        cacheHierarchy(data);
+        
+        // Only re-render if data changed (to avoid flickering)
+        if (!cachedData || JSON.stringify(cachedData) !== JSON.stringify(data)) {
+            renderHierarchy();
         }
+        
     } catch (err) {
         console.error('Failed to load hierarchy:', err);
-        document.getElementById('hierarchy-container').innerHTML =
-            '<p style="color:#c0392b;">Eliöryhmien lataus epäonnistui.</p>';
+        
+        // If we have cached data, show it as fallback
+        const cachedData = getCachedHierarchy();
+        if (cachedData && taxonTree.length > 0) {
+            console.log('Showing cached data due to network error');
+            // Data already rendered from cache
+        } else {
+            document.getElementById('hierarchy-container').innerHTML =
+                '<p style="color:#c0392b;">Eliöryhmien lataus epäonnistui.</p>';
+        }
     }
 }
 
@@ -294,6 +373,8 @@ async function submitAddSpecies() {
         if (result.success) {
             showSuccess('Laji lisätty onnistuneesti!');
             closeAddSpeciesModal();
+            // Clear cache since hierarchy has changed
+            clearHierarchyCache();
             // Make sure this taxon is expanded so the new species is visible
             expandedTaxons.add(currentModalTaxonId);
             await loadHierarchy();
@@ -318,6 +399,8 @@ async function deleteSpecies(projectId) {
         const result = await resp.json();
         if (result.success) {
             showSuccess('Laji poistettu onnistuneesti!');
+            // Clear cache since hierarchy has changed
+            clearHierarchyCache();
             await loadHierarchy();
         } else {
             showError('Lajin poistaminen epäonnistui: ' + result.error);

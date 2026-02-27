@@ -410,9 +410,22 @@ def _project_to_dict(project):
 @app.route("/api/taxons", methods=["GET"])
 @login_required
 def list_taxons():
-    """Return the full taxon hierarchy as a tree, optionally with projects."""
+    """Return the full taxon hierarchy as a tree, optionally with projects.
+    
+    Results are cached to improve performance on repeated requests.
+    Cache key varies based on whether projects are included.
+    """
     try:
         include_projects = request.args.get('projects', '0') == '1'
+        
+        # Create cache key based on whether projects are included
+        cache_key = f"taxons:{'with_projects' if include_projects else 'no_projects'}"
+        
+        # Check cache first
+        cached_result = stats_cache.get(cache_key)
+        if cached_result is not None:
+            return jsonify(cached_result)
+        
         db = Session()
 
         # Eagerly load the whole tree
@@ -446,7 +459,13 @@ def list_taxons():
 
         tree = [build(r) for r in roots]
         db.close()
-        return jsonify({'taxons': tree})
+        
+        result = {'taxons': tree}
+        
+        # Cache the result (30-minute TTL for taxonomy is reasonable since it changes infrequently)
+        stats_cache.set(cache_key, result)
+        
+        return jsonify(result)
     except Exception as e:
         import traceback; traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500
@@ -498,6 +517,11 @@ def create_species():
         db.commit()
         result = _project_to_dict(project)
         db.close()
+        
+        # Invalidate taxons cache since projects have been modified
+        stats_cache.delete('taxons:with_projects')
+        stats_cache.delete('taxons:no_projects')
+        
         return jsonify({'success': True, 'project': result})
     except Exception as e:
         import traceback; traceback.print_exc()
@@ -546,6 +570,11 @@ def update_species(project_id):
         db.commit()
         result = _project_to_dict(project)
         db.close()
+        
+        # Invalidate taxons cache since projects have been modified
+        stats_cache.delete('taxons:with_projects')
+        stats_cache.delete('taxons:no_projects')
+        
         return jsonify({'success': True, 'project': result})
     except Exception as e:
         import traceback; traceback.print_exc()
@@ -570,6 +599,11 @@ def delete_species(project_id):
         db.commit()
         db.close()
         stats_cache.delete(f"stats:{project_id}")
+        
+        # Invalidate taxons cache since projects have been modified
+        stats_cache.delete('taxons:with_projects')
+        stats_cache.delete('taxons:no_projects')
+        
         return jsonify({'success': True, 'deleted_observations': obs_count})
     except Exception as e:
         import traceback; traceback.print_exc()
