@@ -11,7 +11,7 @@ if __name__ == "__main__":
         init_db()
         print("Database initialization complete!")
         print("  - taxons table (hierarchy from hierarchy.json)")
-        print("  - projects table (species)")
+        print("  - projects table (species seeded from species_and_groups.tsv)")
         print("  - observations table")
         print("  - convex_hulls table")
         print("  - grid_cells table")

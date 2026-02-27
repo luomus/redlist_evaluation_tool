@@ -11,6 +11,7 @@
 // ---------------------------------------------------------------------------
 let taxonTree = [];          // full tree from API
 let expandedTaxons = new Set(); // ids of currently expanded taxons
+let searchQuery = '';         // current search string
 
 // Restore persisted accordion state from previous page visit
 (function restoreAccordionState() {
@@ -46,11 +47,18 @@ async function loadHierarchy() {
 
 /**
  * Render (or re-render) the hierarchy into #hierarchy-container.
+ * When a search is active, renders flat search results instead of the tree.
  */
 function renderHierarchy() {
     const container = document.getElementById('hierarchy-container');
     if (!container) return;
-    container.innerHTML = buildNodes(taxonTree);
+    if (searchQuery.trim().length > 0) {
+        renderSearchResults(searchQuery.trim());
+    } else {
+        const countEl = document.getElementById('search-result-count');
+        if (countEl) countEl.textContent = '';
+        container.innerHTML = buildNodes(taxonTree);
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -122,14 +130,15 @@ function buildSpeciesList(taxonNode) {
         const isDataOpen = openSpeciesDataId === p.id;
         html += `
         <div class="species-card" id="species-${p.id}">
-            <div class="species-header-row">
+            <div class="species-header-row" onclick="toggleSpeciesData(${p.id})">
+                <span class="species-caret ${isDataOpen ? 'open' : ''}">▶</span>
                 <div class="species-info">
                     <span class="species-name">${escapeHtml(p.name)}</span>
+                    ${p.iucn_category ? `<span class="iucn-badge iucn-${iucnClass(p.iucn_category)}">${escapeHtml(p.iucn_category)}</span>` : ''}
                     ${p.description ? `<span class="species-desc">${escapeHtml(p.description)}</span>` : ''}
                 </div>
                 <div class="species-actions">
-                    <button class="btn-small btn-primary" onclick="toggleSpeciesData(${p.id}); event.stopPropagation();">${isDataOpen ? '▼ Piilota aineistot' : '▶ Näytä aineistot'}</button>
-                    <select onchange="handleSpeciesAction(this, ${p.id})">
+                    <select onchange="handleSpeciesAction(this, ${p.id})" onclick="event.stopPropagation()">
                         <option value="" selected disabled>Työkalut ▾</option>
                         <option value="/stats">Näytä tilastot</option>
                         <option value="/grid">Laske esiintymisalue (AOO)</option>
@@ -326,8 +335,205 @@ async function deleteSpecies(projectId) {
 
 
 // ---------------------------------------------------------------------------
+// Search
+// ---------------------------------------------------------------------------
+
+/**
+ * Called by the search button or Enter key.
+ */
+function doHierarchySearch() {
+    const input = document.getElementById('hierarchy-search');
+    searchQuery = input ? input.value : '';
+    renderHierarchy();
+}
+
+/**
+ * Render flat search results for `query`.
+ */
+function renderSearchResults(query) {
+    const container = document.getElementById('hierarchy-container');
+    const countEl = document.getElementById('search-result-count');
+    if (!container) return;
+
+    const speciesMatches = [];
+    const groupMatches = [];
+    collectMatches(taxonTree, query.toLowerCase(), [], speciesMatches, groupMatches);
+
+    const total = speciesMatches.length + groupMatches.length;
+    if (countEl) countEl.textContent = total > 0 ? `${total} osumaa` : '';
+
+    if (total === 0) {
+        container.innerHTML = `<div class="search-no-results">Ei hakutuloksia haulle "${escapeHtml(query)}"</div>`;
+        return;
+    }
+
+    let html = '<div class="search-results">';
+
+    // --- Taxon group matches ---
+    for (const { node, breadcrumb } of groupMatches) {
+        const path = breadcrumb.length ? breadcrumb.join(' › ') : '';
+        html += `
+        <div class="search-result-item">
+            ${path ? `<div class="result-breadcrumb">${escapeHtml(path)}</div>` : ''}
+            <div class="result-name">📁 ${highlightMatch(node.name, query)}${node.scientific_name ? ` <span style="font-weight:400;font-style:italic;font-size:13px;color:#7f8c8d;">${highlightMatch(node.scientific_name, query)}</span>` : ''}</div>
+            <div class="result-meta">${node.is_leaf ? 'Lehtiryhmä' : 'Ryhmä'}</div>
+            <div class="result-actions">
+                <button class="btn-small" onclick="navigateToTaxon(${node.id})">Avaa ryhmässä</button>
+            </div>
+        </div>`;
+    }
+
+    // --- Species matches ---
+    for (const { p, breadcrumb, taxonId } of speciesMatches) {
+        const path = breadcrumb.join(' › ');
+        const isDataOpen = openSpeciesDataId === p.id;
+        html += `
+        <div class="search-result-item" id="species-${p.id}">
+            <div class="result-header-row" onclick="toggleSpeciesDataInSearch(${p.id}, ${taxonId})">
+                <span class="species-caret ${isDataOpen ? 'open' : ''}">▶</span>
+                <div style="flex:1; min-width:0;">
+                    <div class="result-breadcrumb">${escapeHtml(path)}</div>
+                    <div class="result-name">
+                        ${highlightMatch(p.name, query)}
+                        ${p.iucn_category ? `<span class="iucn-badge iucn-${iucnClass(p.iucn_category)}" style="margin-left:6px;">${escapeHtml(p.iucn_category)}</span>` : ''}
+                    </div>
+                    ${p.description ? `<div class="result-meta">${highlightMatch(p.description, query)}</div>` : ''}
+                </div>
+                <div class="species-actions">
+                    <select onchange="handleSpeciesAction(this, ${p.id})" onclick="event.stopPropagation()">
+                        <option value="" selected disabled>Työkalut ▾</option>
+                        <option value="/stats">Näytä tilastot</option>
+                        <option value="/grid">Laske esiintymisalue (AOO)</option>
+                        <option value="/convex_hull">Laske levinneisyysalue (EOO)</option>
+                        <option value="delete">Poista laji</option>
+                    </select>
+                    <button class="btn-small" onclick="navigateToTaxon(${taxonId}); event.stopPropagation()">Näytä ryhmässä</button>
+                </div>
+            </div>
+            ${isDataOpen ? buildInlineDataPanel(p.id, p.name) : ''}
+        </div>`;
+    }
+
+    html += '</div>';
+    container.innerHTML = html;
+
+    // Load datasets if any data panel is open
+    if (openSpeciesDataId) {
+        loadSpeciesDatasets(openSpeciesDataId);
+    }
+}
+
+/**
+ * Recursively collect taxon-group and species matches.
+ */
+function collectMatches(nodes, queryLower, breadcrumb, speciesMatches, groupMatches) {
+    for (const node of nodes) {
+        const nodeNameLower = (node.name || '').toLowerCase();
+        const nodeSciLower = (node.scientific_name || '').toLowerCase();
+
+        // Check if this taxon group itself matches
+        if (nodeNameLower.includes(queryLower) || nodeSciLower.includes(queryLower)) {
+            groupMatches.push({ node, breadcrumb: [...breadcrumb] });
+        }
+
+        // Check species (projects) at this node
+        if (node.projects) {
+            for (const p of node.projects) {
+                const speciesNameLower = (p.name || '').toLowerCase();
+                const descLower = (p.description || '').toLowerCase();
+                if (speciesNameLower.includes(queryLower) || descLower.includes(queryLower)) {
+                    speciesMatches.push({
+                        p,
+                        breadcrumb: [...breadcrumb, node.name],
+                        taxonId: node.id
+                    });
+                }
+            }
+        }
+
+        // Recurse into children
+        if (node.children && node.children.length > 0) {
+            collectMatches(node.children, queryLower, [...breadcrumb, node.name], speciesMatches, groupMatches);
+        }
+    }
+}
+
+/**
+ * Highlight all occurrences of `query` in `text` using <mark>.
+ */
+function highlightMatch(text, query) {
+    if (!text || !query) return escapeHtml(text);
+    const escaped = escapeHtml(text);
+    const escapedQuery = escapeHtml(query).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return escaped.replace(new RegExp(`(${escapedQuery})`, 'gi'), '<mark>$1</mark>');
+}
+
+/**
+ * Navigate to a taxon in the tree: expand it, clear search, scroll to it.
+ */
+function navigateToTaxon(taxonId) {
+    // Expand all ancestors up to this taxon, then expand the taxon itself
+    function expandPath(nodes, targetId) {
+        for (const n of nodes) {
+            if (n.id === targetId) {
+                expandedTaxons.add(n.id);
+                return true;
+            }
+            if (n.children && expandPath(n.children, targetId)) {
+                expandedTaxons.add(n.id);
+                return true;
+            }
+        }
+        return false;
+    }
+    expandPath(taxonTree, taxonId);
+    try { localStorage.setItem('expandedTaxons', JSON.stringify([...expandedTaxons])); } catch (e) { /* ignore */ }
+
+    // Clear search and re-render tree
+    searchQuery = '';
+    const input = document.getElementById('hierarchy-search');
+    if (input) input.value = '';
+    const countEl = document.getElementById('search-result-count');
+    if (countEl) countEl.textContent = '';
+    renderHierarchy();
+
+    // Scroll to the node
+    setTimeout(() => {
+        const el = document.querySelector(`.taxon-node[data-id="${taxonId}"]`);
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 50);
+}
+
+/**
+ * Toggle data panel for a species while in search results view.
+ */
+function toggleSpeciesDataInSearch(speciesId, taxonId) {
+    if (openSpeciesDataId === speciesId) {
+        openSpeciesDataId = null;
+    } else {
+        openSpeciesDataId = speciesId;
+    }
+    try { localStorage.setItem('openSpeciesDataId', openSpeciesDataId ?? ''); } catch (e) { /* ignore */ }
+    // Re-render search results
+    renderSearchResults(searchQuery.trim());
+    if (openSpeciesDataId === speciesId) {
+        loadSpeciesDatasets(speciesId);
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+/**
+ * Derive a short CSS class from an IUCN category string.
+ * E.g. "LC – Elinvoimaiset" → "LC", "CR – Äärimmäisen uhanalaiset" → "CR"
+ */
+function iucnClass(category) {
+    if (!category) return '';
+    const code = category.trim().split(/[\s–-]/)[0].toUpperCase();
+    return ['LC','NT','VU','EN','CR','EW','EX','DD','NA','NE'].includes(code) ? code : '';
+}
 
 function escapeHtml(text) {
     if (!text) return '';

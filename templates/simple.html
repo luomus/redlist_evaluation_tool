@@ -50,6 +50,11 @@
             <p style="color: #7f8c8d; margin-bottom: 15px; line-height: 1.6;">
                 Selaa eliöryhmiä, lisää lajeja ja hallinnoi havaintoaineistoja.
             </p>
+            <div class="search-bar-wrapper">
+                <input type="search" id="hierarchy-search" placeholder="Hae lajia tai eliöryhmää…" autocomplete="off" onkeydown="if(event.key==='Enter') doHierarchySearch()" oninput="if(this.value==='') doHierarchySearch()">
+                <button class="btn-small btn-search" onclick="doHierarchySearch()">Hae</button>
+                <span class="search-result-count" id="search-result-count"></span>
+            </div>
             <div id="hierarchy-container">Ladataan…</div>
         </div>
 

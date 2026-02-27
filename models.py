@@ -41,6 +41,8 @@ class Project(Base):
     name = Column(String(255), nullable=False)
     description = Column(Text)
     taxon_id = Column(Integer, ForeignKey('taxons.id', ondelete='CASCADE'), nullable=False, index=True)
+    iucn_category = Column(String(100))   # e.g. "LC – Elinvoimaiset" from red-list TSV
+    mx_id = Column(String(50))            # FinBIF MX-identifier, e.g. "MX.5"
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -189,6 +191,13 @@ def init_db():
                         load_taxons_to_db(Session)
                     except Exception as e:
                         print(f"Warning: Taxon hierarchy loading failed: {e}")
+
+                    # Seed species from species_and_groups.tsv (idempotent)
+                    try:
+                        from species_loader import load_species_to_db
+                        load_species_to_db(Session)
+                    except Exception as e:
+                        print(f"Warning: Species seeding failed: {e}")
 
                     # Create base grid (idempotent)
                     try:

@@ -198,3 +198,116 @@ textarea {
     border-radius: 8px;
     font-weight: 500;
 }
+
+/* ===== Hierarchy search ===== */
+
+.search-bar-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 18px;
+}
+
+.search-bar-wrapper input[type="search"] {
+    flex: 1;
+    padding: 9px 14px;
+    border: 2px solid #e0e6ed;
+    border-radius: 8px;
+    font-size: 15px;
+    background: #f8fafb;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    box-sizing: border-box;
+}
+
+.search-bar-wrapper input[type="search"]:focus {
+    outline: none;
+    border-color: #3498db;
+    background: #fff;
+    box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.12);
+}
+
+.btn-search {
+    padding: 9px 18px;
+    font-size: 14px;
+    background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    white-space: nowrap;
+    font-weight: 600;
+    transition: background 0.2s;
+}
+
+.btn-search:hover {
+    background: linear-gradient(135deg, #2980b9 0%, #21618c 100%);
+}
+
+.search-result-count {
+    white-space: nowrap;
+    font-size: 13px;
+    color: #7f8c8d;
+    min-width: 90px;
+    text-align: right;
+}
+
+/* Search results list */
+.search-results {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.search-result-item {
+    display: flex;
+    flex-direction: column;
+    padding: 10px 14px;
+    border: 1px solid #e0e6ed;
+    border-radius: 8px;
+    background: #f8fafb;
+    transition: background 0.15s;
+}
+
+.search-result-item:hover {
+    background: #eaf4fb;
+    border-color: #3498db;
+}
+
+.search-result-item .result-breadcrumb {
+    font-size: 12px;
+    color: #95a5a6;
+    margin-bottom: 4px;
+}
+
+.search-result-item .result-name {
+    font-weight: 600;
+    color: #2c3e50;
+    font-size: 14px;
+}
+
+.search-result-item .result-name mark {
+    background: #fff3cd;
+    color: #2c3e50;
+    padding: 0 2px;
+    border-radius: 2px;
+}
+
+.search-result-item .result-meta {
+    font-size: 12px;
+    color: #7f8c8d;
+    margin-top: 2px;
+}
+
+.search-result-item .result-actions {
+    display: flex;
+    gap: 6px;
+    margin-top: 8px;
+    flex-wrap: wrap;
+}
+
+.search-no-results {
+    color: #95a5a6;
+    font-size: 14px;
+    padding: 12px 0;
+    text-align: center;
+}

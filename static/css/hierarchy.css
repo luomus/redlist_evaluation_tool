@@ -162,11 +162,36 @@
     transition: box-shadow 0.15s ease, transform 0.15s ease;
 }
 
-.species-header-row {
+.species-header-row,
+.result-header-row {
     display: flex;
     align-items: center;
     justify-content: space-between;
     width: 100%;
+    cursor: pointer;
+    gap: 8px;
+    border-radius: 6px;
+    padding: 2px 4px;
+    margin: -2px -4px;
+    transition: background 0.15s;
+}
+
+.species-header-row:hover,
+.result-header-row:hover {
+    background: #eaf4fb;
+}
+
+.species-caret {
+    font-size: 10px;
+    color: #95a5a6;
+    transition: transform 0.2s;
+    flex-shrink: 0;
+    display: inline-block;
+}
+
+.species-caret.open {
+    transform: rotate(90deg);
+    color: #3498db;
 }
 
 .species-card:hover {
@@ -190,6 +215,30 @@
     font-size: 12px;
     color: #7f8c8d;
 }
+
+/* IUCN red-list category badge */
+.iucn-badge {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 1px 7px;
+    border-radius: 10px;
+    letter-spacing: 0.03em;
+    width: fit-content;
+    background: #eef2f4;
+    color: #555;
+    border: 1px solid #c8d0d6;
+}
+.iucn-LC  { background: #d4edda; color: #1f6b37; border-color: #a8d5b4; }
+.iucn-NT  { background: #d0efdf; color: #1a5e32; border-color: #94ceaa; }
+.iucn-VU  { background: #fff3cd; color: #7d5a00; border-color: #ffe08a; }
+.iucn-EN  { background: #fde9d0; color: #8a3f00; border-color: #f9c78a; }
+.iucn-CR  { background: #fce0e0; color: #8b1a1a; border-color: #f5a0a0; }
+.iucn-EW  { background: #e6d0f5; color: #4a1c6e; border-color: #c39de8; }
+.iucn-EX  { background: #d0d0d0; color: #2e2e2e; border-color: #a0a0a0; }
+.iucn-DD  { background: #e8eaf0; color: #3b4460; border-color: #b8becc; }
+.iucn-NA  { background: #f5f5f5; color: #666;    border-color: #ccc; }
+.iucn-NE  { background: #f5f5f5; color: #666;    border-color: #ccc; }
 
 .species-actions {
     display: flex;

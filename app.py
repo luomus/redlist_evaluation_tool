@@ -401,6 +401,8 @@ def _project_to_dict(project):
         'name': project.name,
         'description': project.description,
         'taxon_id': project.taxon_id,
+        'iucn_category': project.iucn_category,
+        'mx_id': project.mx_id,
         'created_at': project.created_at.isoformat() if project.created_at else None,
         'updated_at': project.updated_at.isoformat() if project.updated_at else None,
     }

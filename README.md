@@ -21,6 +21,14 @@ chmod +x docker-entrypoint.sh
 docker-compose up --build
 ```
 
+On first start the entrypoint automatically:
+1. Creates all tables
+2. Loads the taxon hierarchy from `static/resources/hierarchy.json`
+3. Seeds species from `static/resources/species_and_groups.tsv` (includes IUCN 2019 categories)
+4. Generates the Finland base grid
+
+All steps are idempotent — safe to run multiple times.
+
 Access the app at http://localhost:5000/simple
 
 To stop:
@@ -31,4 +39,34 @@ docker-compose down
 To remove all data (including database):
 ```bash
 docker-compose down -v
+```
+
+## Data seeding
+
+Species and their IUCN categories are seeded automatically on startup.  
+To re-seed manually (e.g. after updating the TSV):
+
+```bash
+# locally (requires DB port 5432 mapped)
+python seed_species.py
+
+# or inside the running container
+docker compose exec web python seed_species.py
+```
+
+The seeder skips existing species and prints a summary of inserted / skipped rows.
+
+### OpenShift — adding new columns to an existing database
+
+If you have an existing deployment that predates the `iucn_category` / `mx_id` columns, run the migration first:
+
+```bash
+oc exec <db-pod> -- psql -U biotools -d biotools \
+  -f /dev/stdin < migrations/add_iucn_mx_id_to_projects.sql
+```
+
+Then trigger a re-seed:
+
+```bash
+oc exec <web-pod> -- python seed_species.py
 ```

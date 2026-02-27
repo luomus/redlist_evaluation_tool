@@ -30,10 +30,13 @@ CREATE TABLE projects (
     name VARCHAR(255) NOT NULL,
     description TEXT,
     taxon_id INTEGER NOT NULL REFERENCES taxons(id) ON DELETE CASCADE,
+    iucn_category VARCHAR(100),   -- e.g. "LC – Elinvoimaiset" from red-list TSV
+    mx_id VARCHAR(50),            -- FinBIF MX-identifier, e.g. "MX.5"
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX idx_projects_taxon ON projects(taxon_id);
+CREATE INDEX idx_projects_mx_id ON projects(mx_id);
 
 -- Observations with spatial data
 CREATE TABLE observations (
