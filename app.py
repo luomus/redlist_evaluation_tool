@@ -2,7 +2,6 @@ from flask import Flask, render_template, jsonify, request, session, redirect, u
 from livereload import Server
 from models import init_db, Session, Observation, ConvexHull, Project, GridCell, Taxon
 from sqlalchemy import Integer, text, func
-from sqlalchemy.orm import joinedload
 import json
 import csv
 import io

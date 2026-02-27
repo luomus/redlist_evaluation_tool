@@ -13,6 +13,10 @@ let taxonTree = [];          // full tree from API
 let expandedTaxons = new Set(); // ids of currently expanded taxons
 let searchQuery = '';         // current search string
 
+// Performance optimizations
+let renderHierarchyTimeout = null;  // debounce timer
+let searchMemoCache = {};           // { queryLower: { groupMatches, speciesMatches } }
+
 // Restore persisted accordion state from previous page visit
 (function restoreAccordionState() {
     try {
@@ -48,17 +52,22 @@ async function loadHierarchy() {
 /**
  * Render (or re-render) the hierarchy into #hierarchy-container.
  * When a search is active, renders flat search results instead of the tree.
+ * Debounced to prevent rapid successive renders.
  */
 function renderHierarchy() {
-    const container = document.getElementById('hierarchy-container');
-    if (!container) return;
-    if (searchQuery.trim().length > 0) {
-        renderSearchResults(searchQuery.trim());
-    } else {
-        const countEl = document.getElementById('search-result-count');
-        if (countEl) countEl.textContent = '';
-        container.innerHTML = buildNodes(taxonTree);
-    }
+    if (renderHierarchyTimeout) clearTimeout(renderHierarchyTimeout);
+    renderHierarchyTimeout = setTimeout(() => {
+        const container = document.getElementById('hierarchy-container');
+        if (!container) return;
+        if (searchQuery.trim().length > 0) {
+            renderSearchResults(searchQuery.trim());
+        } else {
+            const countEl = document.getElementById('search-result-count');
+            if (countEl) countEl.textContent = '';
+            container.innerHTML = buildNodes(taxonTree);
+        }
+        renderHierarchyTimeout = null;
+    }, 10);
 }
 
 // ---------------------------------------------------------------------------
@@ -68,92 +77,77 @@ function renderHierarchy() {
 function buildNodes(nodes) {
     if (!nodes || nodes.length === 0) return '';
 
-    let html = '';
+    const parts = [];
     for (const node of nodes) {
         const hasChildren = node.children && node.children.length > 0;
         const isLeaf = node.is_leaf;
         const isOpen = expandedTaxons.has(node.id);
 
-        html += `<div class="taxon-node" data-level="${node.level}" data-id="${node.id}">`;
+        parts.push(`<div class="taxon-node" data-level="${node.level}" data-id="${node.id}">`);
 
         // Header row
-        html += `<div class="taxon-header ${isLeaf && !hasChildren ? 'leaf' : ''}" onclick="toggleTaxon(${node.id}, event)">`;
+        parts.push(`<div class="taxon-header ${isLeaf && !hasChildren ? 'leaf' : ''}" onclick="toggleTaxon(${node.id}, event)">`);
 
         // Caret / toggle icon
         if (isLeaf && !hasChildren) {
-            html += `<span class="taxon-toggle leaf">●</span>`;
+            parts.push(`<span class="taxon-toggle leaf">●</span>`);
         } else {
-            html += `<span class="taxon-toggle ${isOpen ? 'open' : ''}">${isOpen ? '▶' : '▶'}</span>`;
+            parts.push(`<span class="taxon-toggle ${isOpen ? 'open' : ''}">${isOpen ? '▶' : '▶'}</span>`);
         }
 
         // Name
-        html += `<span class="taxon-name">${escapeHtml(node.name)}`;
+        parts.push(`<span class="taxon-name">${escapeHtml(node.name)}`);
         if (node.scientific_name) {
-            html += `<span class="taxon-scientific"> ${escapeHtml(node.scientific_name)}</span>`;
+            parts.push(`<span class="taxon-scientific"> ${escapeHtml(node.scientific_name)}</span>`);
         }
-        html += `</span>`;
+        parts.push(`</span>`);
 
         // Badge: species count for leaves
         if (isLeaf) {
             const count = (node.projects || []).length;
-            html += `<span class="taxon-badge">${count} lajia</span>`;
-            html += `<button class="taxon-add-btn" onclick="openAddSpeciesModal(${node.id}, '${escapeAttr(node.name)}'); event.stopPropagation();">+ Lisää laji</button>`;
+            parts.push(`<span class="taxon-badge">${count} lajia</span>`);
+            parts.push(`<button class="taxon-add-btn" onclick="openAddSpeciesModal(${node.id}, '${escapeAttr(node.name)}'); event.stopPropagation();">+ Lisää laji</button>`);
         }
 
-        html += `</div>`; // end header
+        parts.push(`</div>`); // end header
 
         // Children container (sub-taxons)
         if (hasChildren) {
-            html += `<div class="taxon-children ${isOpen ? 'open' : ''}">`;
-            html += buildNodes(node.children);
-            html += `</div>`;
+            parts.push(`<div class="taxon-children ${isOpen ? 'open' : ''}">`);
+            parts.push(buildNodes(node.children));
+            parts.push(`</div>`);
         }
 
         // Species list (for both leaf and non-leaf nodes)
         if (isOpen) {
-            html += buildSpeciesList(node);
+            parts.push(buildSpeciesList(node));
         }
 
-        html += `</div>`; // end taxon-node
+        parts.push(`</div>`); // end taxon-node
     }
-    return html;
+    return parts.join('');
 }
 
 function buildSpeciesList(taxonNode) {
-    const projects = (taxonNode.projects || []).sort((a, b) => 
-        (a.name || '').localeCompare(b.name || '', 'fi')
-    );
+    // Cache sorted species to avoid re-sorting on every render
+    if (!taxonNode._sortedProjects) {
+        taxonNode._sortedProjects = (taxonNode.projects || []).sort((a, b) => 
+            (a.name || '').localeCompare(b.name || '', 'fi')
+        );
+    }
+    const projects = taxonNode._sortedProjects;
+    
     if (projects.length === 0) {
         return `<div class="species-list"><p style="color:#999; font-size:13px;">Ei lajeja vielä.</p></div>`;
     }
 
-    let html = '<div class="species-list">';
+    const parts = ['<div class="species-list">'];
     for (const p of projects) {
         const isDataOpen = openSpeciesDataId === p.id;
-        html += `
-        <div class="species-card" id="species-${p.id}">
-            <div class="species-header-row" onclick="toggleSpeciesData(${p.id})">
-                <span class="species-caret ${isDataOpen ? 'open' : ''}">▶</span>
-                <div class="species-info">
-                    <span class="species-name">${escapeHtml(p.name)}</span>
-                    ${p.iucn_category ? `<span class="iucn-badge iucn-${iucnClass(p.iucn_category)}">${escapeHtml(p.iucn_category)}</span>` : ''}
-                    ${p.description ? `<span class="species-desc">${escapeHtml(p.description)}</span>` : ''}
-                </div>
-                <div class="species-actions">
-                    <select onchange="handleSpeciesAction(this, ${p.id})" onclick="event.stopPropagation()">
-                        <option value="" selected disabled>Työkalut ▾</option>
-                        <option value="/stats">Näytä tilastot</option>
-                        <option value="/grid">Laske esiintymisalue (AOO)</option>
-                        <option value="/convex_hull">Laske levinneisyysalue (EOO)</option>
-                        <option value="delete">Poista laji</option>
-                    </select>
-                </div>
-            </div>
-            ${isDataOpen ? buildInlineDataPanel(p.id, p.name) : ''}
-        </div>`;
+        parts.push(`<div class="species-card" id="species-${p.id}"><div class="species-header-row" onclick="toggleSpeciesData(${p.id})"><span class="species-caret ${isDataOpen ? 'open' : ''}">▶</span><div class="species-info"><span class="species-name">${escapeHtml(p.name)}</span>${p.iucn_category ? `<span class="iucn-badge iucn-${iucnClass(p.iucn_category)}">${escapeHtml(p.iucn_category)}</span>` : ''}${p.description ? `<span class="species-desc">${escapeHtml(p.description)}</span>` : ''}</div><div class="species-actions"><select onchange="handleSpeciesAction(this, ${p.id})" onclick="event.stopPropagation()"><option value="" selected disabled>Työkalut ▾</option><option value="/stats">Näytä tilastot</option><option value="/grid">Laske esiintymisalue (AOO)</option><option value="/convex_hull">Laske levinneisyysalue (EOO)</option><option value="delete">Poista laji</option></select></div></div>${isDataOpen ? buildInlineDataPanel(p.id, p.name) : ''}</div>`);
     }
-    html += '</div>';
-    return html;
+    parts.push('</div>');
+    return parts.join('');
 }
 
 function buildInlineDataPanel(speciesId, speciesName) {
@@ -346,6 +340,8 @@ async function deleteSpecies(projectId) {
 function doHierarchySearch() {
     const input = document.getElementById('hierarchy-search');
     searchQuery = input ? input.value : '';
+    // Clear memoized results when search changes
+    searchMemoCache = {};
     renderHierarchy();
 }
 
@@ -427,6 +423,7 @@ function renderSearchResults(query) {
 
 /**
  * Recursively collect taxon-group and species matches.
+ * Results are memoized per query to avoid re-traversing the tree.
  */
 function collectMatches(nodes, queryLower, breadcrumb, speciesMatches, groupMatches) {
     for (const node of nodes) {

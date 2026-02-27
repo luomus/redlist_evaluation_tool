@@ -92,18 +92,6 @@ class GridCell(Base):
 
     project = relationship('Project', back_populates='grid_cells')
 
-
-class BaseGridCell(Base):
-    __tablename__ = 'base_grid_cells'
-
-    id = Column(Integer, primary_key=True)
-    grid_x = Column(Integer)
-    grid_y = Column(Integer)
-    geom_3067 = Column(Geometry(geometry_type='POLYGON', srid=3067))
-    geom_4326 = Column(Geometry(geometry_type='POLYGON', srid=4326))
-    created_at = Column(DateTime, default=datetime.utcnow)
-
-
 # ---------------------------------------------------------------------------
 # Database connection
 # ---------------------------------------------------------------------------
