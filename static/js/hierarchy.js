@@ -120,7 +120,9 @@ function buildNodes(nodes) {
 }
 
 function buildSpeciesList(taxonNode) {
-    const projects = taxonNode.projects || [];
+    const projects = (taxonNode.projects || []).sort((a, b) => 
+        (a.name || '').localeCompare(b.name || '', 'fi')
+    );
     if (projects.length === 0) {
         return `<div class="species-list"><p style="color:#999; font-size:13px;">Ei lajeja vielä.</p></div>`;
     }
