@@ -12,8 +12,14 @@ if (!datasetId) {
 // Create shared map and helpers
 const { map, geometryLayer, stats, updateStatus } = createSharedMap();
 
-// Layer for convex hull
-let hullLayer = null;
+// Separate Leaflet layers per mode
+const hullLayers = { max: null, min: null };
+
+// Visual style per mode
+const HULL_STYLES = {
+    max: { color: '#ff7800', weight: 2, opacity: 0.9, fillColor: '#ff7800', fillOpacity: 0.12 },
+    min: { color: '#3388ff', weight: 2, opacity: 0.9, fillColor: '#3388ff', fillOpacity: 0.12, dashArray: '6 4' }
+};
 
 // Store all features (geometry + properties)
 const allFeatures = [];
@@ -26,125 +32,97 @@ function formatIsoTimestamp(iso) {
     return d.toLocaleString();
 }
 
-// Fetch and display convex hull from the backend
-async function fetchAndDisplayConvexHull(fitMap = true) {
+// Fetch and display one hull mode. Returns the response data or null.
+async function fetchAndDisplayHull(mode) {
+    const areaEl = document.getElementById(mode === 'max' ? 'areaMax' : 'areaMin');
     try {
-        const response = await fetch(`/api/observations/${datasetId}/convex_hull`);
-        
+        const response = await fetch(`/api/observations/${datasetId}/convex_hull?mode=${mode}`);
         if (!response.ok) {
             if (response.status === 404) {
-                // Convex hull not calculated yet
-                document.getElementById('areaValue').textContent = 'Ei laskettu';
-                document.getElementById('calculated_at').textContent = 'Ei laskettu';
-                console.log('Convex hull -aluetta ei ole vielä laskettu. Käytä painiketta "Laske uudelleen".');
-                return;
+                if (areaEl) areaEl.textContent = 'Ei laskettu';
+                return null;
             }
             throw new Error(`HTTP error! status: ${response.status}`);
         }
-        
         const data = await response.json();
-        
         if (!data.success || !data.geometry) {
-            document.getElementById('areaValue').textContent = 'N/A';
-            document.getElementById('calculated_at').textContent = '-';
-            return;
+            if (areaEl) areaEl.textContent = 'N/A';
+            return null;
         }
-        
-        // Remove existing hull layer
-        if (hullLayer) {
-            map.removeLayer(hullLayer);
-        }
-        
-        // Coordinates are in WGS84 (lon, lat) so just swap to Leaflet's [lat, lon]
-        const coords = data.geometry.coordinates[0]; // Polygon outer ring
-        const latLngs = coords.map(coord => [coord[1], coord[0]]);
-        
-        hullLayer = L.polygon(latLngs, {
-            color: '#ff7800',
-            weight: 2,
-            opacity: 0.8,
-            fillColor: '#ff7800',
-            fillOpacity: 0.2
-        }).addTo(map);
-        
-        // Optionally fit map to hull bounds
-        if (fitMap) {
-            try {
-                const bounds = hullLayer.getBounds();
-                if (bounds && bounds.isValid()) map.fitBounds(bounds, { padding: [50, 50] });
-            } catch (e) {
-                // ignore
-            }
-        }
-        
-        // Ensure the shared data layer is above the hull so features remain clickable
-        try {
-            if (window.sharedGeometryLayer && typeof window.sharedGeometryLayer.bringToFront === 'function') {
-                window.sharedGeometryLayer.bringToFront();
-            }
-        } catch (e) {
-            // ignore
-        }
-        
-        // Display area and calculation timestamp
-        document.getElementById('areaValue').textContent = `${data.area_km2.toFixed(2)} km²`;
-        document.getElementById('calculated_at').textContent = formatIsoTimestamp(data.calculated_at);
-        
+        // Remove old layer for this mode
+        if (hullLayers[mode]) map.removeLayer(hullLayers[mode]);
+        const coords = data.geometry.coordinates[0];
+        const latLngs = coords.map(c => [c[1], c[0]]);
+        hullLayers[mode] = L.polygon(latLngs, HULL_STYLES[mode]).addTo(map);
+        hullLayers[mode].bindTooltip(
+            mode === 'max' ? `Laaja EOO: ${data.area_km2.toFixed(2)} km²`
+                           : `Minimaalinen EOO: ${data.area_km2.toFixed(2)} km²`
+        );
+        if (areaEl) areaEl.textContent = `${data.area_km2.toFixed(2)} km²`;
+        return data;
     } catch (error) {
-        console.error('Error fetching convex hull:', error);
-        document.getElementById('areaValue').textContent = 'Virhe';
-        document.getElementById('calculated_at').textContent = 'Virhe';
+        console.error(`Error fetching convex hull (${mode}):`, error);
+        if (areaEl) areaEl.textContent = 'Virhe';
+        return null;
     }
 }
 
-// Calculate convex hull on the server
-async function calculateConvexHull(fitMap = true) {
+// Fetch and display both hulls in parallel, optionally fit map to the max hull
+async function fetchAndDisplayConvexHull(fitMap = true) {
+    const [maxData] = await Promise.all([
+        fetchAndDisplayHull('max'),
+        fetchAndDisplayHull('min')
+    ]);
+    // Fit map to the wider (max) hull
+    if (fitMap && hullLayers.max) {
+        try {
+            const bounds = hullLayers.max.getBounds();
+            if (bounds && bounds.isValid()) map.fitBounds(bounds, { padding: [50, 50] });
+        } catch (e) { /* ignore */ }
+    }
+    // Update timestamp from max hull result
+    const calEl = document.getElementById('calculated_at');
+    if (calEl && maxData && maxData.calculated_at) {
+        calEl.textContent = formatIsoTimestamp(maxData.calculated_at);
+    }
+    // Bring observation layer to front so features stay clickable
     try {
-        updateStatus('Levinneisyysalueen laskenta käynnissä...');
-        document.getElementById('areaValue').textContent = 'Lasketaan...';
-        document.getElementById('calculated_at').textContent = 'Lasketaan...';
-        // Disable recalc button while operation runs
-        let recalcBtn = document.getElementById('recalcBtn');
-        if (recalcBtn) {
-            recalcBtn.disabled = true;
-            recalcBtn.style.opacity = '0.6';
-            recalcBtn.style.cursor = 'not-allowed';
+        if (window.sharedGeometryLayer && typeof window.sharedGeometryLayer.bringToFront === 'function') {
+            window.sharedGeometryLayer.bringToFront();
         }
+    } catch (e) { /* ignore */ }
+}
 
-        const response = await fetch(`/api/observations/${datasetId}/convex_hull`, {
+// Calculate both hull modes on the server in a single request, then display
+async function calculateConvexHull(fitMap = true) {
+    updateStatus('Levinneisyysalueen laskenta käynnissä...');
+    document.getElementById('areaMax').textContent = 'Lasketaan...';
+    document.getElementById('areaMin').textContent = 'Lasketaan...';
+    document.getElementById('calculated_at').textContent = 'Lasketaan...';
+    const recalcBtn = document.getElementById('recalcBtn');
+    if (recalcBtn) {
+        recalcBtn.disabled = true;
+        recalcBtn.style.opacity = '0.6';
+        recalcBtn.style.cursor = 'not-allowed';
+    }
+    try {
+        // Single POST — server computes both modes in one SQL pass
+        const res = await fetch(`/api/observations/${datasetId}/convex_hull`, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            }
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({})
         });
-        
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
-        const data = await response.json();
-        
-        if (!data.success) {
-            throw new Error(data.error || 'Failed to calculate convex hull');
-        }
-        
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error || 'Calculation failed');
         updateStatus('Levinneisyysalueen laskenta onnistui');
-        
-        // Fetch and display the newly calculated hull
         await fetchAndDisplayConvexHull(fitMap);
-
-        // Re-enable recalc button
-        if (recalcBtn) {
-            recalcBtn.disabled = false;
-            recalcBtn.style.opacity = '';
-            recalcBtn.style.cursor = '';
-        }
-        
     } catch (error) {
         console.error('Error calculating convex hull:', error);
         updateStatus(`Virhe: ${error.message}`);
-        document.getElementById('areaValue').textContent = 'Virhe';
-        document.getElementById('calculated_at').textContent = 'Virhe';
+        document.getElementById('areaMax').textContent = 'Virhe';
+        document.getElementById('areaMin').textContent = 'Virhe';
+    } finally {
         if (recalcBtn) {
             recalcBtn.disabled = false;
             recalcBtn.style.opacity = '';

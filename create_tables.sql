@@ -55,13 +55,15 @@ CREATE INDEX idx_observations_dataset ON observations(dataset_id);
 CREATE INDEX idx_observations_excluded ON observations(excluded);
 CREATE INDEX idx_observations_created ON observations(created_at);
 
--- Convex hulls (EOO)
+-- Convex hulls (EOO) with support for multiple modes (max/min) per project
 CREATE TABLE convex_hulls (
     id SERIAL PRIMARY KEY,
-    project_id INTEGER NOT NULL UNIQUE REFERENCES projects(id) ON DELETE CASCADE,
+    project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    mode VARCHAR(10) NOT NULL DEFAULT 'max',  -- 'max' for full-geometry hull, 'min' for representative-point hull
     geometry GEOMETRY(POLYGON, 4326),
     area_km2 DOUBLE PRECISION,
-    calculated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    calculated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT ux_convex_hulls_project_mode UNIQUE (project_id, mode)
 );
 
 -- Grid cells (AOO)

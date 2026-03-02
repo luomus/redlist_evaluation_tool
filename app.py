@@ -1478,17 +1478,22 @@ def get_dataset_stats(project_id):
 @app.route("/api/observations/<int:project_id>/convex_hull", methods=["GET"])
 @login_required
 def get_convex_hull(project_id):
-    """Get the pre-calculated convex hull for a project"""
+    """Get the pre-calculated convex hull for a project.  Supports mode=\"max\" or \"min\" query parameter."""
     try:
         session = Session()
+        mode = request.args.get('mode', 'max')
+        if mode not in ('max', 'min'):
+            session.close()
+            return jsonify({"success": False, "error": "Invalid mode"}), 400
         
-        convex_hull = session.query(ConvexHull).filter_by(project_id=project_id).first()
+        convex_hull = session.query(ConvexHull).filter_by(project_id=project_id, mode=mode).first()
         
         if not convex_hull:
             session.close()
             return jsonify({
                 "success": False, 
-                "error": "Convex hull not calculated yet. Click 'Re-calculate Hull' to generate it."
+                "error": "Convex hull not calculated yet. Click 'Re-calculate Hull' to generate it.",
+                "mode": mode
             }), 404
         
         # Convert geometry to GeoJSON
@@ -1501,6 +1506,7 @@ def get_convex_hull(project_id):
         return jsonify({
             "success": True,
             "project_id": project_id,
+            "mode": mode,
             "geometry": geometry_geojson,
             "area_km2": convex_hull.area_km2,
             "calculated_at": convex_hull.calculated_at.isoformat() if convex_hull.calculated_at else None
@@ -1514,86 +1520,99 @@ def get_convex_hull(project_id):
 @app.route("/api/observations/<int:project_id>/convex_hull", methods=["POST"])
 @login_required
 def calculate_convex_hull(project_id):
-    """Calculate convex hull for a project using PostGIS and store in database"""
+    """Calculate both max and min convex hulls for a project in a single SQL pass."""
     try:
         session = Session()
-        
+
         # Check if project exists
         project_count = session.query(Observation).filter_by(project_id=project_id).count()
         if project_count == 0:
             session.close()
             return jsonify({"success": False, "error": "Project not found or has no observations"}), 404
-        
-        # Use PostGIS to calculate convex hull of all non-excluded geometries
-        # ST_ConvexHull works on collections, so we use ST_Collect to aggregate all geometries
-        convex_hull_query = text("""
+
+        # Single query that scans observations once and produces both hulls.
+        # max hull  – full geometries fed to ST_ConvexHull
+        # min hull  – each geometry collapsed to the point on its surface nearest
+        #             to the overall distribution centre (ST_ClosestPoint), so large
+        #             uncertainty polygons only pull the hull as far inward as possible
+        combined_query = text("""
             WITH non_excluded AS (
-                SELECT geometry
+                SELECT geometry AS geom
                 FROM observations
                 WHERE project_id = :project_id
                   AND geometry IS NOT NULL
                   AND (excluded IS NULL OR excluded = FALSE)
             ),
-            collected AS (
-                SELECT ST_Collect(geometry) as geom_collection
-                FROM non_excluded
+
+            -- ── max hull (full geometries) ────────────────────────────────────
+            max_collection AS (
+                SELECT ST_Collect(geom) AS gc FROM non_excluded
+            ),
+            max_hull AS (
+                SELECT ST_ConvexHull(gc) AS hull FROM max_collection WHERE gc IS NOT NULL
+            ),
+
+            -- ── min hull (snap each geometry to closest point to centre) ────────
+            distribution_centre AS (
+                SELECT ST_Centroid(ST_Collect(ST_Centroid(geom))) AS centre FROM non_excluded
+            ),
+            min_collection AS (
+                SELECT ST_Collect(ST_ClosestPoint(n.geom, d.centre)) AS gc
+                FROM non_excluded n, distribution_centre d
+            ),
+            min_hull AS (
+                SELECT ST_ConvexHull(gc) AS hull FROM min_collection WHERE gc IS NOT NULL
             )
-            SELECT 
-                ST_ConvexHull(geom_collection) as hull_geom,
-                ST_Area(ST_Transform(ST_ConvexHull(geom_collection), 3067)) / 1000000.0 as area_km2
-            FROM collected
-            WHERE geom_collection IS NOT NULL
+
+            -- return both hulls + areas in one row
+            SELECT
+                mx.hull                                                         AS max_geom,
+                ST_Area(ST_Transform(mx.hull, 3067)) / 1000000.0               AS max_area_km2,
+                mn.hull                                                         AS min_geom,
+                ST_Area(ST_Transform(mn.hull, 3067)) / 1000000.0               AS min_area_km2
+            FROM max_hull mx, min_hull mn
         """)
-        
-        result = session.execute(convex_hull_query, {'project_id': project_id}).fetchone()
-        
+
+        result = session.execute(combined_query, {'project_id': project_id}).fetchone()
+
         if not result or not result[0]:
             session.close()
             return jsonify({
-                "success": False, 
+                "success": False,
                 "error": "Could not calculate convex hull. Project may have insufficient non-excluded geometries."
             }), 400
-        
-        hull_wkb = result[0]
-        area_km2 = float(result[1]) if result[1] else 0.0
 
+        max_geom, max_area, min_geom, min_area = result[0], float(result[1] or 0), result[2], float(result[3] or 0)
+        now = datetime.utcnow()
 
-        # Check if convex hull already exists for this project
-        existing_hull = session.query(ConvexHull).filter_by(project_id=project_id).first()
-
-        if existing_hull:
-            # Update existing via ORM; if we need to set dataset_id (fallback) do a direct UPDATE
-            existing_hull.geometry = hull_wkb
-            existing_hull.area_km2 = area_km2
-            existing_hull.calculated_at = datetime.utcnow()
-        else:
-            # Create new via ORM
-            new_hull = ConvexHull(
-                project_id=project_id,
-                geometry=hull_wkb,
-                area_km2=area_km2,
-                calculated_at=datetime.utcnow()
-            )
-            session.add(new_hull)
+        # Upsert both mode records in one transaction
+        for mode, hull_wkb, area_km2 in [('max', max_geom, max_area), ('min', min_geom, min_area)]:
+            existing = session.query(ConvexHull).filter_by(project_id=project_id, mode=mode).first()
+            if existing:
+                existing.geometry = hull_wkb
+                existing.area_km2 = area_km2
+                existing.calculated_at = now
+            else:
+                session.add(ConvexHull(
+                    project_id=project_id,
+                    mode=mode,
+                    geometry=hull_wkb,
+                    area_km2=area_km2,
+                    calculated_at=now
+                ))
 
         session.commit()
-        
-        # Get the geometry as GeoJSON for response
-        convex_hull = session.query(ConvexHull).filter_by(project_id=project_id).first()
-        geometry_geojson = None
-        if convex_hull and convex_hull.geometry:
-            geometry_geojson = json.loads(session.scalar(convex_hull.geometry.ST_AsGeoJSON()))
-        
+
         session.close()
-        
+
         return jsonify({
             "success": True,
             "project_id": project_id,
-            "geometry": geometry_geojson,
-            "area_km2": area_km2,
-            "calculated_at": datetime.utcnow().isoformat()
+            "calculated_at": now.isoformat(),
+            "max": {"area_km2": max_area},
+            "min": {"area_km2": min_area}
         })
-        
+
     except Exception as e:
         import traceback
         traceback.print_exc()

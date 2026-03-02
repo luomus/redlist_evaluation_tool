@@ -19,14 +19,22 @@
         <div class="info-panel">
             <h3>Aineiston tiedot</h3>
             <div class="info-item">
-                <span class="info-label">Levinneisyysalue:</span>
-                <span class="info-value" id="areaValue">-</span>
-            </div>     
+                <span class="info-label" style="color:#ff7800;">&#9632;</span>
+                <span class="info-label">Laaja EOO:</span>
+                <span class="eoo-info" data-tip="Laaja levinneisyysalue (EOO). Lasketaan niin, että sisältää kaikkien geometrioiden kaikki pisteet. Antaa suurimman mahdollisen levinneisyysalueen arvion.">?</span>
+                <span class="info-value" id="areaMax">-</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label" style="color:#3388ff;">&#9632;</span>
+                <span class="info-label">Minimaalinen EOO:</span>
+                <span class="eoo-info" data-tip="Minimaalinen levinneisyysalue (EOO). Lasketaan niin, että sisällytetään vain aluemuotoisten havaintojen lähin nurkkaus. Antaa pienimmän uskottavan levinneisyysalueen arvion.">?</span>
+                <span class="info-value" id="areaMin">-</span>
+            </div>
             <div class="info-item">           
                 <span class="info-label">Laskettu:</span>
                 <span class="info-value" id="calculated_at">-</span>
             </div>
-            <button id="recalcBtn" onclick="window.createConvexHull(false)" style="margin-top: 10px; padding: 8px 16px; background: #3388ff; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">↻ Laske levinneisyysalue</button>
+            <button id="recalcBtn" onclick="window.createConvexHull(false)" style="margin-top: 10px; padding: 8px 16px; background: #3388ff; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">&#8635; Laske levinneisyysalueet</button>
         </div>
 
         <div id="status" class="stats">Ladataan aineistoa…</div>

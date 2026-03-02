@@ -49,7 +49,8 @@ class Project(Base):
     taxon = relationship('Taxon', back_populates='projects')
     observations = relationship('Observation', back_populates='project', cascade='all, delete-orphan')
     grid_cells = relationship('GridCell', back_populates='project', cascade='all, delete-orphan')
-    convex_hull = relationship('ConvexHull', back_populates='project', uselist=False, cascade='all, delete-orphan')
+    # allow multiple hull records (max/min)
+    convex_hulls = relationship('ConvexHull', back_populates='project', cascade='all, delete-orphan')
 
 
 class Observation(Base):
@@ -72,12 +73,13 @@ class ConvexHull(Base):
     __tablename__ = 'convex_hulls'
 
     id = Column(Integer, primary_key=True)
-    project_id = Column(Integer, ForeignKey('projects.id', ondelete='CASCADE'), nullable=False, unique=True, index=True)
+    project_id = Column(Integer, ForeignKey('projects.id', ondelete='CASCADE'), nullable=False, index=True)
+    mode = Column(String(10), nullable=False, default='max', server_default='max', index=True)
     geometry = Column(Geometry(geometry_type='POLYGON', srid=4326))
     area_km2 = Column(Float)
     calculated_at = Column(DateTime, default=datetime.utcnow, index=True)
 
-    project = relationship('Project', back_populates='convex_hull')
+    project = relationship('Project', back_populates='convex_hulls')
 
 
 class GridCell(Base):
