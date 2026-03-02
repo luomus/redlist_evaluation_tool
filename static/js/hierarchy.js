@@ -90,11 +90,12 @@ async function loadHierarchy() {
         const cachedData = getCachedHierarchy();
         if (cachedData) {
             taxonTree = cachedData.taxons || [];
-            renderHierarchy();
-            // Restore open datasets panel from previous visit
-            if (openSpeciesDataId) {
-                loadSpeciesDatasets(openSpeciesDataId);
-            }
+            renderHierarchy(() => {
+                // Restore open datasets panel from previous visit after rendering
+                if (openSpeciesDataId) {
+                    loadSpeciesDatasets(openSpeciesDataId);
+                }
+            });
         } else {
             // Show loading state if no cache
             document.getElementById('hierarchy-container').innerHTML = '<p style="color:#7f8c8d;">Ladataan…</p>';
@@ -110,7 +111,12 @@ async function loadHierarchy() {
         
         // Only re-render if data changed (to avoid flickering)
         if (!cachedData || JSON.stringify(cachedData) !== JSON.stringify(data)) {
-            renderHierarchy();
+            renderHierarchy(() => {
+                // Reload datasets if a panel was open and data changed
+                if (openSpeciesDataId) {
+                    loadSpeciesDatasets(openSpeciesDataId);
+                }
+            });
         }
         
     } catch (err) {
@@ -132,8 +138,9 @@ async function loadHierarchy() {
  * Render (or re-render) the hierarchy into #hierarchy-container.
  * When a search is active, renders flat search results instead of the tree.
  * Debounced to prevent rapid successive renders.
+ * @param {Function} onRenderComplete - Optional callback called after rendering completes
  */
-function renderHierarchy() {
+function renderHierarchy(onRenderComplete) {
     if (renderHierarchyTimeout) clearTimeout(renderHierarchyTimeout);
     renderHierarchyTimeout = setTimeout(() => {
         const container = document.getElementById('hierarchy-container');
@@ -146,6 +153,10 @@ function renderHierarchy() {
             container.innerHTML = buildNodes(taxonTree);
         }
         renderHierarchyTimeout = null;
+        // Call the callback after rendering is complete
+        if (onRenderComplete && typeof onRenderComplete === 'function') {
+            onRenderComplete();
+        }
     }, 10);
 }
 
@@ -304,11 +315,13 @@ function toggleSpeciesData(speciesId) {
         openSpeciesDataId = speciesId;
     }
     try { localStorage.setItem('openSpeciesDataId', openSpeciesDataId ?? ''); } catch (e) { /* ignore */ }
-    renderHierarchy();
-    // After render, load datasets if panel is now open
-    if (openSpeciesDataId === speciesId) {
-        loadSpeciesDatasets(speciesId);
-    }
+    
+    // Render hierarchy and load datasets after rendering if panel is now open
+    renderHierarchy(() => {
+        if (openSpeciesDataId === speciesId) {
+            loadSpeciesDatasets(speciesId);
+        }
+    });
 }
 
 function handleSpeciesAction(selectElem, projectId) {

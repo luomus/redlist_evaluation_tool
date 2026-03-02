@@ -69,7 +69,7 @@ function displayStatistics(statsData) {
     
     statsContentDiv.innerHTML = `
         <div class="info-note">
-            <p><strong>Huomio:</strong> Tilastot voidaan laskea myös laji.fi-palvelusta ladatuille tiedoille.</p>
+            <p><strong>Huomio:</strong> Tilastot voidaan laskea vain laji.fi-palvelusta ladatuille tiedoille tai vastaavasti muotoilluille tiedostoille.</p>
         </div>
         
         <div class="stats-grid">
