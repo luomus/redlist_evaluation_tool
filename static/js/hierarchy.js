@@ -234,13 +234,14 @@ function buildSpeciesList(taxonNode) {
     const parts = ['<div class="species-list">'];
     for (const p of projects) {
         const isDataOpen = openSpeciesDataId === p.id;
-        parts.push(`<div class="species-card" id="species-${p.id}"><div class="species-header-row" onclick="toggleSpeciesData(${p.id})"><span class="species-caret ${isDataOpen ? 'open' : ''}">▶</span><div class="species-info"><span class="species-name">${escapeHtml(p.name)}</span>${p.iucn_category ? `<span class="iucn-badge iucn-${iucnClass(p.iucn_category)}">${escapeHtml(p.iucn_category)}</span>` : ''}${p.description ? `<span class="species-desc">${escapeHtml(p.description)}</span>` : ''}</div><div class="species-actions"><select onchange="handleSpeciesAction(this, ${p.id})" onclick="event.stopPropagation()"><option value="" selected disabled>Työkalut ▾</option><option value="/stats">Näytä tilastot</option><option value="/grid">Laske esiintymisalue (AOO)</option><option value="/convex_hull">Laske levinneisyysalue (EOO)</option><option value="delete">Poista laji</option></select></div></div>${isDataOpen ? buildInlineDataPanel(p.id, p.name) : ''}</div>`);
+        parts.push(`<div class="species-card" id="species-${p.id}"><div class="species-header-row" onclick="toggleSpeciesData(${p.id})"><span class="species-caret ${isDataOpen ? 'open' : ''}">▶</span><div class="species-info"><span class="species-name">${escapeHtml(p.name)}</span>${p.iucn_category ? `<span class="iucn-badge iucn-${iucnClass(p.iucn_category)}">${escapeHtml(p.iucn_category)}</span>` : ''}${p.description ? `<span class="species-desc">${escapeHtml(p.description)}</span>` : ''}</div><div class="species-actions"><select onchange="handleSpeciesAction(this, ${p.id})" onclick="event.stopPropagation()"><option value="" selected disabled>Työkalut ▾</option><option value="/stats">Näytä tilastot</option><option value="/grid">Laske esiintymisalue (AOO)</option><option value="/convex_hull">Laske levinneisyysalue (EOO)</option><option value="delete">Poista laji</option></select></div></div>${isDataOpen ? buildInlineDataPanel(p.id, p.name, p.mx_id) : ''}</div>`);
     }
     parts.push('</div>');
     return parts.join('');
 }
 
-function buildInlineDataPanel(speciesId, speciesName) {
+function buildInlineDataPanel(speciesId, speciesName, mxId) {
+    const defaultUrl = mxId ? `https://laji.fi/observation/list?target=${encodeURIComponent(mxId)}` : '';
     return `
     <div class="species-detail-panel open" id="data-panel-${speciesId}">
         <div id="datasets-${speciesId}">Ladataan…</div>
@@ -251,9 +252,10 @@ function buildInlineDataPanel(speciesId, speciesName) {
                 <span class="info-tooltip" data-tip="Avaa laji.fi-sivusto ja rajaa havainnot haluamallasi tavalla (esim. laji, alue, vuosi). Kopioi selaimen osoitepalkin URL ja liitä se tähän kenttään. Sovellus hakee rajaukseesi sopivat havainnot automaattisesti.">i</span>
             </label>
             <div class="input-row">
-                <input type="text" id="url-${speciesId}" placeholder="https://laji.fi/observation/list?...">
+                <input type="text" id="url-${speciesId}" placeholder="https://laji.fi/observation/list?..." value="${escapeAttr(defaultUrl)}">
                 <button onclick="fetchDataForSpecies(${speciesId})" class="btn-fetch">Hae tiedot</button>
             </div>
+            ${defaultUrl ? `<p style="margin:4px 0 0; font-size:12px; color:#856404; background:#fff3cd; border:1px solid #ffc107; border-radius:4px; padding:4px 8px;">Yllä oleva oletus-URL sisältää havainnot ilman suodattimia. Voit lisätä rajauksia laji.fi-sivustolla ja sitten kopioida URL:n ylle.</p>` : ''}
         </div>
 
         <div style="margin-top:12px; padding:8px; background:#fafafa; border-radius:4px;">
@@ -500,7 +502,7 @@ function renderSearchResults(query) {
                     <button class="btn-small" onclick="navigateToTaxon(${taxonId}); event.stopPropagation()">Näytä ryhmässä</button>
                 </div>
             </div>
-            ${isDataOpen ? buildInlineDataPanel(p.id, p.name) : ''}
+            ${isDataOpen ? buildInlineDataPanel(p.id, p.name, p.mx_id) : ''}
         </div>`;
     }
 
