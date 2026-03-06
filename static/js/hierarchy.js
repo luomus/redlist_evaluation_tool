@@ -274,10 +274,6 @@ function buildInlineDataPanel(speciesId, speciesName) {
         </div>
 
         <div id="save-section-${speciesId}" style="display:none; margin-top:15px;">
-            <div class="input-group">
-                <label>Aineiston nimi (valinnainen):</label>
-                <input type="text" id="dataset-name-${speciesId}" maxlength="256">
-            </div>
             <button onclick="saveDataForSpecies(${speciesId})" class="btn-save">Tallenna</button>
         </div>
     </div>`;

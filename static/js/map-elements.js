@@ -1,6 +1,44 @@
 /* global L */
 
 
+// Module-level geometry utilities shared across functions
+
+// Ray-casting point-in-polygon test (latlng objects {lat, lng})
+function pointInPolygon(pt, vs) {
+    const x = pt.lng, y = pt.lat;
+    let inside = false;
+    for (let i = 0, j = vs.length - 1; i < vs.length; j = i++) {
+        const xi = vs[i].lng, yi = vs[i].lat;
+        const xj = vs[j].lng, yj = vs[j].lat;
+        const intersect = ((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi + 0.0) + xi);
+        if (intersect) inside = !inside;
+    }
+    return inside;
+}
+
+// Flatten nested latlngs to a flat array of latlng objects
+function flattenLatLngs(arr) {
+    const out = [];
+    (function rec(a) {
+        if (!a) return;
+        if (Array.isArray(a)) {
+            a.forEach(v => rec(v));
+        } else if (a.lat !== undefined && a.lng !== undefined) {
+            out.push(a);
+        }
+    })(arr);
+    return out;
+}
+
+// Pixel distance from point p to segment [a, b] (Leaflet Point objects)
+function distToSegment(p, a, b) {
+    const dx = b.x - a.x, dy = b.y - a.y;
+    if (dx === 0 && dy === 0) return p.distanceTo(a);
+    const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / (dx * dx + dy * dy)));
+    return p.distanceTo(L.point(a.x + t * dx, a.y + t * dy));
+}
+
+
 // Polygon selector and bulk enable/disable controls
 // Adds a small UI control to start polygon selection, finish/cancel drawing
 // and buttons to enable/disable all features at once. Does not require
@@ -153,34 +191,6 @@ function setupPolygonSelector(map, geometryLayer) {
         try { map.dragging.disable(); if (map.doubleClickZoom) map.doubleClickZoom.disable(); } catch (e) { /* ignore */ }
     });
 
-    // Utility: ray-casting point-in-polygon test (latlng objects {lat, lng})
-    function pointInPolygon(pt, vs) {
-        const x = pt.lng, y = pt.lat;
-        let inside = false;
-        for (let i = 0, j = vs.length - 1; i < vs.length; j = i++) {
-            const xi = vs[i].lng, yi = vs[i].lat;
-            const xj = vs[j].lng, yj = vs[j].lat;
-
-            const intersect = ((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi + 0.0) + xi);
-            if (intersect) inside = !inside;
-        }
-        return inside;
-    }
-
-    // Flatten nested latlngs to an array of latlngs
-    function flattenLatLngs(arr) {
-        const out = [];
-        (function rec(a) {
-            if (!a) return;
-            if (Array.isArray(a)) {
-                a.forEach(v => rec(v));
-            } else if (a.lat !== undefined && a.lng !== undefined) {
-                out.push(a);
-            }
-        })(arr);
-        return out;
-    }
-
     function getLayersInSelection() {
         if (!selectionPolygon) return [];
         const polyPoints = selectionPolygon.getLatLngs()[0];
@@ -325,11 +335,19 @@ function createPopupContent(properties, opts) {
     return content;
 }
 
+// Returns appropriate popup opts based on the layer's geometry type
+function getPopupOpts(layer) {
+    if (layer instanceof L.CircleMarker) return { showMoveBtn: true };
+    if (layer instanceof L.Polygon) return { showConvertBtn: true };
+    return {};
+}
+
 // Create popup content for multiple overlapping features
 function createMultiFeaturePopup(features) {
     let content = '<div class="multi-feature-popup">';
     content += `<div class="popup-header"><strong>${features.length} havaintoa tässä sijainnissa</strong></div>`;
-    
+    content += `<div class="multi-feature-actions"><button onclick="window.applyMultiFeatureExclude(true)">Poista kaikki analyysista</button> <button onclick="window.applyMultiFeatureExclude(false)">Sisällytä kaikki analyysiin</button></div>`;
+
     features.forEach((layer, index) => {
         const props = layer.feature.properties || {};
         const scientificName = props['unit.linkings.taxon.scientificName'] || 'Tuntematon laji';
@@ -348,7 +366,7 @@ function createMultiFeaturePopup(features) {
         content += `</div>`;
         
         content += `<div class="feature-details" id="feature-details-${index}" style="display:none;">`;
-        content += createPopupContent(props, { showMoveBtn: true }).replace('<div class="popup-content">', '').replace('</div>', '');
+        content += createPopupContent(props, getPopupOpts(layer)).replace('<div class="popup-content">', '').replace('</div>', '');
         content += `</div>`;
         
         content += `</div>`;
@@ -364,37 +382,43 @@ function createMultiFeaturePopup(features) {
 
 // Setup handler for detecting and displaying multiple overlapping features
 function setupMultiFeatureHandler(map, geometryLayer) {
-    // Handle clicks on the geometry layer - only for CircleMarkers (points)
-    geometryLayer.on('click', function(e) {
-        const clickedLayer = e.layer;
-        
-        // Only handle CircleMarkers (points) - let polygons/lines use default popup
-        if (!(clickedLayer instanceof L.CircleMarker)) {
-            return; // Let default popup handling work for non-point features
-        }
-        
-        const clickLatLng = e.latlng;
-        
-        // Find all point features at or very near the click location
-        const nearbyFeatures = [];
-        const pixelRadius = 10; // pixels
-        const point = map.latLngToContainerPoint(clickLatLng);
-        
-        geometryLayer.eachLayer(function(layer) {
-            // Only check CircleMarkers (points)
-            if (!(layer instanceof L.CircleMarker)) {
-                return;
+    // Returns true if the click point hits the given layer
+    function layerContainsClick(layer, clickLatLng, pixelRadius) {
+        try {
+            if (layer instanceof L.CircleMarker) {
+                const clickPoint = map.latLngToContainerPoint(clickLatLng);
+                const layerPoint = map.latLngToContainerPoint(layer.getLatLng());
+                return clickPoint.distanceTo(layerPoint) < pixelRadius;
             }
-            
-            const layerPoint = map.latLngToContainerPoint(layer.getLatLng());
-            const distance = point.distanceTo(layerPoint);
-            
-            if (distance < pixelRadius) {
+            // Check L.Polygon before L.Polyline because Polygon extends Polyline
+            if (layer instanceof L.Polygon) {
+                const rings = layer.getLatLngs();
+                const outerRing = flattenLatLngs(rings.length ? rings[0] : rings);
+                return outerRing.length > 0 && pointInPolygon(clickLatLng, outerRing);
+            }
+            if (layer instanceof L.Polyline) {
+                const clickPoint = map.latLngToContainerPoint(clickLatLng);
+                const pts = flattenLatLngs(layer.getLatLngs()).map(ll => map.latLngToContainerPoint(ll));
+                for (let i = 0; i < pts.length - 1; i++) {
+                    if (distToSegment(clickPoint, pts[i], pts[i + 1]) < pixelRadius) return true;
+                }
+            }
+        } catch (e) { /* ignore */ }
+        return false;
+    }
+
+    geometryLayer.on('click', function(e) {
+        const clickLatLng = e.latlng;
+        const pixelRadius = 10; // pixels
+
+        const nearbyFeatures = [];
+        geometryLayer.eachLayer(function(layer) {
+            if (!layer.feature) return;
+            if (layerContainsClick(layer, clickLatLng, pixelRadius)) {
                 nearbyFeatures.push(layer);
             }
         });
-        
-        // Create and show appropriate popup
+
         if (nearbyFeatures.length > 1) {
             const popupContent = createMultiFeaturePopup(nearbyFeatures);
             L.popup()
@@ -402,16 +426,39 @@ function setupMultiFeatureHandler(map, geometryLayer) {
                 .setContent(popupContent)
                 .openOn(map);
         } else if (nearbyFeatures.length === 1) {
-            const popupContent = createPopupContent(nearbyFeatures[0].feature.properties || {}, { showMoveBtn: true });
+            const layer = nearbyFeatures[0];
+            const popupContent = createPopupContent(layer.feature.properties || {}, getPopupOpts(layer));
             L.popup()
                 .setLatLng(clickLatLng)
                 .setContent(popupContent)
                 .openOn(map);
         }
-        
+
         L.DomEvent.stopPropagation(e);
     });
 }
+
+// Bulk exclude/include all features currently shown in the multi-feature popup
+window.applyMultiFeatureExclude = async function(exclude) {
+    const features = window._currentMultiFeatures;
+    if (!features || !features.length) return;
+    const dbIds = [];
+    features.forEach(function(layer) {
+        const props = (layer.feature && layer.feature.properties) || {};
+        const id = props._db_id || props.db_id;
+        if (id) dbIds.push(id);
+    });
+    if (!dbIds.length) { alert('Valituissa havainnoissa ei ole tietokantaan tallennettuja havaintoja.'); return; }
+    if (!confirm(`Haluatko ${exclude ? 'poistaa analyysista' : 'sisällyttää analyysiin'} ${dbIds.length} havaintoa?`)) return;
+    try {
+        const res = await window.setExcludeBatch(dbIds, exclude);
+        if (window.sharedMap) window.sharedMap.closePopup();
+        alert(`Käsitelty ${res.processed} havaintoa (${res.failed} epäonnistui).`);
+    } catch (e) {
+        console.error('Multi-feature exclude error', e);
+        alert('Käsittely epäonnistui: ' + (e && e.message));
+    }
+};
 
 // Toggle feature details in multi-feature popup
 window.toggleFeatureDetails = function(index, element) {

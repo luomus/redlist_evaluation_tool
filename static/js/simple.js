@@ -125,8 +125,6 @@ async function saveDataForSpecies(speciesId) {
         showError('Ei tallennettavaa dataa. Hae data ensin.');
         return;
     }
-    const datasetNameInput = document.getElementById(`dataset-name-${speciesId}`);
-    const datasetName = datasetNameInput ? datasetNameInput.value.trim() : '';
     const currentApiUrl = window.currentFetchedUrl || '';
 
     try {
@@ -136,7 +134,7 @@ async function saveDataForSpecies(speciesId) {
             body: JSON.stringify({
                 project_id: speciesId,
                 dataset_id: generateId(),
-                dataset_name: datasetName || `Dataset ${new Date().toLocaleString()}`,
+                dataset_name: `Dataset ${new Date().toLocaleString()}`,
                 dataset_url: currentApiUrl,
                 features: window.currentFetchedData.features
             })
@@ -146,7 +144,6 @@ async function saveDataForSpecies(speciesId) {
             showSuccess(`Aineisto tallennettu! ${result.count} havaintoa.`);
             const urlInput = document.getElementById(`url-${speciesId}`);
             if (urlInput) urlInput.value = '';
-            if (datasetNameInput) datasetNameInput.value = '';
             const saveSection = document.getElementById(`save-section-${speciesId}`);
             if (saveSection) saveSection.style.display = 'none';
             const progressDiv = document.getElementById(`fetch-progress-${speciesId}`);
@@ -171,11 +168,8 @@ async function uploadCsvForSpecies(speciesId) {
         showError('Valitse CSV-tiedosto');
         return;
     }
-    const datasetNameInput = document.getElementById(`dataset-name-${speciesId}`);
-    const datasetName = datasetNameInput ? datasetNameInput.value.trim() : '';
     const form = new FormData();
     form.append('file', fileInput.files[0]);
-    if (datasetName) form.append('dataset_name', datasetName);
 
     try {
         const resp = await fetch(`/api/species/${speciesId}/upload_csv`, {

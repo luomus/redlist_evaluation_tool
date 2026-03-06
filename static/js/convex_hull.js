@@ -95,6 +95,15 @@ async function fetchAndDisplayConvexHull(fitMap = true) {
 
 // Calculate both hull modes on the server in a single request, then display
 async function calculateConvexHull(fitMap = true) {
+    // Check if we have enough features for convex hull
+    if (stats.total < 3) {
+        const msg = `Liian vähän havaintoja: monitahoiseen tarvitaan vähintään 3, sinulla on ${stats.total}`;
+        updateStatus(`Virhe: ${msg}`);
+        document.getElementById('areaMax').textContent = 'Ei saatavilla';
+        document.getElementById('areaMin').textContent = 'Ei saatavilla';
+        return;
+    }
+
     updateStatus('Levinneisyysalueen laskenta käynnissä...');
     document.getElementById('areaMax').textContent = 'Lasketaan...';
     document.getElementById('areaMin').textContent = 'Lasketaan...';
@@ -112,9 +121,20 @@ async function calculateConvexHull(fitMap = true) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({})
         });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        if (!res.ok) {
+            if (res.status === 400) {
+                throw new Error('Riittämätön määrä havaintoja laskentaan');
+            }
+            throw new Error(`HTTP ${res.status}`);
+        }
         const data = await res.json();
-        if (!data.success) throw new Error(data.error || 'Calculation failed');
+        if (!data.success) {
+            // Check for insufficient features error from backend
+            if (data.error && data.error.toLowerCase().includes('feature')) {
+                throw new Error('Riittämätön määrä havaintoja laskentaan');
+            }
+            throw new Error(data.error || 'Laskenta epäonnistui');
+        }
         updateStatus('Levinneisyysalueen laskenta onnistui');
         await fetchAndDisplayConvexHull(fitMap);
     } catch (error) {
