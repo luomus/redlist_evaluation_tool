@@ -113,15 +113,11 @@ def login():
     
     return redirect(laji_auth_login_url)
 
-@app.route("/login/callback", methods=["GET", "POST"])
+@app.route("/login/callback", methods=["POST"])
 def login_callback():
-    """Handle callback from laji-auth system (GET redirect or POST form)"""
-    if request.method == 'POST':
-        token = request.form.get('token') or (request.get_json(silent=True) or {}).get('token')
-        next_url = request.form.get('next') or (request.get_json(silent=True) or {}).get('next', '/')
-    else:
-        token = request.args.get('token')
-        next_url = request.args.get('next', '/')
+    """Handle callback from laji-auth system"""
+    token = request.form.get('token') or (request.get_json(silent=True) or {}).get('token')
+    next_url = request.form.get('next') or (request.get_json(silent=True) or {}).get('next', '/')
 
     # Restrict next_url to relative paths to prevent open redirect
     if not next_url or not next_url.startswith('/'):
