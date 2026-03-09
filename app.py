@@ -464,6 +464,94 @@ def get_taxon_children(taxon_id):
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@app.route("/api/search", methods=["GET"])
+@login_required
+def search_species_api():
+    """Search for species and taxon groups by name/description across the entire database.
+
+    Query params:
+      q  – search term (case-insensitive substring match)
+
+    Returns JSON with:
+      speciesMatches – list of matching projects with breadcrumb path
+      groupMatches   – list of matching taxon groups with breadcrumb path
+    """
+    try:
+        query = request.args.get('q', '').strip()
+        if not query:
+            return jsonify({'speciesMatches': [], 'groupMatches': []})
+
+        db = Session()
+
+        # Build an id→taxon lookup for breadcrumb resolution
+        all_taxons = {t.id: t for t in db.query(Taxon).all()}
+
+        def build_breadcrumb(taxon_id):
+            path = []
+            current_id = taxon_id
+            while current_id is not None:
+                t = all_taxons.get(current_id)
+                if t is None:
+                    break
+                path.insert(0, t.name)
+                current_id = t.parent_id
+            return path
+
+        # Species / project matches
+        projects = (
+            db.query(Project)
+            .filter(
+                (Project.name.ilike(f'%{query}%')) |
+                (Project.description.ilike(f'%{query}%'))
+            )
+            .order_by(Project.name)
+            .all()
+        )
+
+        species_results = []
+        for p in projects:
+            breadcrumb = build_breadcrumb(p.taxon_id)
+            # breadcrumb includes the leaf taxon name; drop last element so the
+            # path shown is the parent chain (same as the in-tree display)
+            species_results.append({
+                'id': p.id,
+                'name': p.name,
+                'description': p.description,
+                'taxon_id': p.taxon_id,
+                'iucn_category': p.iucn_category,
+                'mx_id': p.mx_id,
+                'breadcrumb': breadcrumb,
+            })
+
+        # Taxon group matches
+        taxons = (
+            db.query(Taxon)
+            .filter(
+                (Taxon.name.ilike(f'%{query}%')) |
+                (Taxon.scientific_name.ilike(f'%{query}%'))
+            )
+            .order_by(Taxon.name)
+            .all()
+        )
+
+        group_results = []
+        for t in taxons:
+            breadcrumb = build_breadcrumb(t.parent_id) if t.parent_id else []
+            group_results.append({
+                'id': t.id,
+                'name': t.name,
+                'scientific_name': t.scientific_name,
+                'is_leaf': t.is_leaf,
+                'breadcrumb': breadcrumb,
+            })
+
+        db.close()
+        return jsonify({'speciesMatches': species_results, 'groupMatches': group_results})
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 # ===== SPECIES / PROJECT ENDPOINTS =====
 
 @app.route("/api/species", methods=["POST"])

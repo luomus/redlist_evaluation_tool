@@ -294,3 +294,35 @@ async function deleteDataset(speciesId, datasetId) {
     }
 }
 
+// ---- Reset search ----
+
+function resetSearch() {
+    const searchInput = document.getElementById('hierarchy-search');
+    const resetBtn = document.getElementById('reset-search-btn');
+    
+    if (searchInput) {
+        searchInput.value = '';
+        searchInput.focus();
+    }
+    
+    if (resetBtn) {
+        resetBtn.style.display = 'none';
+    }
+    
+    doHierarchySearch();
+}
+
+// Show/hide reset button based on search input
+document.addEventListener('DOMContentLoaded', function () {
+    const searchInput = document.getElementById('hierarchy-search');
+    const resetBtn = document.getElementById('reset-search-btn');
+    
+    if (searchInput) {
+        searchInput.addEventListener('input', function () {
+            if (resetBtn) {
+                resetBtn.style.display = this.value.trim() ? 'block' : 'none';
+            }
+        });
+    }
+}, true);
+

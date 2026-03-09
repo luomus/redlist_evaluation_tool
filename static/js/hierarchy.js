@@ -15,7 +15,6 @@ let searchQuery = '';         // current search string
 
 // Performance optimizations
 let renderHierarchyTimeout = null;  // debounce timer
-let searchMemoCache = {};           // { queryLower: { groupMatches, speciesMatches } }
 
 // Lazy-loading state for species (projects) per taxon
 let loadingTaxons = new Set();      // taxon ids currently being fetched
@@ -158,7 +157,7 @@ function renderHierarchy(onRenderComplete) {
         const container = document.getElementById('hierarchy-container');
         if (!container) return;
         if (searchQuery.trim().length > 0) {
-            renderSearchResults(searchQuery.trim());
+            _fetchSearchResults(searchQuery.trim());
         } else {
             const countEl = document.getElementById('search-result-count');
             if (countEl) countEl.textContent = '';
@@ -622,28 +621,62 @@ async function deleteSpecies(projectId) {
 // Search
 // ---------------------------------------------------------------------------
 
+let searchDebounceTimer = null;   // debounce timer for API search
+let searchRequestId = 0;          // cancel stale responses
+
 /**
- * Called by the search button or Enter key.
+ * Called by the search button, Enter key, or oninput.
+ * Debounces API requests so we don't fire on every keystroke.
  */
 function doHierarchySearch() {
     const input = document.getElementById('hierarchy-search');
-    searchQuery = input ? input.value : '';
-    // Clear memoized results when search changes
-    searchMemoCache = {};
-    renderHierarchy();
+    const q = input ? input.value.trim() : '';
+    searchQuery = q;
+
+    if (!q) {
+        renderHierarchy();
+        return;
+    }
+
+    // Show loading indicator immediately
+    const container = document.getElementById('hierarchy-container');
+    const countEl = document.getElementById('search-result-count');
+    if (container) container.innerHTML = '<p style="color:#7f8c8d; padding:8px 0;">Haetaan…</p>';
+    if (countEl) countEl.textContent = '';
+
+    clearTimeout(searchDebounceTimer);
+    searchDebounceTimer = setTimeout(() => _fetchSearchResults(q), 200);
 }
 
 /**
- * Render flat search results for `query`.
+ * Fetch search results from the backend and render them.
  */
-function renderSearchResults(query) {
+async function _fetchSearchResults(query) {
+    const myId = ++searchRequestId;
+    try {
+        const resp = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const data = await resp.json();
+
+        // Ignore stale responses if the query changed
+        if (myId !== searchRequestId) return;
+
+        renderSearchResults(query, data.speciesMatches || [], data.groupMatches || []);
+    } catch (err) {
+        if (myId !== searchRequestId) return;
+        const container = document.getElementById('hierarchy-container');
+        if (container) container.innerHTML = '<p style="color:#c0392b;">Haku epäonnistui.</p>';
+        console.error('Search error:', err);
+    }
+}
+
+/**
+ * Render flat search results returned from the API.
+ */
+function renderSearchResults(query, speciesMatches, groupMatches) {
     const container = document.getElementById('hierarchy-container');
     const countEl = document.getElementById('search-result-count');
     if (!container) return;
-
-    const speciesMatches = [];
-    const groupMatches = [];
-    collectMatches(taxonTree, query.toLowerCase(), [], speciesMatches, groupMatches);
 
     const total = speciesMatches.length + groupMatches.length;
     if (countEl) countEl.textContent = total > 0 ? `${total} osumaa` : '';
@@ -656,22 +689,23 @@ function renderSearchResults(query) {
     let html = '<div class="search-results">';
 
     // --- Taxon group matches ---
-    for (const { node, breadcrumb } of groupMatches) {
-        const path = breadcrumb.length ? breadcrumb.join(' › ') : '';
+    for (const node of groupMatches) {
+        const path = node.breadcrumb.length ? node.breadcrumb.join(' › ') : '';
         html += `
         <div class="search-result-item">
             ${path ? `<div class="result-breadcrumb">${escapeHtml(path)}</div>` : ''}
             <div class="result-name">📁 ${highlightMatch(node.name, query)}${node.scientific_name ? ` <span style="font-weight:400;font-style:italic;font-size:13px;color:#7f8c8d;">${highlightMatch(node.scientific_name, query)}</span>` : ''}</div>
             <div class="result-meta">${node.is_leaf ? 'Lehtiryhmä' : 'Ryhmä'}</div>
             <div class="result-actions">
-                <button class="btn-small" onclick="navigateToTaxon(${node.id})">Avaa ryhmässä</button>
+                <button class="btn-small" onclick="navigateToTaxon(${node.id})">Avaa lajiryhmä</button>
             </div>
         </div>`;
     }
 
     // --- Species matches ---
-    for (const { p, breadcrumb, taxonId } of speciesMatches) {
-        const path = breadcrumb.join(' › ');
+    for (const p of speciesMatches) {
+        const path = p.breadcrumb.join(' › ');
+        const taxonId = p.taxon_id;
         const isDataOpen = openSpeciesDataId === p.id;
         html += `
         <div class="search-result-item" id="species-${p.id}">
@@ -703,45 +737,8 @@ function renderSearchResults(query) {
     html += '</div>';
     container.innerHTML = html;
 
-    // Load datasets if any data panel is open
     if (openSpeciesDataId) {
         loadSpeciesDatasets(openSpeciesDataId);
-    }
-}
-
-/**
- * Recursively collect taxon-group and species matches.
- * Results are memoized per query to avoid re-traversing the tree.
- */
-function collectMatches(nodes, queryLower, breadcrumb, speciesMatches, groupMatches) {
-    for (const node of nodes) {
-        const nodeNameLower = (node.name || '').toLowerCase();
-        const nodeSciLower = (node.scientific_name || '').toLowerCase();
-
-        // Check if this taxon group itself matches
-        if (nodeNameLower.includes(queryLower) || nodeSciLower.includes(queryLower)) {
-            groupMatches.push({ node, breadcrumb: [...breadcrumb] });
-        }
-
-        // Check species (projects) at this node
-        if (node.projects) {
-            for (const p of node.projects) {
-                const speciesNameLower = (p.name || '').toLowerCase();
-                const descLower = (p.description || '').toLowerCase();
-                if (speciesNameLower.includes(queryLower) || descLower.includes(queryLower)) {
-                    speciesMatches.push({
-                        p,
-                        breadcrumb: [...breadcrumb, node.name],
-                        taxonId: node.id
-                    });
-                }
-            }
-        }
-
-        // Recurse into children
-        if (node.children && node.children.length > 0) {
-            collectMatches(node.children, queryLower, [...breadcrumb, node.name], speciesMatches, groupMatches);
-        }
     }
 }
 
@@ -801,8 +798,8 @@ function toggleSpeciesDataInSearch(speciesId, taxonId) {
         openSpeciesDataId = speciesId;
     }
     try { localStorage.setItem('openSpeciesDataId', openSpeciesDataId ?? ''); } catch (e) { /* ignore */ }
-    // Re-render search results
-    renderSearchResults(searchQuery.trim());
+    // Re-render search results with updated panel state
+    _fetchSearchResults(searchQuery.trim());
     if (openSpeciesDataId === speciesId) {
         loadSpeciesDatasets(speciesId);
     }
