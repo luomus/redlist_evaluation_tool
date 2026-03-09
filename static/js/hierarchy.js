@@ -1,9 +1,9 @@
 /**
  * hierarchy.js – Accordion-based taxon hierarchy browser.
  *
- * Renders the taxon tree fetched from /api/taxons?projects=1 as a
+ * Renders the taxon tree fetched from /api/taxons/tree as a
  * collapsible accordion on the main page.  Leaf nodes show their
- * species (projects) and an "+ Lisää laji" button that opens a modal.
+ * species (projects) loaded lazily via /api/taxons/<id>/children.
  */
 
 // ---------------------------------------------------------------------------
@@ -17,10 +17,21 @@ let searchQuery = '';         // current search string
 let renderHierarchyTimeout = null;  // debounce timer
 let searchMemoCache = {};           // { queryLower: { groupMatches, speciesMatches } }
 
+// Lazy-loading state for species (projects) per taxon
+let loadingTaxons = new Set();      // taxon ids currently being fetched
+
 // Cache management
-const CACHE_KEY = 'hierarchyCache';
-const CACHE_TIMESTAMP_KEY = 'hierarchyCacheTimestamp';
+const CACHE_KEY = 'taxonTreeCache'; // lightweight tree (no species data)
+const CACHE_TIMESTAMP_KEY = 'taxonTreeCacheTimestamp';
 const CACHE_TTL_MINUTES = 30; // Cache valid for 30 minutes
+
+// One-time migration: remove old heavy cache keys from users' browsers
+(function migrateOldCache() {
+    try {
+        localStorage.removeItem('hierarchyCache');
+        localStorage.removeItem('hierarchyCacheTimestamp');
+    } catch (e) { /* ignore */ }
+})();
 
 // Restore persisted accordion state from previous page visit
 (function restoreAccordionState() {
@@ -73,6 +84,7 @@ function clearHierarchyCache() {
     } catch (e) {
         console.warn('Failed to clear hierarchy cache:', e);
     }
+    loadingTaxons.clear();
 }
 
 // ---------------------------------------------------------------------------
@@ -102,7 +114,7 @@ async function loadHierarchy() {
         }
         
         // Fetch fresh data from server in the background
-        const resp = await fetch('/api/taxons?projects=1');
+        const resp = await fetch('/api/taxons/tree');
         const data = await resp.json();
         taxonTree = data.taxons || [];
         
@@ -153,11 +165,62 @@ function renderHierarchy(onRenderComplete) {
             container.innerHTML = buildNodes(taxonTree);
         }
         renderHierarchyTimeout = null;
+        // Trigger lazy-loading for any expanded leaf nodes without projects
+        ensureProjectsLoaded(taxonTree);
         // Call the callback after rendering is complete
         if (onRenderComplete && typeof onRenderComplete === 'function') {
             onRenderComplete();
         }
     }, 10);
+}
+
+/**
+ * Walk the visible tree and start fetching projects for any expanded leaf
+ * nodes that haven't been loaded yet.
+ */
+function ensureProjectsLoaded(nodes) {
+    for (const node of nodes) {
+        if (node.is_leaf && expandedTaxons.has(node.id) && node.projects === undefined) {
+            loadTaxonProjects(node.id);
+        }
+        if (node.children && node.children.length > 0) {
+            ensureProjectsLoaded(node.children);
+        }
+    }
+}
+
+/**
+ * Fetch the species (projects) for a leaf taxon from the API and inject
+ * them into the in-memory tree, then re-render.
+ */
+async function loadTaxonProjects(taxonId) {
+    if (loadingTaxons.has(taxonId)) return;
+    loadingTaxons.add(taxonId);
+    try {
+        const resp = await fetch(`/api/taxons/${taxonId}/children`);
+        const data = await resp.json();
+        const projects = data.projects || [];
+        // Update the in-memory tree node with its projects
+        updateTaxonNode(taxonTree, taxonId, { projects });
+        renderHierarchy();
+    } catch (err) {
+        console.error(`Failed to load projects for taxon ${taxonId}:`, err);
+    } finally {
+        loadingTaxons.delete(taxonId);
+    }
+}
+
+/** Update a single taxon node's properties in the in-memory tree. */
+function updateTaxonNode(nodes, taxonId, props) {
+    for (const node of nodes) {
+        if (node.id === taxonId) {
+            Object.assign(node, props);
+            node._sortedProjects = null; // clear sort cache
+            return true;
+        }
+        if (node.children && updateTaxonNode(node.children, taxonId, props)) return true;
+    }
+    return false;
 }
 
 // ---------------------------------------------------------------------------
@@ -192,9 +255,9 @@ function buildNodes(nodes) {
         }
         parts.push(`</span>`);
 
-        // Badge: species count for leaves
+        // Badge: species count for leaves (shows ? until projects are loaded)
         if (isLeaf) {
-            const count = (node.projects || []).length;
+            const count = node.projects !== undefined ? node.projects.length : '?';
             parts.push(`<span class="taxon-badge">${count} lajia</span>`);
             parts.push(`<button class="taxon-add-btn" onclick="openAddSpeciesModal(${node.id}, '${escapeAttr(node.name)}'); event.stopPropagation();">+ Lisää laji</button>`);
         }
@@ -219,6 +282,11 @@ function buildNodes(nodes) {
 }
 
 function buildSpeciesList(taxonNode) {
+    // Show loading state while projects are being fetched from the server
+    if (taxonNode.is_leaf && taxonNode.projects === undefined) {
+        return `<div class="species-list"><p style="color:#7f8c8d; font-size:13px;">Ladataan lajeja…</p></div>`;
+    }
+
     // Cache sorted species to avoid re-sorting on every render
     if (!taxonNode._sortedProjects) {
         taxonNode._sortedProjects = (taxonNode.projects || []).sort((a, b) => 

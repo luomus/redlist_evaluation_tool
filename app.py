@@ -371,28 +371,6 @@ def mml_maastokartta_tile(z, x, y):
 
 # ===== TAXON HIERARCHY ENDPOINTS =====
 
-def _taxon_to_dict(taxon, include_children=True, include_projects=False):
-    """Convert a Taxon ORM object to a dict, optionally with children and projects."""
-    d = {
-        'id': taxon.id,
-        'name': taxon.name,
-        'scientific_name': taxon.scientific_name,
-        'level': taxon.level,
-        'parent_id': taxon.parent_id,
-        'is_leaf': taxon.is_leaf,
-    }
-    if include_children and taxon.children:
-        d['children'] = [_taxon_to_dict(c, include_children=True, include_projects=include_projects)
-                         for c in sorted(taxon.children, key=lambda t: t.sort_order)]
-    else:
-        d['children'] = []
-    if include_projects:
-        d['projects'] = [_project_to_dict(p) for p in (taxon.projects or [])]
-    else:
-        d['projects'] = []
-    return d
-
-
 def _project_to_dict(project):
     """Convert a Project ORM object to a dict."""
     return {
@@ -407,42 +385,28 @@ def _project_to_dict(project):
     }
 
 
-@app.route("/api/taxons", methods=["GET"])
+@app.route("/api/taxons/tree", methods=["GET"])
 @login_required
-def list_taxons():
-    """Return the full taxon hierarchy as a tree, optionally with projects.
-    
-    Results are cached to improve performance on repeated requests.
-    Cache key varies based on whether projects are included.
+def list_taxons_tree():
+    """Return the taxon hierarchy as a lightweight tree without species/projects.
+
+    Used for fast initial page load. Species are fetched on-demand per taxon
+    via /api/taxons/<id>/children when the user expands a leaf node.
     """
     try:
-        include_projects = request.args.get('projects', '0') == '1'
-        
-        # Create cache key based on whether projects are included
-        cache_key = f"taxons:{'with_projects' if include_projects else 'no_projects'}"
-        
-        # Check cache first
+        cache_key = "taxons:tree_only"
         cached_result = stats_cache.get(cache_key)
         if cached_result is not None:
             return jsonify(cached_result)
-        
-        db = Session()
 
-        # Eagerly load the whole tree
+        db = Session()
         roots = (db.query(Taxon)
                  .filter(Taxon.parent_id.is_(None))
                  .order_by(Taxon.sort_order)
                  .all())
 
-        # If projects requested, prefetch all projects keyed by taxon_id
-        project_map = {}
-        if include_projects:
-            all_projects = db.query(Project).all()
-            for p in all_projects:
-                project_map.setdefault(p.taxon_id, []).append(p)
-
         def build(taxon):
-            d = {
+            return {
                 'id': taxon.id,
                 'name': taxon.name,
                 'scientific_name': taxon.scientific_name,
@@ -451,38 +415,46 @@ def list_taxons():
                 'is_leaf': taxon.is_leaf,
                 'children': [build(c) for c in sorted(taxon.children or [], key=lambda t: t.sort_order)],
             }
-            if include_projects:
-                d['projects'] = [_project_to_dict(p) for p in project_map.get(taxon.id, [])]
-            else:
-                d['projects'] = []
-            return d
 
         tree = [build(r) for r in roots]
         db.close()
-        
+
         result = {'taxons': tree}
-        
-        # Cache the result (30-minute TTL for taxonomy is reasonable since it changes infrequently)
         stats_cache.set(cache_key, result)
-        
         return jsonify(result)
     except Exception as e:
         import traceback; traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
-@app.route("/api/taxons/<int:taxon_id>", methods=["GET"])
+@app.route("/api/taxons/<int:taxon_id>/children", methods=["GET"])
 @login_required
-def get_taxon(taxon_id):
-    """Return a single taxon with its children and projects."""
+def get_taxon_children(taxon_id):
+    """Return the projects (species) for a leaf taxon, called when the user expands it.
+
+    For leaf taxons: returns the taxon's projects with full metadata.
+    The result is cached so repeated expansions are fast.
+    """
     try:
+        cache_key = f"taxon_children:{taxon_id}"
+        cached_result = stats_cache.get(cache_key)
+        if cached_result is not None:
+            return jsonify(cached_result)
+
         db = Session()
         taxon = db.query(Taxon).filter_by(id=taxon_id).first()
         if not taxon:
             db.close()
             return jsonify({'success': False, 'error': 'Taxon not found'}), 404
-        result = _taxon_to_dict(taxon, include_projects=True)
+
+        result = {
+            'id': taxon.id,
+            'is_leaf': taxon.is_leaf,
+            'projects': [_project_to_dict(p) for p in (taxon.projects or [])] if taxon.is_leaf else [],
+        }
         db.close()
+
+        stats_cache.set(cache_key, result)
         return jsonify(result)
     except Exception as e:
         import traceback; traceback.print_exc()
@@ -518,9 +490,8 @@ def create_species():
         result = _project_to_dict(project)
         db.close()
         
-        # Invalidate taxons cache since projects have been modified
-        stats_cache.delete('taxons:with_projects')
-        stats_cache.delete('taxons:no_projects')
+        stats_cache.delete('taxons:tree_only')
+        stats_cache.delete(f'taxon_children:{taxon_id}')
         
         return jsonify({'success': True, 'project': result})
     except Exception as e:
@@ -566,15 +537,13 @@ def update_species(project_id):
             db.close()
             return jsonify({'success': False, 'error': 'Project not found'}), 404
 
+        taxon_id = project.taxon_id
         project.description = description
         db.commit()
         result = _project_to_dict(project)
         db.close()
-        
-        # Invalidate taxons cache since projects have been modified
-        stats_cache.delete('taxons:with_projects')
-        stats_cache.delete('taxons:no_projects')
-        
+        stats_cache.delete('taxons:tree_only')
+        stats_cache.delete(f'taxon_children:{taxon_id}')
         return jsonify({'success': True, 'project': result})
     except Exception as e:
         import traceback; traceback.print_exc()
@@ -592,6 +561,7 @@ def delete_species(project_id):
             db.close()
             return jsonify({'success': False, 'error': 'Project not found'}), 404
 
+        taxon_id = project.taxon_id
         obs_count = db.query(Observation).filter_by(project_id=project_id).count()
         db.query(ConvexHull).filter_by(project_id=project_id).delete()
         db.query(GridCell).filter_by(project_id=project_id).delete(synchronize_session=False)
@@ -599,11 +569,8 @@ def delete_species(project_id):
         db.commit()
         db.close()
         stats_cache.delete(f"stats:{project_id}")
-        
-        # Invalidate taxons cache since projects have been modified
-        stats_cache.delete('taxons:with_projects')
-        stats_cache.delete('taxons:no_projects')
-        
+        stats_cache.delete('taxons:tree_only')
+        stats_cache.delete(f'taxon_children:{taxon_id}')
         return jsonify({'success': True, 'deleted_observations': obs_count})
     except Exception as e:
         import traceback; traceback.print_exc()
