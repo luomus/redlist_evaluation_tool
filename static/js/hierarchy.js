@@ -202,6 +202,25 @@ async function loadTaxonProjects(taxonId) {
         const projects = data.projects || [];
         // Update the in-memory tree node with its projects
         updateTaxonNode(taxonTree, taxonId, { projects });
+        // Surgical DOM update: replace the species list and badge in-place
+        if (expandedTaxons.has(taxonId)) {
+            const nodeEl = document.querySelector(`.taxon-node[data-id="${taxonId}"]`);
+            if (nodeEl) {
+                const taxonData = findTaxonById(taxonTree, taxonId);
+                if (taxonData) {
+                    const speciesList = nodeEl.querySelector(':scope > .species-list');
+                    const newHtml = buildSpeciesList(taxonData);
+                    if (speciesList) {
+                        speciesList.outerHTML = newHtml;
+                    } else {
+                        nodeEl.insertAdjacentHTML('beforeend', newHtml);
+                    }
+                    const badge = nodeEl.querySelector(':scope > .taxon-header .taxon-badge');
+                    if (badge) badge.textContent = `${projects.length} lajia`;
+                }
+                return;
+            }
+        }
         renderHierarchy();
     } catch (err) {
         console.error(`Failed to load projects for taxon ${taxonId}:`, err);
@@ -281,6 +300,13 @@ function buildNodes(nodes) {
     return parts.join('');
 }
 
+const SPECIES_PAGE_SIZE = 100;
+
+/** Build HTML for a single species card. */
+function buildSpeciesCard(p, isDataOpen) {
+    return `<div class="species-card" id="species-${p.id}" data-name="${escapeAttr(p.name)}" data-mxid="${escapeAttr(p.mx_id||'')}"><div class="species-header-row" onclick="toggleSpeciesData(${p.id})"><span class="species-caret ${isDataOpen ? 'open' : ''}">▶</span><div class="species-info"><span class="species-name">${escapeHtml(p.name)}</span>${p.iucn_category ? `<span class="iucn-badge iucn-${iucnClass(p.iucn_category)}">${escapeHtml(p.iucn_category)}</span>` : ''}${p.description ? `<span class="species-desc">${escapeHtml(p.description)}</span>` : ''}</div><div class="species-actions"><select onchange="handleSpeciesAction(this, ${p.id})" onclick="event.stopPropagation()"><option value="" selected disabled>Työkalut ▾</option><option value="/stats">Näytä tilastot</option><option value="/grid">Laske esiintymisalue (AOO)</option><option value="/convex_hull">Laske levinneisyysalue (EOO)</option><option value="delete">Poista laji</option></select></div></div>${isDataOpen ? buildInlineDataPanel(p.id, p.name, p.mx_id) : ''}</div>`;
+}
+
 function buildSpeciesList(taxonNode) {
     // Show loading state while projects are being fetched from the server
     if (taxonNode.is_leaf && taxonNode.projects === undefined) {
@@ -299,13 +325,46 @@ function buildSpeciesList(taxonNode) {
         return `<div class="species-list"><p style="color:#999; font-size:13px;">Ei lajeja vielä.</p></div>`;
     }
 
+    const visible = projects.slice(0, SPECIES_PAGE_SIZE);
+    const hasMore = projects.length > SPECIES_PAGE_SIZE;
     const parts = ['<div class="species-list">'];
-    for (const p of projects) {
-        const isDataOpen = openSpeciesDataId === p.id;
-        parts.push(`<div class="species-card" id="species-${p.id}"><div class="species-header-row" onclick="toggleSpeciesData(${p.id})"><span class="species-caret ${isDataOpen ? 'open' : ''}">▶</span><div class="species-info"><span class="species-name">${escapeHtml(p.name)}</span>${p.iucn_category ? `<span class="iucn-badge iucn-${iucnClass(p.iucn_category)}">${escapeHtml(p.iucn_category)}</span>` : ''}${p.description ? `<span class="species-desc">${escapeHtml(p.description)}</span>` : ''}</div><div class="species-actions"><select onchange="handleSpeciesAction(this, ${p.id})" onclick="event.stopPropagation()"><option value="" selected disabled>Työkalut ▾</option><option value="/stats">Näytä tilastot</option><option value="/grid">Laske esiintymisalue (AOO)</option><option value="/convex_hull">Laske levinneisyysalue (EOO)</option><option value="delete">Poista laji</option></select></div></div>${isDataOpen ? buildInlineDataPanel(p.id, p.name, p.mx_id) : ''}</div>`);
+    for (const p of visible) {
+        parts.push(buildSpeciesCard(p, openSpeciesDataId === p.id));
+    }
+    if (hasMore) {
+        const remaining = projects.length - SPECIES_PAGE_SIZE;
+        parts.push(`<div class="show-more-row"><button class="btn-small" onclick="showMoreSpecies(${taxonNode.id}, ${SPECIES_PAGE_SIZE})">Näytä 100 lajia lisää (yht. ${remaining})</button></div>`);
     }
     parts.push('</div>');
     return parts.join('');
+}
+
+/** Append the next page of species cards to an already-open species list. */
+function showMoreSpecies(taxonId, offset) {
+    const nodeEl = document.querySelector(`.taxon-node[data-id="${taxonId}"]`);
+    if (!nodeEl) return;
+    const taxonData = findTaxonById(taxonTree, taxonId);
+    if (!taxonData || !taxonData._sortedProjects) return;
+
+    const projects = taxonData._sortedProjects;
+    const batch = projects.slice(offset, offset + SPECIES_PAGE_SIZE);
+    const hasMore = projects.length > offset + SPECIES_PAGE_SIZE;
+
+    const speciesList = nodeEl.querySelector(':scope > .species-list');
+    if (!speciesList) return;
+
+    const showMoreRow = speciesList.querySelector('.show-more-row');
+    if (showMoreRow) showMoreRow.remove();
+
+    const parts = [];
+    for (const p of batch) {
+        parts.push(buildSpeciesCard(p, openSpeciesDataId === p.id));
+    }
+    if (hasMore) {
+        const remaining = projects.length - offset - SPECIES_PAGE_SIZE;
+        parts.push(`<div class="show-more-row"><button class="btn-small" onclick="showMoreSpecies(${taxonId}, ${offset + SPECIES_PAGE_SIZE})">Näytä lisää (${remaining} lajia)</button></div>`);
+    }
+    speciesList.insertAdjacentHTML('beforeend', parts.join(''));
 }
 
 function buildInlineDataPanel(speciesId, speciesName, mxId) {
@@ -358,12 +417,73 @@ function toggleTaxon(id, event) {
     if (event && event.target.closest('.taxon-add-btn')) return;
 
     if (expandedTaxons.has(id)) {
-        expandedTaxons.delete(id);
+        _collapseWithDescendants(id);
     } else {
+        // Close any sibling that is currently open (same parent container)
+        const nodeEl = document.querySelector(`.taxon-node[data-id="${id}"]`);
+        if (nodeEl) {
+            const parentContainer = nodeEl.parentElement;
+            parentContainer.querySelectorAll(':scope > .taxon-node').forEach(sib => {
+                const sibId = Number(sib.dataset.id);
+                if (sibId !== id && expandedTaxons.has(sibId)) {
+                    _collapseWithDescendants(sibId);
+                }
+            });
+        }
         expandedTaxons.add(id);
+        _expandNodeDOM(id);
     }
     try { localStorage.setItem('expandedTaxons', JSON.stringify([...expandedTaxons])); } catch (e) { /* ignore */ }
-    renderHierarchy();
+}
+
+/** Collapse a node and remove it and all its expanded descendants from the state. */
+function _collapseWithDescendants(id) {
+    // Recursively remove all descendant ids from expandedTaxons
+    function removeDescendants(node) {
+        if (!node) return;
+        expandedTaxons.delete(node.id);
+        if (node.children) node.children.forEach(removeDescendants);
+    }
+    removeDescendants(findTaxonById(taxonTree, id));
+    expandedTaxons.delete(id); // ensure removed even if not in tree yet
+    _collapseNodeDOM(id);
+}
+
+function _expandNodeDOM(id) {
+    const nodeEl = document.querySelector(`.taxon-node[data-id="${id}"]`);
+    if (!nodeEl) { renderHierarchy(); return; }
+
+    const toggle = nodeEl.querySelector(':scope > .taxon-header .taxon-toggle');
+    if (toggle && !toggle.classList.contains('leaf')) toggle.classList.add('open');
+
+    const childrenEl = nodeEl.querySelector(':scope > .taxon-children');
+    if (childrenEl) childrenEl.classList.add('open');
+
+    const taxonData = findTaxonById(taxonTree, id);
+    if (!taxonData) { renderHierarchy(); return; }
+
+    // Remove stale species list if present, then insert fresh
+    const existing = nodeEl.querySelector(':scope > .species-list');
+    if (existing) existing.remove();
+    nodeEl.insertAdjacentHTML('beforeend', buildSpeciesList(taxonData));
+
+    if (taxonData.is_leaf && taxonData.projects === undefined) {
+        loadTaxonProjects(id);
+    }
+}
+
+function _collapseNodeDOM(id) {
+    const nodeEl = document.querySelector(`.taxon-node[data-id="${id}"]`);
+    if (!nodeEl) { renderHierarchy(); return; }
+
+    const toggle = nodeEl.querySelector(':scope > .taxon-header .taxon-toggle');
+    if (toggle) toggle.classList.remove('open');
+
+    const childrenEl = nodeEl.querySelector(':scope > .taxon-children');
+    if (childrenEl) childrenEl.classList.remove('open');
+
+    const speciesList = nodeEl.querySelector(':scope > .species-list');
+    if (speciesList) speciesList.remove();
 }
 
 // Track which species has its data panel open (only one at a time)
@@ -375,19 +495,25 @@ let openSpeciesDataId = (() => {
 })();
 
 function toggleSpeciesData(speciesId) {
-    if (openSpeciesDataId === speciesId) {
-        openSpeciesDataId = null;
-    } else {
-        openSpeciesDataId = speciesId;
-    }
+    const wasOpen = (openSpeciesDataId === speciesId);
+    openSpeciesDataId = wasOpen ? null : speciesId;
     try { localStorage.setItem('openSpeciesDataId', openSpeciesDataId ?? ''); } catch (e) { /* ignore */ }
-    
-    // Render hierarchy and load datasets after rendering if panel is now open
-    renderHierarchy(() => {
-        if (openSpeciesDataId === speciesId) {
-            loadSpeciesDatasets(speciesId);
-        }
-    });
+
+    // Close any currently open detail panel
+    document.querySelectorAll('.species-detail-panel').forEach(p => p.remove());
+    document.querySelectorAll('.species-caret.open').forEach(c => c.classList.remove('open'));
+
+    if (!wasOpen) {
+        const cardEl = document.getElementById(`species-${speciesId}`);
+        if (!cardEl) { renderHierarchy(); return; }
+        const caret = cardEl.querySelector('.species-caret');
+        if (caret) caret.classList.add('open');
+        // Use data attributes set by buildSpeciesCard to avoid tree traversal
+        const name = cardEl.dataset.name || '';
+        const mxId = cardEl.dataset.mxid || '';
+        cardEl.insertAdjacentHTML('beforeend', buildInlineDataPanel(speciesId, name, mxId));
+        loadSpeciesDatasets(speciesId);
+    }
 }
 
 function handleSpeciesAction(selectElem, projectId) {
