@@ -3,7 +3,7 @@ set -e
 
 echo "Waiting for database to be ready..."
 # Wait for database to be ready
-until python -c "from models import engine; engine.connect()" 2>/dev/null; do
+until python -c "from models import engine; engine.connect()" 2>&1; do
     echo "Database not ready, waiting..."
     sleep 2
 done
