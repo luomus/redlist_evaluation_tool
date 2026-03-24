@@ -250,17 +250,7 @@ def laji_proxy():
             'Accept-Language': request.headers.get('Accept-Language', 'fi')
         }
 
-        # Debug: log what we're sending (mask tokens for safety)
-        print(f"[laji_proxy] Target: {target_url}...")
-        print(f"[laji_proxy] Authorization: Bearer {LAJI_API_ACCESS_TOKEN}")
-        print(f"[laji_proxy] Person-Token: {person_token}")
-
         resp = requests.get(target_url, headers=forward_headers, timeout=30)
-
-        # Debug: log response status
-        print(f"[laji_proxy] Response status: {resp.status_code}")
-        if resp.status_code != 200:
-            print(f"[laji_proxy] Response body: {resp.text[:500]}")
 
         # Return response content and status code with original content-type
         content_type = resp.headers.get('Content-Type', 'application/json')
