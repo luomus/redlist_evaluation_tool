@@ -13,21 +13,21 @@ parameters:
     description: Docker image for the web app
     required: true
     value: 'ghcr.io/luomus/redlist_evaluation_tool:latest'
-  - name: POSTGRES_IMAGE
-    description: PostGIS image to use for the database
-    value: postgis/postgis:16-3.4
-  - name: POSTGRES_USER
-    description: Postgres username
+  - name: DB_HOST
+    description: External database host
+    value: external-db.example.com
+  - name: DB_PORT
+    description: External database port
+    value: "5432"
+  - name: DB_NAME
+    description: External database name
     value: redlist
-  - name: POSTGRES_PASSWORD
-    description: Postgres password
+  - name: DB_USER
+    description: External database username
+    value: redlist
+  - name: DB_PASSWORD
+    description: External database password
     value: your-secure-password
-  - name: POSTGRES_DB
-    description: Postgres database name
-    value: redlist
-  - name: VOLUME_CAPACITY
-    description: PVC size for Postgres data
-    value: 1Gi
   - name: MML_API_KEY
     description: API key for the MML API (optional)
     value: your-mml-api-key
@@ -45,73 +45,6 @@ parameters:
 
 
 objects:
-
-  - apiVersion: v1
-    kind: PersistentVolumeClaim
-    metadata:
-      name: ${NAME}-pgdata
-    spec:
-      accessModes: ["ReadWriteOnce"]
-      resources:
-        requests:
-          storage: ${VOLUME_CAPACITY}
-
-  - apiVersion: apps/v1
-    kind: Deployment
-    metadata:
-      name: ${NAME}-db
-      labels:
-        app: ${NAME}
-        role: db
-    spec:
-      replicas: 1
-      selector:
-        matchLabels:
-          app: ${NAME}
-          role: db
-      template:
-        metadata:
-          labels:
-            app: ${NAME}
-            role: db
-        spec:
-          containers:
-            - name: postgres
-              image: ${POSTGRES_IMAGE}
-              ports:
-                - containerPort: 5432
-              env:
-                - name: POSTGRES_DB
-                  value: "${POSTGRES_DB}"
-                - name: POSTGRES_USER
-                  value: "${POSTGRES_USER}"
-                - name: POSTGRES_PASSWORD
-                  value: "${POSTGRES_PASSWORD}"
-                - name: PGDATA
-                  value: "/var/lib/postgresql/data/pgdata"
-              volumeMounts:
-                - name: pgdata
-                  mountPath: /var/lib/postgresql/data
-          volumes:
-            - name: pgdata
-              persistentVolumeClaim:
-                claimName: ${NAME}-pgdata
-
-  - apiVersion: v1
-    kind: Service
-    metadata:
-      name: ${NAME}-db
-      labels:
-        app: ${NAME}
-        role: db
-    spec:
-      ports:
-        - port: 5432
-          targetPort: 5432
-          protocol: TCP
-      selector:
-        app: ${NAME}
-        role: db
 
   - apiVersion: apps/v1
     kind: Deployment
@@ -141,7 +74,7 @@ objects:
                 - name: PYTHONUNBUFFERED
                   value: "1"
                 - name: DATABASE_URL
-                  value: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${NAME}-db:5432/${POSTGRES_DB}"
+                  value: "postgresql://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}"
                 - name: MML_API_KEY
                   value: "${MML_API_KEY}"
                 - name: LAJIAUTH_URL
@@ -187,4 +120,4 @@ objects:
         termination: edge
         insecureEdgeTerminationPolicy: Allow
 
-objectsCount: 7
+objectsCount: 5
