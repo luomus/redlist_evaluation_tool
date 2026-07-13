@@ -17,7 +17,7 @@ import requests
 
 
 app = Flask(__name__)
-app.debug = True
+app.debug = os.getenv('DEBUG', 'False').lower() == 'true'
 
 # Load .env file from project root (if present)
 env_path = Path(__file__).parent / ".env"
@@ -25,12 +25,17 @@ load_dotenv(dotenv_path=env_path)
 
 # Session configuration
 app.secret_key = os.getenv("SECRET_KEY")
+if not app.secret_key:
+    raise RuntimeError("SECRET_KEY environment variable must be set")
 
 LAJI_API_ACCESS_TOKEN = os.getenv("LAJI_API_ACCESS_TOKEN", "")
 LAJI_API_BASE_URL = os.getenv("LAJI_API_BASE_URL", "")
 TARGET = os.getenv("TARGET", "")
 LAJIAUTH_URL = os.getenv("LAJIAUTH_URL", "")
 SECRET_TIMEOUT_PERIOD = int(os.getenv("SECRET_TIMEOUT_PERIOD", "10"))
+
+# Security configurations
+app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024  # 100MB max upload size
 
 # Simple in-memory cache for stats
 class SimpleCache:
@@ -119,7 +124,7 @@ def login_callback():
     token = request.form.get('token') or (request.get_json(silent=True) or {}).get('token')
     next_url = request.form.get('next') or (request.get_json(silent=True) or {}).get('next', '/')
 
-    # Restrict next_url to relative paths to prevent open redirect
+    # Restrict next_url to relative paths to prevent open redirect (block protocol-relative URLs like //attacker.com)
     if not next_url or not next_url.startswith('/'):
         next_url = '/'    
     if not token:
@@ -167,8 +172,7 @@ def _get_authentication_info(token):
             content = json.loads(response.content.decode('utf-8'))
             return content
     except Exception as e:
-        import traceback
-        traceback.print_exc()
+        app.logger.error(f"Failed to get authentication info: {str(e)}", exc_info=True)
         return None
 
 def _delete_authentication_token(token):
@@ -182,8 +186,7 @@ def _delete_authentication_token(token):
         response = requests.delete(url, timeout=SECRET_TIMEOUT_PERIOD)
         return response.status_code == 200
     except Exception as e:
-        import traceback
-        traceback.print_exc()
+        app.logger.error(f"Failed to delete authentication token: {str(e)}", exc_info=True)
         return False
 
 @app.route("/logout")
@@ -250,14 +253,15 @@ def laji_proxy():
             'Accept-Language': request.headers.get('Accept-Language', 'fi')
         }
 
+        app.logger.debug(f"Proxying request to LAJI API: {target_url} with headers {forward_headers}")
+
         resp = requests.get(target_url, headers=forward_headers, timeout=30)
 
         # Return response content and status code with original content-type
         content_type = resp.headers.get('Content-Type', 'application/json')
         return (resp.content, resp.status_code, {'Content-Type': content_type})
     except Exception as e:
-        import traceback
-        traceback.print_exc()
+        app.logger.error(f"LAJI proxy request failed: {str(e)}", exc_info=True)
         return jsonify({"success": False, "error": str(e)}), 500
 
 
@@ -416,7 +420,7 @@ def list_taxons_tree():
         stats_cache.set(cache_key, result)
         return jsonify(result)
     except Exception as e:
-        import traceback; traceback.print_exc()
+        app.logger.error(f"Failed to list taxons tree: {str(e)}", exc_info=True)
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
@@ -450,7 +454,7 @@ def get_taxon_children(taxon_id):
         stats_cache.set(cache_key, result)
         return jsonify(result)
     except Exception as e:
-        import traceback; traceback.print_exc()
+        app.logger.error(f"Failed to get taxon children: {str(e)}", exc_info=True)
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
@@ -538,7 +542,7 @@ def search_species_api():
         db.close()
         return jsonify({'speciesMatches': species_results, 'groupMatches': group_results})
     except Exception as e:
-        import traceback; traceback.print_exc()
+        app.logger.error(f"Search API failed: {str(e)}", exc_info=True)
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
@@ -576,7 +580,7 @@ def create_species():
         
         return jsonify({'success': True, 'project': result})
     except Exception as e:
-        import traceback; traceback.print_exc()
+        app.logger.error(f"Failed to create species: {str(e)}", exc_info=True)
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
@@ -600,7 +604,7 @@ def get_species(project_id):
         db.close()
         return jsonify(result)
     except Exception as e:
-        import traceback; traceback.print_exc()
+        app.logger.error(f"Failed to get species: {str(e)}", exc_info=True)
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
@@ -627,7 +631,7 @@ def update_species(project_id):
         stats_cache.delete(f'taxon_children:{taxon_id}')
         return jsonify({'success': True, 'project': result})
     except Exception as e:
-        import traceback; traceback.print_exc()
+        app.logger.error(f"Failed to update species: {str(e)}", exc_info=True)
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
@@ -654,7 +658,7 @@ def delete_species(project_id):
         stats_cache.delete(f'taxon_children:{taxon_id}')
         return jsonify({'success': True, 'deleted_observations': obs_count})
     except Exception as e:
-        import traceback; traceback.print_exc()
+        app.logger.error(f"Failed to delete species: {str(e)}", exc_info=True)
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
@@ -689,7 +693,7 @@ def list_species_datasets(project_id):
         db.close()
         return jsonify({'datasets': datasets, 'project_id': project_id})
     except Exception as e:
-        import traceback; traceback.print_exc()
+        app.logger.error(f"Failed to list datasets: {str(e)}", exc_info=True)
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
@@ -705,7 +709,7 @@ def delete_species_dataset(project_id, dataset_id):
         stats_cache.delete(f"stats:{project_id}")
         return jsonify({'success': True, 'deleted_observations': obs_count})
     except Exception as e:
-        import traceback; traceback.print_exc()
+        app.logger.error(f"Failed to delete dataset: {str(e)}", exc_info=True)
         return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route("/api/observations", methods=["POST"])
@@ -913,8 +917,7 @@ def upload_csv_to_species(project_id):
             raise e
 
     except Exception as e:
-        import traceback
-        traceback.print_exc()
+        app.logger.error(f"Failed to upload CSV: {str(e)}", exc_info=True)
         return jsonify({"success": False, "error": str(e)}), 500
 
 
@@ -1021,8 +1024,7 @@ def download_csv_from_species(project_id):
         return response
 
     except Exception as e:
-        import traceback
-        traceback.print_exc()
+        app.logger.error(f"Failed to download CSV: {str(e)}", exc_info=True)
         return jsonify({"success": False, "error": str(e)}), 500
 
 @app.route("/api/observations/<int:project_id>", methods=["GET"])
@@ -1038,7 +1040,7 @@ def get_observations(project_id):
     try:
         # Pagination parameters
         page = request.args.get('page', 1, type=int)
-        per_page = request.args.get('per_page', 1000, type=int)
+        per_page = min(int(request.args.get('per_page', 1000)), 1000)  # Limit to max 1000 to prevent DoS
                 
         session = Session()
         
@@ -1122,8 +1124,7 @@ def get_observations(project_id):
             }
         })
     except Exception as e:
-        import traceback
-        traceback.print_exc()
+        app.logger.error(f"Failed to get observations: {str(e)}", exc_info=True)
         return jsonify({"success": False, "error": str(e)}), 500
 
 @app.route("/api/observation/<int:obs_id>/exclude", methods=["POST"])
@@ -1196,7 +1197,7 @@ def set_observations_excluded():
         finally:
             session.close()
     except Exception as e:
-        import traceback; traceback.print_exc()
+        app.logger.error(f"Failed to set observations excluded: {str(e)}", exc_info=True)
         return jsonify({"success": False, "error": str(e)}), 500
 
 @app.route("/api/observation/<int:obs_id>/geometry", methods=["PATCH"])
@@ -1519,8 +1520,7 @@ def get_dataset_stats(project_id):
         return jsonify(result)
         
     except Exception as e:
-        import traceback
-        traceback.print_exc()
+        app.logger.error(f"Failed to get dataset stats: {str(e)}", exc_info=True)
         return jsonify({"success": False, "error": str(e)}), 500
 
 @app.route("/api/observations/<int:project_id>/convex_hull", methods=["GET"])
@@ -1561,8 +1561,7 @@ def get_convex_hull(project_id):
         })
         
     except Exception as e:
-        import traceback
-        traceback.print_exc()
+        app.logger.error(f"Failed to get convex hull: {str(e)}", exc_info=True)
         return jsonify({"success": False, "error": str(e)}), 500
 
 @app.route("/api/observations/<int:project_id>/convex_hull", methods=["POST"])
@@ -1662,8 +1661,7 @@ def calculate_convex_hull(project_id):
         })
 
     except Exception as e:
-        import traceback
-        traceback.print_exc()
+        app.logger.error(f"Failed to calculate convex hull: {str(e)}", exc_info=True)
         return jsonify({"success": False, "error": str(e)}), 500
 
 @app.route("/api/observations/<int:project_id>/grid", methods=["GET"])
@@ -1683,8 +1681,7 @@ def get_grid(project_id):
         session.close()
         return jsonify({"type": "FeatureCollection", "features": features, "project_id": project_id, "success": True})
     except Exception as e:
-        import traceback
-        traceback.print_exc()
+        app.logger.error(f"Failed to get grid: {str(e)}", exc_info=True)
         return jsonify({"success": False, "error": str(e)}), 500
 
 @app.route("/api/observations/<int:project_id>/grid", methods=["POST"])
@@ -1723,8 +1720,7 @@ def calculate_grid(project_id):
     except Exception as e:
         session.rollback()
         session.close()
-        import traceback
-        traceback.print_exc()
+        app.logger.error(f"Failed to calculate grid: {str(e)}", exc_info=True)
         return jsonify({"success": False, "error": str(e)}), 500
 
 if __name__ == "__main__":
