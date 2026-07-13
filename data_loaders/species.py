@@ -17,21 +17,21 @@ Behaviour:
 
 import csv
 import os
+from sqlalchemy import text as sa_text
 
-SPECIES_TSV = os.path.join(os.path.dirname(__file__), 'static/resources/species_and_groups.tsv')
 
+SPECIES_TSV = os.path.join(os.path.dirname(__file__), '..', 'static/resources/species_and_groups.tsv')
 
-# ---------------------------------------------------------------------------
-# Public entry point
-# ---------------------------------------------------------------------------
 
 def load_species_to_db(session_factory, filepath=None):
     """Read TSV and insert species (projects) into the database.
 
-    Called once from models.init_db() after load_taxons_to_db().
+    Called after load_taxons_to_db() to populate the projects table.
+    
+    Args:
+        session_factory: SQLAlchemy session factory (e.g., models.Session)
+        filepath: Path to species_and_groups.tsv (defaults to static/resources/species_and_groups.tsv)
     """
-    from sqlalchemy import text as sa_text
-
     filepath = filepath or SPECIES_TSV
 
     session = session_factory()
@@ -141,12 +141,15 @@ def load_species_to_db(session_factory, filepath=None):
         session.close()
 
 
-# ---------------------------------------------------------------------------
-# Internal helpers
-# ---------------------------------------------------------------------------
-
 def _parse_tsv(filepath):
-    """Return a list of dicts with keys: mx_id, name, iucn_category, group."""
+    """Return a list of dicts with keys: mx_id, name, iucn_category, group.
+    
+    Args:
+        filepath: Path to the species_and_groups.tsv file
+        
+    Returns:
+        List of dictionaries, one per row
+    """
     rows = []
     with open(filepath, 'r', encoding='utf-8') as f:
         reader = csv.DictReader(f, delimiter='\t')
@@ -170,6 +173,16 @@ def _resolve_taxon_id(group_raw, by_finnish, by_scientific,
 
     Returns the taxon id (int) or None if not resolved.
     Side-effects: appends to skipped_no_match.
+    
+    Args:
+        group_raw: Group string from TSV (may contain Finnish and scientific name)
+        by_finnish: Dict mapping Finnish names to taxon IDs
+        by_scientific: Dict mapping scientific names to taxon IDs
+        species_name: Species name (for error reporting)
+        skipped_no_match: List to append error messages to
+        
+    Returns:
+        Taxon ID if found, None otherwise
     """
     if not group_raw:
         skipped_no_match.append(f"{species_name} [empty group]")

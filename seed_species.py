@@ -16,7 +16,7 @@ To force a re-seed after clearing the projects table manually:
 """
 
 from models import Session
-from species_loader import load_species_to_db
+from data_loaders.species import load_species_to_db
 
 if __name__ == "__main__":
     print("Seeding species from species_and_groups.tsv ...")

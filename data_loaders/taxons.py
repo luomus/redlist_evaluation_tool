@@ -11,15 +11,18 @@ The JSON file contains a nested tree structure:
     ...
   ]
 
-The hierarchy is read-only once loaded. This module is called during
-database initialization and will skip loading if taxons already exist.
+The hierarchy is read-only once loaded. This module handles:
+- Parsing the hierarchy.json file
+- Inserting taxons into the database
+- Marking leaf nodes appropriately
 """
 
 import json
 import os
+from sqlalchemy import text as sa_text
 
 
-HIERARCHY_FILE = os.path.join(os.path.dirname(__file__), 'static/resources/hierarchy.json')
+HIERARCHY_FILE = os.path.join(os.path.dirname(__file__), '..', 'static/resources/hierarchy.json')
 
 
 def parse_hierarchy(filepath=None):
@@ -30,6 +33,12 @@ def parse_hierarchy(filepath=None):
         'scientific_name': str or None,
         'children': [node, ...],
     }
+    
+    Args:
+        filepath: Path to hierarchy.json (defaults to static/resources/hierarchy.json)
+        
+    Returns:
+        List of root node dictionaries
     """
     filepath = filepath or HIERARCHY_FILE
 
@@ -40,11 +49,13 @@ def parse_hierarchy(filepath=None):
 def load_taxons_to_db(session_factory, filepath=None):
     """Insert parsed hierarchy into the taxons table.
 
-    - Skips if taxons already exist.
+    - Skips if taxons already exist (idempotent).
     - Marks nodes without children as is_leaf=True.
+    
+    Args:
+        session_factory: SQLAlchemy session factory (e.g., models.Session)
+        filepath: Path to hierarchy.json (defaults to static/resources/hierarchy.json)
     """
-    from sqlalchemy import text as sa_text
-
     session = session_factory()
     try:
         count = session.execute(sa_text("SELECT COUNT(*) FROM taxons")).scalar()
@@ -69,9 +80,18 @@ def load_taxons_to_db(session_factory, filepath=None):
 
 
 def _insert_nodes(session, nodes, parent_id, level, counter):
-    """Recursively insert nodes and return total count."""
-    from sqlalchemy import text as sa_text
-
+    """Recursively insert nodes and return total count.
+    
+    Args:
+        session: SQLAlchemy session
+        nodes: List of node dictionaries to insert
+        parent_id: Parent taxon ID (None for root nodes)
+        level: Hierarchy level (1 for roots)
+        counter: Mutable list with single counter value for sort_order
+        
+    Returns:
+        Total number of nodes inserted (including descendants)
+    """
     total = 0
     for node in nodes:
         is_leaf = len(node['children']) == 0
