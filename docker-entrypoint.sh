@@ -9,7 +9,7 @@ until python -c "from models import engine; engine.connect()" 2>&1; do
 done
 
 echo "Database is ready, initializing tables..."
-python init_database.py
+python -c "from models import init_db; init_db()"
 
 echo "Starting application..."
 exec "$@"

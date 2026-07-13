@@ -109,7 +109,7 @@ class BaseGridCell(Base):
 # ---------------------------------------------------------------------------
 # Database connection
 # ---------------------------------------------------------------------------
-DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql://biotools:biotools@localhost:5432/biotools')
+DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql://redlisttool:redlisttool@localhost:5432/redlisttool')
 engine = create_engine(
     DATABASE_URL,
     pool_size=10,

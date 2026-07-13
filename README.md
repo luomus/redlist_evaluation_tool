@@ -61,7 +61,7 @@ The seeder skips existing species and prints a summary of inserted / skipped row
 If you have an existing deployment that predates the `iucn_category` / `mx_id` columns, run the migration first:
 
 ```bash
-oc exec <db-pod> -- psql -U biotools -d biotools \
+oc exec <db-pod> -- psql -U redlisttool -d redlisttool \
   -f /dev/stdin < migrations/add_iucn_mx_id_to_projects.sql
 ```
 

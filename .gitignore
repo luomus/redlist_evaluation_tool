@@ -12,3 +12,5 @@ TODO
 UHA_**
 test.csv
 taxon_hierarchy.py
+.vscode
+.gitignore

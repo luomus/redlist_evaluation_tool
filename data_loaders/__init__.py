@@ -1,5 +1,5 @@
 """
-Data loaders package for biotools.
+Data loaders package for redlisttools.
 
 Handles consolidated database initialization, including:
 - Table creation and schema setup
