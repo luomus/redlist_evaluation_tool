@@ -3,7 +3,8 @@ import json
 from datetime import datetime
 from flask import Blueprint, jsonify, request, current_app
 from sqlalchemy import text
-from models import Session, Observation, ConvexHull
+from models import Observation, ConvexHull
+from data_loaders.database import Session
 from auth.decorators import login_required
 
 bp = Blueprint('api_spatial', __name__, url_prefix='/api')

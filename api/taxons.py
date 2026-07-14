@@ -1,6 +1,7 @@
 """Taxon hierarchy and search API endpoints."""
 from flask import Blueprint, jsonify, request, current_app
-from models import Session, Taxon, Project
+from models import Taxon, Project
+from data_loaders.database import Session
 from cache import stats_cache
 from utils.helpers import project_to_dict
 from auth.decorators import login_required

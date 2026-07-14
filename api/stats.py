@@ -1,7 +1,8 @@
 """Statistics and analytics API endpoint."""
 from flask import Blueprint, jsonify, current_app
 from sqlalchemy import text, cast, Integer, func
-from models import Session, Project, Observation
+from models import Project, Observation
+from data_loaders.database import Session
 from cache import stats_cache
 from auth.decorators import login_required
 

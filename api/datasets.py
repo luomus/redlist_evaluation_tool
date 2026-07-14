@@ -1,7 +1,8 @@
 """Datasets listing API endpoint."""
 from flask import Blueprint, jsonify, current_app
 from sqlalchemy import func
-from models import Session, Observation
+from models import Observation
+from data_loaders.database import Session
 from auth.decorators import login_required
 
 bp = Blueprint('api_datasets', __name__, url_prefix='/api')

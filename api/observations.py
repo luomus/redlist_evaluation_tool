@@ -7,7 +7,8 @@ from flask import Blueprint, jsonify, request, current_app, make_response
 from sqlalchemy import text, insert
 from shapely.geometry import shape
 from shapely import wkt as shapely_wkt
-from models import Session, Project, Observation
+from models import Project, Observation
+from data_loaders.database import Session
 from cache import stats_cache
 from utils.helpers import generate_id
 from auth.decorators import login_required

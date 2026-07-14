@@ -1,11 +1,9 @@
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, Text, Float, text, ForeignKey, Boolean
+from sqlalchemy import Column, Integer, String, DateTime, Text, Float, ForeignKey, Boolean
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, relationship
+from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import JSONB
 from geoalchemy2 import Geometry
 from datetime import datetime
-import os
-import time
 
 Base = declarative_base()
 
@@ -105,27 +103,3 @@ class BaseGridCell(Base):
     geom_3067 = Column(Geometry(geometry_type='POLYGON', srid=3067))
     geom_4326 = Column(Geometry(geometry_type='POLYGON', srid=4326))
     created_at = Column(DateTime, default=datetime.utcnow)
-
-# ---------------------------------------------------------------------------
-# Database connection
-# ---------------------------------------------------------------------------
-DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql://redlisttool:redlisttool@localhost:5432/redlisttool')
-engine = create_engine(
-    DATABASE_URL,
-    pool_size=10,
-    max_overflow=20,
-    pool_pre_ping=True,
-    pool_recycle=3600,
-)
-Session = sessionmaker(bind=engine)
-
-
-def init_db():
-    """Initialize database tables, load taxon hierarchy and base grid.
-    
-    Uses the consolidated data_loaders package to handle all initialization.
-    All operations are idempotent (safe to run multiple times).
-    Includes retry logic for Docker container startup sequencing issues.
-    """
-    from data_loaders.seed import seed_database
-    seed_database(engine, Session)

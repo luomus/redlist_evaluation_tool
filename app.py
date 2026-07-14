@@ -1,6 +1,6 @@
 from flask import Flask, render_template
 from livereload import Server
-from models import init_db
+from data_loaders.database import init_db
 
 from config import (
     DEBUG, SECRET_KEY, LAJI_API_ACCESS_TOKEN, LAJI_API_BASE_URL,

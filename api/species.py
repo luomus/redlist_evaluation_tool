@@ -1,7 +1,8 @@
 """Species/project management API endpoints."""
 from flask import Blueprint, jsonify, request, current_app
 from sqlalchemy import func
-from models import Session, Project, Observation, ConvexHull, GridCell
+from models import Project, Observation, ConvexHull, GridCell
+from data_loaders.database import Session
 from cache import stats_cache
 from utils.helpers import project_to_dict
 from auth.decorators import login_required

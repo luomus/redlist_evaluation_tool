@@ -2,11 +2,27 @@
 Database initialization: table creation and base grid setup.
 
 This module handles:
+- Database connection setup
 - Creating all required tables
 - Generating the Finland-wide 2km base grid (both EPSG:3067 and EPSG:4326)
 """
 
-from sqlalchemy import text
+import os
+from sqlalchemy import create_engine, text
+from sqlalchemy.orm import sessionmaker
+
+# ---------------------------------------------------------------------------
+# Database connection
+# ---------------------------------------------------------------------------
+DATABASE_URL = os.getenv('DATABASE_URL')
+engine = create_engine(
+    DATABASE_URL,
+    pool_size=10,
+    max_overflow=20,
+    pool_pre_ping=True,
+    pool_recycle=3600,
+)
+Session = sessionmaker(bind=engine)
 
 
 def create_tables(engine):
@@ -98,5 +114,14 @@ def create_base_grid_if_missing(session):
     except Exception:
         session.rollback()
         raise
-    finally:
-        session.close()
+
+
+def init_db():
+    """Initialize database tables, load taxon hierarchy and base grid.
+    
+    Uses the consolidated data_loaders package to handle all initialization.
+    All operations are idempotent (safe to run multiple times).
+    Includes retry logic for Docker container startup sequencing issues.
+    """
+    from data_loaders.seed import seed_database
+    seed_database(engine, Session)
