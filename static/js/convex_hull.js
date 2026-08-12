@@ -336,3 +336,271 @@ fetchAllObservationsGeneric(datasetId,
         }
     }
 );
+
+// ============================================================================
+// MAP VIEW DATA MANAGEMENT - Download/Upload functionality
+// ============================================================================
+
+// Helper to escape HTML
+function escapeHtml(text) {
+    if (!text) return '';
+    const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
+    return text.replace(/[&<>"']/g, c => map[c]);
+}
+
+// Show/hide data panel
+function toggleMapDataPanel() {
+    const panel = document.getElementById('mapDataPanel');
+    if (panel) {
+        panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+    }
+    // Load datasets when panel opens
+    if (panel && panel.style.display === 'block') {
+        loadMapDatasets();
+    }
+}
+
+// Helper to show error messages
+function showMapError(message) {
+    const el = document.getElementById('mapError');
+    if (el) {
+        el.textContent = message;
+        el.style.display = 'block';
+        setTimeout(() => { el.style.display = 'none'; }, 4000);
+    }
+}
+
+// Load datasets for this species from the backend
+async function loadMapDatasets() {
+    const container = document.getElementById('mapDatasets');
+    if (!container) return;
+    try {
+        const resp = await fetch(`/api/species/${datasetId}/datasets`);
+        const data = await resp.json();
+        displayMapDatasets(data.datasets || [], container);
+    } catch (err) {
+        console.error('Error loading datasets:', err);
+        container.innerHTML = '<p>Aineistojen lataus epäonnistui</p>';
+    }
+}
+
+function displayMapDatasets(datasets, container) {
+    if (datasets.length === 0) {
+        container.innerHTML = '<p style="color:#999; font-size:12px;">Ei vielä aineistoja.</p>';
+        return;
+    }
+    let html = '<div style="border: 1px solid #ddd; border-radius: 3px; padding: 8px; font-size: 12px;">';
+    for (const ds of datasets) {
+        html += `
+        <div style="margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid #eee;">
+            <div><strong>${escapeHtml(ds.dataset_name || 'Nimetön')}</strong></div>
+            <div style="color: #666; font-size: 11px;">Havainnot: ${ds.count}</div>
+            <div style="color: #666; font-size: 11px;">Lisätty: ${new Date(ds.created_at).toLocaleString()}</div>
+            <div style="margin-top: 4px; display: flex; gap: 4px;">
+                <button onclick="downloadMapDataset('${ds.dataset_id}')" style="padding: 4px 8px; background: #007bff; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 11px;">Lataa</button>
+                ${ds.dataset_url ? `<button onclick="reloadMapDataset('${ds.dataset_id}', '${encodeURIComponent(ds.dataset_url)}')" style="padding: 4px 8px; background: #17a2b8; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 11px;">Päivitä</button>` : ''}
+                <button onclick="deleteMapDataset('${ds.dataset_id}')" style="padding: 4px 8px; background: #dc3545; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 11px;">Poista</button>
+            </div>
+        </div>`;
+    }
+    html += '</div>';
+    container.innerHTML = html;
+}
+
+// Fetch data from Laji.fi URL
+async function fetchDataForMap() {
+    const url = (document.getElementById('mapUrlInput') || {}).value || '';
+    if (!url.trim()) { 
+        showMapError('Syötä URL-osoite'); 
+        return; 
+    }
+
+    const progressDiv = document.getElementById('mapFetchProgress');
+    const progressLog = document.getElementById('mapProgressLog');
+    if (progressDiv) progressDiv.style.display = 'block';
+    if (progressLog) progressLog.innerHTML = '';
+
+    try {
+        await window.parseUrl(url, progressLog);
+        const saveSection = document.getElementById('mapSaveSection');
+        if (saveSection) saveSection.style.display = 'block';
+    } catch (err) {
+        showMapError('Haun suoritus epäonnistui: ' + err.message);
+    }
+}
+
+// Generate unique ID for dataset
+function generateMapDatasetId() {
+    return Date.now().toString(36) + Math.random().toString(36).slice(2);
+}
+
+// Save fetched data to database
+async function saveDataForMap() {
+    if (!window.currentFetchedData) {
+        showMapError('Ei tallennettavaa dataa. Hae data ensin.');
+        return;
+    }
+    const currentApiUrl = window.currentFetchedUrl || '';
+
+    try {
+        const resp = await fetch('/api/observations', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                project_id: datasetId,
+                dataset_id: generateMapDatasetId(),
+                dataset_name: `Dataset ${new Date().toLocaleString()}`,
+                dataset_url: currentApiUrl,
+                features: window.currentFetchedData.features
+            })
+        });
+        const result = await resp.json();
+        if (result.success) {
+            showMapError(`✓ Aineisto tallennettu! ${result.count} havaintoa.`);
+            document.getElementById('mapUrlInput').value = '';
+            const saveSection = document.getElementById('mapSaveSection');
+            if (saveSection) saveSection.style.display = 'none';
+            const progressDiv = document.getElementById('mapFetchProgress');
+            if (progressDiv) progressDiv.style.display = 'none';
+            window.currentFetchedData = null;
+            window.currentFetchedUrl = null;
+            await loadMapDatasets();
+        } else {
+            showMapError('Tallennus epäonnistui: ' + result.error);
+        }
+    } catch (err) {
+        console.error('Error saving data:', err);
+        showMapError('Tallennus epäonnistui');
+    }
+}
+
+// Upload CSV file
+async function uploadCsvForMap() {
+    const fileInput = document.getElementById('mapFileInput');
+    if (!fileInput || !fileInput.files.length) {
+        showMapError('Valitse CSV-tiedosto');
+        return;
+    }
+    const form = new FormData();
+    form.append('file', fileInput.files[0]);
+
+    try {
+        const resp = await fetch(`/api/species/${datasetId}/upload_csv`, {
+            method: 'POST',
+            body: form
+        });
+        const result = await resp.json();
+        if (result.success) {
+            showMapError(`✓ Ladattu ${result.count} havaintoa`);
+            fileInput.value = '';
+            await loadMapDatasets();
+        } else {
+            showMapError('Lataus epäonnistui: ' + result.error);
+        }
+    } catch (err) {
+        console.error('Upload error:', err);
+        showMapError('Lähetys epäonnistui');
+    }
+}
+
+// Download dataset as CSV
+async function downloadMapDataset(datasetIdStr) {
+    try {
+        const resp = await fetch(`/api/species/${datasetId}/download_csv?dataset_id=${encodeURIComponent(datasetIdStr)}`);
+        if (!resp.ok) {
+            const err = await resp.json();
+            showMapError('Lataus epäonnistui: ' + (err.error || resp.statusText));
+            return;
+        }
+        const blob = await resp.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `dataset_${datasetIdStr}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        showMapError('✓ Aineisto ladattu');
+    } catch (err) {
+        console.error('Download error:', err);
+        showMapError('Lataus epäonnistui');
+    }
+}
+
+// Reload dataset from URL
+async function reloadMapDataset(datasetIdStr, encodedUrl) {
+    try {
+        const url = decodeURIComponent(encodedUrl || '');
+        if (!url) { 
+            showMapError('Ei lähde-URL-osoitetta'); 
+            return; 
+        }
+        if (!confirm('Uudelleenlataus korvaa olemassa olevan aineiston. Jatketaanko?')) return;
+
+        const progressDiv = document.getElementById('mapFetchProgress');
+        const progressLog = document.getElementById('mapProgressLog');
+        if (progressDiv && progressLog) {
+            progressDiv.style.display = 'block';
+            progressLog.innerHTML = '';
+        }
+
+        await window.parseUrl(url, progressLog);
+
+        // Save the reloaded data with same dataset ID
+        if (!window.currentFetchedData) {
+            showMapError('Haun suoritus epäonnistui.');
+            return;
+        }
+
+        try {
+            const resp = await fetch('/api/observations', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    project_id: datasetId,
+                    dataset_id: datasetIdStr,  // Reuse existing dataset ID
+                    dataset_name: `Dataset ${new Date().toLocaleString()}`,
+                    dataset_url: url,
+                    features: window.currentFetchedData.features,
+                    replace_existing: true
+                })
+            });
+            const result = await resp.json();
+            if (result.success) {
+                showMapError(`✓ Aineisto päivitetty! ${result.count} havaintoa.`);
+                const progressDiv = document.getElementById('mapFetchProgress');
+                if (progressDiv) progressDiv.style.display = 'none';
+                window.currentFetchedData = null;
+                window.currentFetchedUrl = null;
+                await loadMapDatasets();
+            } else {
+                showMapError('Päivitys epäonnistui: ' + result.error);
+            }
+        } catch (err) {
+            console.error('Error updating dataset:', err);
+            showMapError('Päivitys epäonnistui');
+        }
+    } catch (e) {
+        showMapError('Virheellinen URL');
+    }
+}
+
+// Delete dataset
+async function deleteMapDataset(datasetIdStr) {
+    if (!confirm('Haluatko varmasti poistaa tämän aineiston?')) return;
+
+    try {
+        const resp = await fetch(`/api/species/${datasetId}/datasets/${datasetIdStr}`, { method: 'DELETE' });
+        const result = await resp.json();
+        if (result.success) {
+            showMapError('✓ Aineisto poistettu');
+            await loadMapDatasets();
+        } else {
+            showMapError('Poisto epäonnistui: ' + result.error);
+        }
+    } catch (err) {
+        console.error('Error deleting dataset:', err);
+        showMapError('Poisto epäonnistui');
+    }
+}

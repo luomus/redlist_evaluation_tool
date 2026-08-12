@@ -40,9 +40,50 @@
                 <span class="info-value" id="calculated_at">-</span>
             </div>
             <button id="recalcBtn" onclick="window.createConvexHull(false)" style="margin-top: 10px; padding: 8px 16px; background: #3388ff; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">&#8635; Laske levinneisyysalueet</button>
+
+            <!-- Data Download Panel -->
+            <div style="margin-top: 16px; border-top: 1px solid #ddd; padding-top: 12px;">
+                <button onclick="toggleMapDataPanel()" style="width: 100%; padding: 8px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: 500;">📥 Hae / Lataa aineistoa</button>
+                <div id="mapDataPanel" class="map-data-panel" style="display: none; margin-top: 12px;">
+                    <div id="mapDatasets" style="margin-bottom: 12px;">Ladataan…</div>
+
+                    <h4 style="margin: 12px 0 8px 0; font-size: 13px; font-weight: 500;">Hae aineistoa Laji.fi:sta</h4>
+                    <div class="input-group">
+                        <label style="font-size: 12px; margin-bottom: 4px; display: block;">
+                            Liitä URL
+                            <span class="info-tooltip" data-tip="Avaa laji.fi-sivusto ja rajaa havainnot haluamallasi tavalla. Kopioi URL ja liitä tähän.">i</span>
+                        </label>
+                        <div class="input-row" style="margin-bottom: 8px;">
+                            <input type="text" id="mapUrlInput" placeholder="https://laji.fi/observation/list?..." style="flex:1; padding: 6px 8px; border: 1px solid #ddd; border-radius: 3px; font-size: 12px;">
+                            <button onclick="fetchDataForMap()" style="padding: 6px 12px; background: #007bff; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 12px; margin-left: 4px;">Hae</button>
+                        </div>
+                    </div>
+
+                    <div style="margin-top: 12px; padding: 8px; background: #fafafa; border-radius: 4px;">
+                        <label style="font-size: 12px; margin-bottom: 4px; display: block;">
+                            Tai lataa CSV (lat & lon tai WKT)
+                            <span class="info-tooltip" data-tip="Lataa oma CSV-tiedosto. Tulee sisältää 'lat' ja 'lon' tai 'wkt' sarakkeet.">i</span>
+                        </label>
+                        <div class="input-row" style="margin-bottom: 0;">
+                            <input type="file" id="mapFileInput" accept=".csv" style="flex:1; font-size: 12px;">
+                            <button onclick="uploadCsvForMap()" style="padding: 6px 12px; background: #28a745; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 12px; margin-left: 4px;">Lataa</button>
+                        </div>
+                    </div>
+
+                    <div id="mapFetchProgress" class="fetch-progress" style="display:none; margin-top: 12px;">
+                        <h4 style="margin: 0 0 8px 0; font-size: 12px;">Edistyminen:</h4>
+                        <div id="mapProgressLog" style="max-height: 150px; overflow-y: auto; font-size: 12px;"></div>
+                    </div>
+
+                    <div id="mapSaveSection" style="display:none; margin-top: 12px;">
+                        <button onclick="saveDataForMap()" style="width: 100%; padding: 8px; background: #17a2b8; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">Tallenna aineisto</button>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <div id="status" class="stats">Ladataan aineistoa…</div>
+        <div id="mapError" class="map-error-message" style="display: none;"></div>
     </header>
 
     <div id="map"></div>
@@ -55,6 +96,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.9.2/proj4.min.js"></script>
     <script src="/static/js/map-shared.js"></script>
     <script src="/static/js/map-elements.js"></script>
+    <script src="/static/js/fetch_data.js"></script>
     <script src="/static/js/convex_hull.js"></script>
 </body>
 </html>

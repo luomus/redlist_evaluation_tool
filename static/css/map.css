@@ -437,3 +437,162 @@ header { padding: 12px 16px; border-bottom: 1px solid #eee; display: flex; gap: 
 .geom-conversion-mode:active {
     cursor: grabbing;
 }
+
+/* ── Data panel styling ─────────────────────────────────────────────────── */
+
+.map-data-panel {
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 12px;
+    max-height: 400px;
+    overflow-y: auto;
+    font-size: 12px;
+}
+
+.map-data-panel .input-group {
+    margin-bottom: 12px;
+}
+
+.map-data-panel .input-group label {
+    display: block;
+    margin-bottom: 4px;
+    font-weight: 500;
+    color: #333;
+}
+
+.map-data-panel .input-row {
+    display: flex;
+    gap: 4px;
+}
+
+.map-data-panel .input-row input[type="text"],
+.map-data-panel .input-row input[type="file"] {
+    flex: 1;
+    padding: 6px 8px;
+    border: 1px solid #ddd;
+    border-radius: 3px;
+    font-size: 12px;
+}
+
+.map-error-message {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: #fff3cd;
+    color: #856404;
+    border: 1px solid #ffc107;
+    border-radius: 4px;
+    padding: 12px 16px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    font-size: 13px;
+    max-width: 300px;
+    z-index: 1001;
+    animation: slideIn 0.3s ease;
+}
+
+@keyframes slideIn {
+    from { transform: translateX(350px); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+}
+
+.fetch-progress {
+    background: #f5f5f5;
+    border: 1px solid #ddd;
+    border-radius: 3px;
+    padding: 8px;
+}
+
+.fetch-progress h4 {
+    margin: 0 0 8px 0;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.progress-entry {
+    margin-bottom: 4px;
+    padding: 4px 6px;
+    background: #fff;
+    border-radius: 2px;
+    border-left: 2px solid #0084ff;
+    font-size: 11px;
+    color: #333;
+}
+
+.progress-entry.error {
+    border-left-color: #dc3545;
+    color: #721c24;
+}
+
+.progress-summary {
+    margin-top: 8px;
+    padding: 6px;
+    background: #e7f3ff;
+    border-radius: 2px;
+    border-left: 2px solid #0084ff;
+    font-size: 11px;
+    font-weight: 500;
+}
+
+/* ── Info tooltip (copied from hierarchy.css for consistency) ─────────────── */
+
+.info-tooltip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #3498db;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1;
+    cursor: default;
+    margin-left: 5px;
+    vertical-align: middle;
+    flex-shrink: 0;
+    position: relative;
+    user-select: none;
+}
+
+.info-tooltip::after {
+    content: attr(data-tip);
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: #2c3e50;
+    color: #fff;
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 1.45;
+    padding: 7px 10px;
+    border-radius: 6px;
+    white-space: pre-wrap;
+    width: 260px;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+    z-index: 999;
+    box-shadow: 0 3px 10px rgba(0,0,0,0.25);
+}
+
+.info-tooltip::before {
+    content: '';
+    position: absolute;
+    bottom: calc(100% + 2px);
+    left: 50%;
+    transform: translateX(-50%);
+    border: 5px solid transparent;
+    border-top-color: #2c3e50;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+    z-index: 999;
+}
+
+.info-tooltip:hover::after,
+.info-tooltip:hover::before {
+    opacity: 1;
+}
