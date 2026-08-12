@@ -12,8 +12,27 @@ if (!datasetId) {
 // Create shared map and helpers
 const { map, geometryLayer, stats, updateStatus } = createSharedMap();
 
+// Fetch project name for nicer UI messages
+let projectName = `Laji ${datasetId}`;
+(async () => {
+    try {
+        const resp = await fetch(`/api/species/${datasetId}`);
+        if (resp.ok) {
+            const json = await resp.json();
+            if (json.success && json.project && json.project.name) {
+                projectName = json.project.name;
+            }
+        }
+    } catch (e) {
+        // ignore
+    }
+})();
+
 // Separate Leaflet layers per mode
 const hullLayers = { max: null, min: null };
+
+// Layer for grid cells
+let gridLayer = null;
 
 // Visual style per mode
 const HULL_STYLES = {
@@ -93,6 +112,106 @@ async function fetchAndDisplayConvexHull(fitMap = true) {
     } catch (e) { /* ignore */ }
 }
 
+// Fetch and display grid from the backend
+async function fetchAndDisplayGrid(fitMap = true) {
+    try {
+        const response = await fetch(`/api/observations/${datasetId}/grid`);
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        const data = await response.json();
+
+        if (gridLayer) {
+            map.removeLayer(gridLayer);
+            gridLayer = null;
+        }
+
+        const features = data.features || [];
+        const polygons = [];
+
+        // Keep grid under observation overlays so point/polygon clicks still work.
+        if (!map.getPane('gridPane')) {
+            map.createPane('gridPane');
+            const gp = map.getPane('gridPane');
+            gp.style.zIndex = 350;
+        }
+
+        for (const f of features) {
+            if (!f.geometry) continue;
+            try {
+                const coords = f.geometry.coordinates[0];
+                const latLngs = coords.map(c => [c[1], c[0]]);
+                const poly = L.polygon(latLngs, {
+                    pane: 'gridPane',
+                    color: '#3388ff',
+                    weight: 1,
+                    opacity: 0.8,
+                    fillColor: '#3388ff',
+                    fillOpacity: 0.15
+                });
+                polygons.push(poly);
+            } catch (e) {
+                // skip invalid geometry
+            }
+        }
+
+        if (polygons.length > 0) {
+            gridLayer = L.featureGroup(polygons).addTo(map);
+            window.sharedGridFeatures = features;
+
+            if (fitMap) {
+                try {
+                    const bounds = gridLayer.getBounds();
+                    if (bounds && bounds.isValid()) map.fitBounds(bounds, { padding: [50, 50] });
+                } catch (e) {
+                    // ignore
+                }
+            }
+            document.getElementById('cellsCount').textContent = `${polygons.length}`;
+        } else {
+            window.sharedGridFeatures = [];
+            document.getElementById('cellsCount').textContent = '0';
+        }
+    } catch (error) {
+        console.error('Error fetching grid:', error);
+        updateStatus(`Virhe: ${error.message}`);
+        document.getElementById('cellsCount').textContent = 'Virhe';
+    }
+}
+
+// Calculate/generate grid on the server
+async function calculateGrid(fitMap = true) {
+    try {
+        updateStatus('Generoidaan esiintymisaluetta...');
+        const genBtn = document.getElementById('genBtn');
+        if (genBtn) {
+            genBtn.disabled = true;
+            genBtn.style.opacity = '0.6';
+            genBtn.style.cursor = 'not-allowed';
+        }
+
+        const response = await fetch(`/api/observations/${datasetId}/grid`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || 'Failed to generate grid');
+
+        updateStatus('Esiintymisalue luotu!');
+        await fetchAndDisplayGrid(fitMap);
+    } catch (error) {
+        console.error('Error generating grid:', error);
+        updateStatus(`Virhe: ${error.message}`);
+    } finally {
+        const genBtn = document.getElementById('genBtn');
+        if (genBtn) {
+            genBtn.disabled = false;
+            genBtn.style.opacity = '';
+            genBtn.style.cursor = '';
+        }
+    }
+}
+
 // Calculate both hull modes on the server in a single request, then display
 async function calculateConvexHull(fitMap = true) {
     // Check if we have enough features for convex hull
@@ -154,6 +273,8 @@ async function calculateConvexHull(fitMap = true) {
 // Expose functions for the re-calculate button and external modules
 window.createConvexHull = calculateConvexHull;
 window.fetchAndDisplayConvexHull = fetchAndDisplayConvexHull;
+window.createGrid = calculateGrid;
+window.fetchAndDisplayGrid = fetchAndDisplayGrid;
 
 // Collect all features before rendering for optimal performance
 const allFeaturesToRender = [];
@@ -168,7 +289,8 @@ fetchAllObservationsGeneric(datasetId,
     updateStatus,
     ({ datasetName, total }) => {
         // Now render all features at once
-        updateStatus(`${datasetName}: Näytetään ${allFeaturesToRender.length} havaintoa...`);
+        const nameForStatus = projectName || datasetName || `Laji ${datasetId}`;
+        updateStatus(`${nameForStatus}: Näytetään ${allFeaturesToRender.length} havaintoa...`);
         
         const layers = [];
         
@@ -199,10 +321,11 @@ fetchAllObservationsGeneric(datasetId,
         
         stats.total = total || stats.total;
         
-        // Fetch pre-calculated convex hull from backend instead of calculating client-side
+        // Fetch both overlays after observations are loaded.
+        fetchAndDisplayGrid(false);
         fetchAndDisplayConvexHull(true);
 
-        const statusMessage = `${datasetName}: ${stats.total} havaintoa ladattu` +
+        const statusMessage = `${nameForStatus}: ${stats.total} havaintoa ladattu` +
             (stats.skipped > 0 ? ` | Skipattu: ${stats.skipped}` : '');
 
         updateStatus(statusMessage);

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Aineiston levinneisyysalue</title>
+    <title>Lajin karttanakyma</title>
     <link
         rel="stylesheet"
         href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
@@ -17,7 +17,12 @@
         <a href="/simple" class="back-btn">← Takaisin etusivulle</a>
 
         <div class="info-panel">
-            <h3>Aineiston tiedot</h3>
+            <h3>Lajin karttanakyma</h3>
+            <div class="info-item">
+                <span class="info-label">Ruutuja yht:</span>
+                <span class="info-value" id="cellsCount">-</span>
+            </div>
+            <button id="genBtn" onclick="window.createGrid(false)" style="margin-top: 10px; padding: 8px 16px; background: #3388ff; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">&#8635; Laske esiintymisalue</button>
             <div class="info-item">
                 <span class="info-label" style="color:#ff7800;">&#9632;</span>
                 <span class="info-label">Laaja EOO:</span>

@@ -63,7 +63,7 @@ def convex_hull():
 @app.route("/grid")
 @login_required
 def grid():
-    return render_template("grid.html")
+    return render_template("convex_hull.html")
 
 
 if __name__ == "__main__":
