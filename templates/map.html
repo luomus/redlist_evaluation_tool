@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Lajin karttanakyma</title>
+    <title>{{ taxon.name }} – Karttanäkymä</title>
     <link
         rel="stylesheet"
         href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
@@ -14,10 +14,20 @@
 </head>
 <body>
     <header>
-        <a href="/simple" class="back-btn">← Takaisin etusivulle</a>
-
         <div class="info-panel">
-            <h3>Lajin karttanakyma</h3>
+            <h3>{{ taxon.name }}</h3>
+            {% if taxon.category %}
+            <div class="info-item">
+                <span class="info-label">Luokka:</span>
+                <span class="info-value">{{ taxon.category }}</span>
+            </div>
+            {% endif %}
+            {% if taxon.elio_ryhma %}
+            <div class="info-item">
+                <span class="info-label">Eliöryhmä:</span>
+                <span class="info-value">{{ taxon.elio_ryhma }}</span>
+            </div>
+            {% endif %}
             <div class="info-item">
                 <span class="info-label">Ruutuja yht:</span>
                 <span class="info-value" id="cellsCount">-</span>
@@ -26,16 +36,16 @@
             <div class="info-item">
                 <span class="info-label" style="color:#ff7800;">&#9632;</span>
                 <span class="info-label">Laaja EOO:</span>
-                <span class="eoo-info" data-tip="Laaja levinneisyysalue (EOO). Lasketaan niin, että sisältää kaikkien geometrioiden kaikki pisteet. Antaa suurimman mahdollisen levinneisyysalueen arvion.">?</span>
+                <span class="eoo-info" data-tip="Laaja levinneisyysalue (EOO). Lasketaan niin, että sisältää kaikkien geometrioiden kaikki pisteet.">?</span>
                 <span class="info-value" id="areaMax">-</span>
             </div>
             <div class="info-item">
                 <span class="info-label" style="color:#3388ff;">&#9632;</span>
                 <span class="info-label">Minimaalinen EOO:</span>
-                <span class="eoo-info" data-tip="Minimaalinen levinneisyysalue (EOO). Lasketaan niin, että sisällytetään vain aluemuotoisten havaintojen lähin nurkkaus. Antaa pienimmän uskottavan levinneisyysalueen arvion.">?</span>
+                <span class="eoo-info" data-tip="Minimaalinen levinneisyysalue (EOO). Lasketaan vain aluemuotoisten havaintojen lähin nurkkaus.">?</span>
                 <span class="info-value" id="areaMin">-</span>
             </div>
-            <div class="info-item">           
+            <div class="info-item">
                 <span class="info-label">Laskettu:</span>
                 <span class="info-value" id="calculated_at">-</span>
             </div>
@@ -88,6 +98,7 @@
 
     <div id="map"></div>
 
+    <script>window.MX_ID = "{{ taxon.mx_id }}";</script>
     <script
         src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
         integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="

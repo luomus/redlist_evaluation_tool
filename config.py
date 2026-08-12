@@ -1,58 +1,50 @@
-"""
-Configuration module for redlisttools application.
-Loads environment variables and defines Flask configuration.
-"""
+"""Configuration module for biotools application."""
 
 import os
 from pathlib import Path
 from dotenv import load_dotenv
 
-# Load .env file from project root (if present)
 env_path = Path(__file__).parent / ".env"
 load_dotenv(dotenv_path=env_path)
 
-
-# ===== FLASK CONFIGURATION =====
+# ===== FLASK =====
 DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
 SECRET_KEY = os.getenv("SECRET_KEY")
 if not SECRET_KEY:
     raise RuntimeError("SECRET_KEY environment variable must be set")
 
-MAX_CONTENT_LENGTH = 100 * 1024 * 1024  # 100MB max upload size
+MAX_CONTENT_LENGTH = 100 * 1024 * 1024  # 100 MB
 
-# ===== LAJIAUTH CONFIGURATION =====
+# ===== AUTHENTICATION =====
+USE_AUTHENTICATION = os.getenv('USE_AUTHENTICATION', 'false').lower() == 'true'
+
+# LajiAuth – only validated when USE_AUTHENTICATION=true
 TARGET = os.getenv("TARGET")
-if not TARGET:
-    raise RuntimeError("TARGET environment variable must be set")
-
 LAJIAUTH_URL = os.getenv("LAJIAUTH_URL")
-if not LAJIAUTH_URL:
-    raise RuntimeError("LAJIAUTH_URL environment variable must be set")
-
 SECRET_TIMEOUT_PERIOD = int(os.getenv("SECRET_TIMEOUT_PERIOD", "10"))
 ALLOWED_ROLES = ['MA.admin', 'MA.taxonEditorUser']
 
-# ===== LAJIAPI CONFIGURATION =====
-LAJI_API_ACCESS_TOKEN = os.getenv("LAJI_API_ACCESS_TOKEN")
-if not LAJI_API_ACCESS_TOKEN:
-    raise RuntimeError("LAJI_API_ACCESS_TOKEN environment variable must be set")
+if USE_AUTHENTICATION:
+    if not TARGET:
+        raise RuntimeError("TARGET must be set when USE_AUTHENTICATION=true")
+    if not LAJIAUTH_URL:
+        raise RuntimeError("LAJIAUTH_URL must be set when USE_AUTHENTICATION=true")
 
-LAJI_API_BASE_URL = os.getenv("LAJI_API_BASE_URL")
-if not LAJI_API_BASE_URL:
-    raise RuntimeError("LAJI_API_BASE_URL environment variable must be set")
+# ===== LAJI API =====
+LAJI_API_ACCESS_TOKEN = os.getenv("LAJI_API_ACCESS_TOKEN", "")
+LAJI_API_BASE_URL = os.getenv("LAJI_API_BASE_URL", "")
 
-# ===== MML TILE CONFIGURATION =====
-MML_API_KEY = os.getenv('MML_API_KEY')
-if not MML_API_KEY:
-    raise RuntimeError("MML_API_KEY environment variable must be set")
+# ===== MML TILES =====
+MML_API_KEY = os.getenv('MML_API_KEY', '')
 
-# ===== CACHE CONFIGURATION =====
-STATS_CACHE_TTL_SECONDS = 300  # 5 minutes
+# ===== CACHE =====
+STATS_CACHE_TTL_SECONDS = 300
+
 
 def get_flask_config():
-    """Return Flask app configuration dict."""
     return {
         'DEBUG': DEBUG,
         'SECRET_KEY': SECRET_KEY,
         'MAX_CONTENT_LENGTH': MAX_CONTENT_LENGTH,
     }
+

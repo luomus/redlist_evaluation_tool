@@ -26,7 +26,11 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
       - DATABASE_URL=postgresql://redlisttool:redlisttool@db:5432/redlisttool
-      - MML_API_KEY=${MML_API_KEY}
+      - SECRET_KEY=${SECRET_KEY:-change-me-in-production}
+      - USE_AUTHENTICATION=${USE_AUTHENTICATION:-false}
+      - MML_API_KEY=${MML_API_KEY:-}
+      - LAJI_API_BASE_URL=${LAJI_API_BASE_URL:-}
+      - LAJI_API_ACCESS_TOKEN=${LAJI_API_ACCESS_TOKEN:-}
     depends_on:
       db:
         condition: service_healthy

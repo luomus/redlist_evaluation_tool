@@ -9,53 +9,25 @@ Base = declarative_base()
 
 
 class Taxon(Base):
-    """Static taxon hierarchy loaded from hierarchy.json. Read-only after init."""
+    """Taxon loaded from species_and_groups.tsv, identified by MX-identifier."""
     __tablename__ = 'taxons'
 
     id = Column(Integer, primary_key=True)
+    mx_id = Column(String(50), nullable=False, unique=True, index=True)
     name = Column(String(255), nullable=False)
-    scientific_name = Column(String(255))
-    level = Column(Integer, nullable=False, default=1)
-    parent_id = Column(Integer, ForeignKey('taxons.id', ondelete='CASCADE'), index=True)
-    is_leaf = Column(Boolean, nullable=False, default=False)
-    sort_order = Column(Integer, nullable=False, default=0)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    category = Column(String(100))
+    elio_ryhma = Column(String(255))
 
-    parent = relationship('Taxon', remote_side='Taxon.id',
-                          foreign_keys='Taxon.parent_id', uselist=False)
-    children = relationship('Taxon',
-                            foreign_keys='Taxon.parent_id',
-                            order_by='Taxon.sort_order',
-                            lazy='joined',
-                            overlaps='parent')
-    projects = relationship('Project', back_populates='taxon')
-
-
-class Project(Base):
-    """A species project belonging to a leaf taxon."""
-    __tablename__ = 'projects'
-
-    id = Column(Integer, primary_key=True)
-    name = Column(String(255), nullable=False)
-    description = Column(Text)
-    taxon_id = Column(Integer, ForeignKey('taxons.id', ondelete='CASCADE'), nullable=False, index=True)
-    iucn_category = Column(String(100))   # e.g. "LC – Elinvoimaiset" from red-list TSV
-    mx_id = Column(String(50))            # FinBIF MX-identifier, e.g. "MX.5"
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-
-    taxon = relationship('Taxon', back_populates='projects')
-    observations = relationship('Observation', back_populates='project', cascade='all, delete-orphan')
-    grid_cells = relationship('GridCell', back_populates='project', cascade='all, delete-orphan')
-    # allow multiple hull records (max/min)
-    convex_hulls = relationship('ConvexHull', back_populates='project', cascade='all, delete-orphan')
+    observations = relationship('Observation', back_populates='taxon', cascade='all, delete-orphan')
+    convex_hulls = relationship('ConvexHull', back_populates='taxon', cascade='all, delete-orphan')
+    grid_cells = relationship('GridCell', back_populates='taxon', cascade='all, delete-orphan')
 
 
 class Observation(Base):
     __tablename__ = 'observations'
 
     id = Column(Integer, primary_key=True)
-    project_id = Column(Integer, ForeignKey('projects.id', ondelete='CASCADE'), nullable=False, index=True)
+    taxon_id = Column(Integer, ForeignKey('taxons.id', ondelete='CASCADE'), nullable=False, index=True)
     dataset_id = Column(String(100), nullable=False, index=True)
     dataset_name = Column(String(255))
     dataset_url = Column(Text)
@@ -64,33 +36,31 @@ class Observation(Base):
     properties = Column(JSONB, nullable=False)
     geometry = Column(Geometry(geometry_type='GEOMETRY', srid=4326))
 
-    project = relationship('Project', back_populates='observations')
+    taxon = relationship('Taxon', back_populates='observations')
 
 
 class ConvexHull(Base):
     __tablename__ = 'convex_hulls'
 
     id = Column(Integer, primary_key=True)
-    project_id = Column(Integer, ForeignKey('projects.id', ondelete='CASCADE'), nullable=False, index=True)
+    taxon_id = Column(Integer, ForeignKey('taxons.id', ondelete='CASCADE'), nullable=False, index=True)
     mode = Column(String(10), nullable=False, default='max', server_default='max', index=True)
     geometry = Column(Geometry(geometry_type='POLYGON', srid=4326))
     area_km2 = Column(Float)
     calculated_at = Column(DateTime, default=datetime.utcnow, index=True)
 
-    project = relationship('Project', back_populates='convex_hulls')
+    taxon = relationship('Taxon', back_populates='convex_hulls')
 
 
 class GridCell(Base):
     __tablename__ = 'grid_cells'
 
     id = Column(Integer, primary_key=True)
-    project_id = Column(Integer, ForeignKey('projects.id', ondelete='CASCADE'), nullable=False, index=True)
-    cell_row = Column(Integer)
-    cell_col = Column(Integer)
+    taxon_id = Column(Integer, ForeignKey('taxons.id', ondelete='CASCADE'), nullable=False, index=True)
     geom = Column(Geometry(geometry_type='POLYGON', srid=4326))
     created_at = Column(DateTime, default=datetime.utcnow)
 
-    project = relationship('Project', back_populates='grid_cells')
+    taxon = relationship('Taxon', back_populates='grid_cells')
 
 
 class BaseGridCell(Base):

@@ -629,9 +629,14 @@ window.createLegendControl = function() {
         });
     }
 
-    // Populate the legend from server dataset list where available
-    const projectId = window.currentProjectId || (new URLSearchParams(window.location.search)).get('id') || null;
-    const datasetsUrl = projectId ? `/api/species/${encodeURIComponent(projectId)}/datasets` : '/api/datasets';
+    // Populate the legend from server dataset list
+    const mxId = window.MX_ID || null;
+    const datasetsUrl = mxId ? `/api/taxons/${encodeURIComponent(mxId)}/datasets` : null;
+    if (!datasetsUrl) {
+        const list = document.getElementById('dataset-legend-list');
+        if (list) list.textContent = 'Taksonin tunniste puuttuu';
+        return control;
+    }
     fetch(datasetsUrl).then(r => r.json()).then(data => {
         const list = document.getElementById('dataset-legend-list');
         list.innerHTML = '';

@@ -1,12 +1,11 @@
 /* global L, createGeometryLayers, fetchAllObservationsGeneric, createSharedMap */
 
-// Get dataset ID from URL
-const urlParams = new URLSearchParams(window.location.search);
-const datasetId = urlParams.get('id');
+// MX_ID is injected by the Flask template as window.MX_ID
+const datasetId = window.MX_ID;
 
 if (!datasetId) {
-    document.getElementById('status').textContent = 'Virhe: Aineiston tunnistetta ei annettu';
-    throw new Error('No dataset ID provided');
+    document.getElementById('status').textContent = 'Virhe: Taksonin tunnistetta ei löydy';
+    throw new Error('No taxon MX_ID provided');
 }
 
 // Create shared map and helpers
@@ -16,11 +15,11 @@ const { map, geometryLayer, stats, updateStatus } = createSharedMap();
 let projectName = `Laji ${datasetId}`;
 (async () => {
     try {
-        const resp = await fetch(`/api/species/${datasetId}`);
+        const resp = await fetch(`/api/taxons/${datasetId}`);
         if (resp.ok) {
             const json = await resp.json();
-            if (json.success && json.project && json.project.name) {
-                projectName = json.project.name;
+            if (json.success && json.taxon && json.taxon.name) {
+                projectName = json.taxon.name;
             }
         }
     } catch (e) {
@@ -375,7 +374,7 @@ async function loadMapDatasets() {
     const container = document.getElementById('mapDatasets');
     if (!container) return;
     try {
-        const resp = await fetch(`/api/species/${datasetId}/datasets`);
+        const resp = await fetch(`/api/taxons/${datasetId}/datasets`);
         const data = await resp.json();
         displayMapDatasets(data.datasets || [], container);
     } catch (err) {
@@ -447,7 +446,7 @@ async function saveDataForMap() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                project_id: datasetId,
+                mx_id: datasetId,
                 dataset_id: generateMapDatasetId(),
                 dataset_name: `Dataset ${new Date().toLocaleString()}`,
                 dataset_url: currentApiUrl,
@@ -485,7 +484,7 @@ async function uploadCsvForMap() {
     form.append('file', fileInput.files[0]);
 
     try {
-        const resp = await fetch(`/api/species/${datasetId}/upload_csv`, {
+        const resp = await fetch(`/api/taxons/${datasetId}/upload_csv`, {
             method: 'POST',
             body: form
         });
@@ -506,7 +505,7 @@ async function uploadCsvForMap() {
 // Download dataset as CSV
 async function downloadMapDataset(datasetIdStr) {
     try {
-        const resp = await fetch(`/api/species/${datasetId}/download_csv?dataset_id=${encodeURIComponent(datasetIdStr)}`);
+        const resp = await fetch(`/api/taxons/${datasetId}/download_csv?dataset_id=${encodeURIComponent(datasetIdStr)}`);
         if (!resp.ok) {
             const err = await resp.json();
             showMapError('Lataus epäonnistui: ' + (err.error || resp.statusText));
@@ -558,7 +557,7 @@ async function reloadMapDataset(datasetIdStr, encodedUrl) {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    project_id: datasetId,
+                    mx_id: datasetId,
                     dataset_id: datasetIdStr,  // Reuse existing dataset ID
                     dataset_name: `Dataset ${new Date().toLocaleString()}`,
                     dataset_url: url,
@@ -591,7 +590,7 @@ async function deleteMapDataset(datasetIdStr) {
     if (!confirm('Haluatko varmasti poistaa tämän aineiston?')) return;
 
     try {
-        const resp = await fetch(`/api/species/${datasetId}/datasets/${datasetIdStr}`, { method: 'DELETE' });
+        const resp = await fetch(`/api/taxons/${datasetId}/datasets/${datasetIdStr}`, { method: 'DELETE' });
         const result = await resp.json();
         if (result.success) {
             showMapError('✓ Aineisto poistettu');

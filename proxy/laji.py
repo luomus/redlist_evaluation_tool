@@ -39,8 +39,8 @@ def laji_proxy():
         
         # Forward headers — api.laji.fi uses headers for authorization
         forward_headers = {
-            'Authorization': f'Bearer {laji_api_access_token}',
-            'Person-Token': person_token,
+            #'Authorization': f'Bearer {laji_api_access_token}',
+            #'Person-Token': person_token,
             'Api-Version': request.headers.get('Api-Version', '1'),
             'Accept-Language': request.headers.get('Accept-Language', 'fi')
         }

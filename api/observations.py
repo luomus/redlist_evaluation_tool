@@ -1,64 +1,151 @@
-"""Observation data management API endpoints (CRUD, CSV I/O, exclusion, geometry)."""
+﻿"""Observation and taxon data API endpoints."""
 import csv
 import io
 import json
+import os
 from datetime import datetime
 from flask import Blueprint, jsonify, request, current_app, make_response
 from sqlalchemy import text, insert
 from shapely.geometry import shape
 from shapely import wkt as shapely_wkt
-from models import Project, Observation
+from models import Taxon, Observation
 from data_loaders.database import Session
-from cache import stats_cache
 from utils.helpers import generate_id
 from auth.decorators import login_required
 
 bp = Blueprint('api_observations', __name__, url_prefix='/api')
 
+_SKIP_CSV_KEYS = {
+    'lat', 'latitude', 'lon', 'lng', 'longitude', 'x', 'y',
+    'wkt', 'geometry', 'wgs84wkt', 'geometry_wkt', 'geom', 'geom_wkt'
+}
+
+
+@bp.route('/config', methods=['GET'])
+def get_config():
+    """Return client-side configuration."""
+    return jsonify({
+        "base_url": os.getenv('LAJI_API_BASE_URL', ''),
+        "access_token": os.getenv('LAJI_API_ACCESS_TOKEN', ''),
+    })
+
+
+@bp.route('/taxons/<string:mx_id>', methods=['GET'])
+def get_taxon(mx_id):
+    """Return taxon metadata by MX identifier."""
+    db = Session()
+    taxon = db.query(Taxon).filter_by(mx_id=mx_id).first()
+    db.close()
+    if not taxon:
+        return jsonify({"success": False, "error": "Taxon not found"}), 404
+    return jsonify({
+        "success": True,
+        "taxon": {
+            "id": taxon.id,
+            "mx_id": taxon.mx_id,
+            "name": taxon.name,
+            "category": taxon.category,
+            "elio_ryhma": taxon.elio_ryhma,
+        }
+    })
+
+
+@bp.route('/observations/<string:mx_id>', methods=['GET'])
+def get_observations(mx_id):
+    """Return paginated observations for a taxon."""
+    try:
+        page = request.args.get('page', 1, type=int)
+        per_page = min(int(request.args.get('per_page', 1000)), 1000)
+
+        db = Session()
+        taxon = db.query(Taxon).filter_by(mx_id=mx_id).first()
+        if not taxon:
+            db.close()
+            return jsonify({"success": False, "error": "Taxon not found"}), 404
+
+        offset = (page - 1) * per_page
+        results = db.execute(text("""
+            SELECT
+                id, dataset_id, dataset_name, dataset_url, created_at, properties,
+                ST_AsGeoJSON(geometry) as geometry_json,
+                COUNT(*) OVER() as total_count
+            FROM observations
+            WHERE taxon_id = :taxon_id
+            ORDER BY id
+            LIMIT :limit OFFSET :offset
+        """), {'taxon_id': taxon.id, 'limit': per_page, 'offset': offset}).fetchall()
+
+        if not results:
+            db.close()
+            return jsonify({
+                "type": "FeatureCollection",
+                "features": [],
+                "mx_id": mx_id,
+                "pagination": {"page": page, "per_page": per_page, "total": 0, "pages": 0}
+            })
+
+        total = results[0].total_count
+        features = []
+        for row in results:
+            props = dict(row.properties or {})
+            props['_db_id'] = row.id
+            props['_dataset_id'] = row.dataset_id
+            features.append({
+                "type": "Feature",
+                "properties": props,
+                "geometry": json.loads(row.geometry_json) if row.geometry_json else None
+            })
+
+        db.close()
+        total_pages = (total + per_page - 1) // per_page
+        return jsonify({
+            "type": "FeatureCollection",
+            "features": features,
+            "dataset_name": results[0].dataset_name if hasattr(results[0], 'dataset_name') else None,
+            "mx_id": mx_id,
+            "pagination": {"page": page, "per_page": per_page, "total": total, "pages": total_pages}
+        })
+    except Exception as e:
+        current_app.logger.error(f"Failed to get observations: {str(e)}", exc_info=True)
+        return jsonify({"success": False, "error": str(e)}), 500
+
 
 @bp.route('/observations', methods=['POST'])
 @login_required
 def save_observations():
-    """Save observations to database using batched inserts for scalability"""
+    """Save a batch of GeoJSON features as observations for a taxon."""
     try:
         data = request.json
-        project_id = data.get('project_id')
+        mx_id = data.get('mx_id')
         dataset_id = data.get('dataset_id')
         dataset_name = data.get('dataset_name', 'Unnamed Dataset')
         dataset_url = data.get('dataset_url', '')
         features = data.get('features', [])
-        
-        if not project_id:
-            return jsonify({"success": False, "error": "project_id is required"}), 400
-        
+
+        if not mx_id:
+            return jsonify({"success": False, "error": "mx_id is required"}), 400
         if not features:
             return jsonify({"success": False, "error": "No features provided"}), 400
-        
-        # Verify project exists
+
         db = Session()
-        project = db.query(Project).filter_by(id=project_id).first()
-        if not project:
+        taxon = db.query(Taxon).filter_by(mx_id=mx_id).first()
+        if not taxon:
             db.close()
-            return jsonify({"success": False, "error": "Project not found"}), 404
-        
+            return jsonify({"success": False, "error": "Taxon not found"}), 404
+
         current_time = datetime.utcnow()
-        
-        # Process in chunks for memory efficiency
         chunk_size = 1000
         total_inserted = 0
-        
         try:
             for i in range(0, len(features), chunk_size):
-                chunk = features[i:i+chunk_size]
-                
-                observations = []
+                chunk = features[i:i + chunk_size]
+                rows = []
                 for feature in chunk:
                     geom = None
                     if feature.get('geometry'):
                         geom = shape(feature['geometry']).wkt
-                    
-                    observations.append({
-                        'project_id': project_id,
+                    rows.append({
+                        'taxon_id': taxon.id,
                         'dataset_id': dataset_id,
                         'dataset_name': dataset_name,
                         'dataset_url': dataset_url,
@@ -66,34 +153,24 @@ def save_observations():
                         'properties': feature.get('properties', {}),
                         'geometry': (f'SRID=4326;{geom}' if geom else None)
                     })
-                
-                if observations:
-                    db.execute(insert(Observation), observations)
+                if rows:
+                    db.execute(insert(Observation), rows)
                     db.commit()
-                    total_inserted += len(observations)
-            
-            project.updated_at = datetime.utcnow()
-            db.commit()
-            stats_cache.delete(f"stats:{project_id}")
-            
+                    total_inserted += len(rows)
             return jsonify({"success": True, "count": total_inserted})
-            
         except Exception as e:
             db.rollback()
             raise e
         finally:
             db.close()
-            
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
 
-@bp.route('/species/<int:project_id>/upload_csv', methods=['POST'])
+@bp.route('/taxons/<string:mx_id>/upload_csv', methods=['POST'])
 @login_required
-def upload_csv_to_species(project_id):
-    """Upload CSV file and insert observations for the project.
-    Expected CSV: rows with latitude/longitude OR a geometry WKT column.
-    """
+def upload_csv(mx_id):
+    """Upload a CSV file and insert observations for the taxon."""
     try:
         if 'file' not in request.files:
             return jsonify({"success": False, "error": "No file provided"}), 400
@@ -102,25 +179,22 @@ def upload_csv_to_species(project_id):
             return jsonify({"success": False, "error": "Empty file"}), 400
 
         dataset_name = request.form.get('dataset_name') or request.form.get('dataset') or f.filename
-        dataset_id = request.form.get('dataset_id') or generate_id()
+        dataset_id = request.form.get('dataset_id') or str(generate_id())
 
         content = f.stream.read().decode('utf-8', errors='replace')
         reader = csv.DictReader(io.StringIO(content))
 
         features = []
         for row in reader:
-            # Prefer WKT column when present
             wkt_str = None
             for k, v in (row or {}).items():
                 if k is None or v is None:
                     continue
-                kl = k.strip().lower()
-                if kl in ('wkt', 'geometry', 'wgs84wkt', 'geometry_wkt', 'geom', 'geom_wkt') and v:
+                if k.strip().lower() in ('wkt', 'geometry', 'wgs84wkt', 'geometry_wkt', 'geom', 'geom_wkt') and v:
                     wkt_str = v.strip()
                     break
 
-            lat = None
-            lon = None
+            lat = lon = None
             for k, v in (row or {}).items():
                 if k is None:
                     continue
@@ -130,60 +204,46 @@ def upload_csv_to_species(project_id):
                 if kl in ('lon', 'lng', 'longitude', 'x') and v:
                     lon = v
 
-            # Try to parse WKT geometry if available
             geom_obj = None
             if wkt_str:
                 try:
                     geom_obj = shapely_wkt.loads(wkt_str)
                 except Exception:
-                    geom_obj = None
+                    pass
 
             if geom_obj is None:
                 try:
                     latf = float(lat) if lat is not None else None
                     lonf = float(lon) if lon is not None else None
                 except Exception:
-                    latf = None
-                    lonf = None
-
+                    latf = lonf = None
                 if latf is None or lonf is None:
                     continue
-
                 feature_geometry = {"type": "Point", "coordinates": [lonf, latf]}
             else:
                 feature_geometry = geom_obj.__geo_interface__
 
-            props = {}
-            for k, v in (row or {}).items():
-                if k is None:
-                    continue
-                kl = k.strip().lower()
-                if kl in ('lat', 'latitude', 'lon', 'lng', 'longitude', 'x', 'y', 'wkt', 'geometry', 'wgs84wkt', 'geometry_wkt', 'geom', 'geom_wkt'):
-                    continue
-                props[k] = v
-
-            feature = {"type": "Feature", "properties": props, "geometry": feature_geometry}
-            features.append(feature)
+            props = {k: v for k, v in (row or {}).items()
+                     if k is not None and k.strip().lower() not in _SKIP_CSV_KEYS}
+            features.append({"type": "Feature", "properties": props, "geometry": feature_geometry})
 
         if not features:
             return jsonify({"success": False, "error": "No valid rows with coordinates found in CSV"}), 400
 
-        # Insert observations
         db = Session()
-        project = db.query(Project).filter_by(id=project_id).first()
-        if not project:
+        taxon = db.query(Taxon).filter_by(mx_id=mx_id).first()
+        if not taxon:
             db.close()
-            return jsonify({"success": False, "error": "Project not found"}), 404
+            return jsonify({"success": False, "error": "Taxon not found"}), 404
 
         current_time = datetime.utcnow()
-
         observations = []
         for feature in features:
             geom = None
             if feature.get('geometry'):
                 geom = shape(feature['geometry']).wkt
             observations.append({
-                'project_id': project_id,
+                'taxon_id': taxon.id,
                 'dataset_id': str(dataset_id),
                 'dataset_name': dataset_name,
                 'dataset_url': '',
@@ -196,63 +256,47 @@ def upload_csv_to_species(project_id):
         total_inserted = 0
         try:
             for i in range(0, len(observations), chunk_size):
-                chunk = observations[i:i+chunk_size]
+                chunk = observations[i:i + chunk_size]
                 db.execute(insert(Observation), chunk)
                 db.commit()
                 total_inserted += len(chunk)
-
-            project.updated_at = datetime.utcnow()
-            db.commit()
-            stats_cache.delete(f"stats:{project_id}")
-
             db.close()
             return jsonify({"success": True, "count": total_inserted, "dataset_id": str(dataset_id)})
         except Exception as e:
             db.rollback()
             db.close()
             raise e
-
     except Exception as e:
         current_app.logger.error(f"Failed to upload CSV: {str(e)}", exc_info=True)
         return jsonify({"success": False, "error": str(e)}), 500
 
 
-@bp.route('/species/<int:project_id>/download_csv', methods=['GET'])
-@login_required
-def download_csv_from_species(project_id):
-    """Download observations from a project as CSV."""
+@bp.route('/taxons/<string:mx_id>/download_csv', methods=['GET'])
+def download_csv(mx_id):
+    """Download observations for a taxon as CSV."""
     try:
-        session = Session()
-        project = session.query(Project).filter_by(id=project_id).first()
-        if not project:
-            session.close()
-            return jsonify({"success": False, "error": "Project not found"}), 404
+        db = Session()
+        taxon = db.query(Taxon).filter_by(mx_id=mx_id).first()
+        if not taxon:
+            db.close()
+            return jsonify({"success": False, "error": "Taxon not found"}), 404
 
-        dataset_id = request.args.get('dataset_id', None)
-
+        dataset_id = request.args.get('dataset_id')
+        params = {'taxon_id': taxon.id}
         if dataset_id:
-            query_text = text("""
-                SELECT 
-                    id, dataset_id, dataset_name, properties,
-                    ST_AsText(geometry) as geometry_wkt
-                FROM observations
-                WHERE project_id = :project_id AND dataset_id = :dataset_id
-                ORDER BY id
+            query_sql = text("""
+                SELECT id, dataset_id, dataset_name, properties, ST_AsText(geometry) as geometry_wkt
+                FROM observations WHERE taxon_id = :taxon_id AND dataset_id = :dataset_id ORDER BY id
             """)
-            result = session.execute(query_text, {'project_id': project_id, 'dataset_id': dataset_id})
+            params['dataset_id'] = dataset_id
         else:
-            query_text = text("""
-                SELECT 
-                    id, dataset_id, dataset_name, properties,
-                    ST_AsText(geometry) as geometry_wkt
-                FROM observations
-                WHERE project_id = :project_id
-                ORDER BY id
+            query_sql = text("""
+                SELECT id, dataset_id, dataset_name, properties, ST_AsText(geometry) as geometry_wkt
+                FROM observations WHERE taxon_id = :taxon_id ORDER BY id
             """)
-            result = session.execute(query_text, {'project_id': project_id})
-        
-        observations = result.fetchall()
-        session.close()
+
+        observations = db.execute(query_sql, params).fetchall()
+        db.close()
 
         if not observations:
             return jsonify({"success": False, "error": "No observations found"}), 400
@@ -264,16 +308,11 @@ def download_csv_from_species(project_id):
                 all_property_keys.update(props.keys())
 
         property_keys = sorted(all_property_keys)
-
         output = io.StringIO()
-        fieldnames = ['wkt'] + property_keys
-        writer = csv.DictWriter(output, fieldnames=fieldnames)
+        writer = csv.DictWriter(output, fieldnames=['wkt'] + property_keys)
         writer.writeheader()
-
         for obs in observations:
-            row = {}
-            if obs.geometry_wkt:
-                row['wkt'] = obs.geometry_wkt
+            row = {'wkt': obs.geometry_wkt or ''}
             props = obs.properties or {}
             if isinstance(props, dict):
                 for key in property_keys:
@@ -282,129 +321,68 @@ def download_csv_from_species(project_id):
 
         csv_content = output.getvalue()
         output.close()
-
         timestamp = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
-        if dataset_id:
-            filename = f"species_{project_id}_dataset_{dataset_id}_{timestamp}.csv"
-        else:
-            filename = f"species_{project_id}_{timestamp}.csv"
-
+        safe_mx = mx_id.replace('.', '_')
+        filename = f"{safe_mx}_{timestamp}.csv"
         response = make_response(csv_content)
         response.headers['Content-Disposition'] = f'attachment; filename={filename}'
         response.headers['Content-Type'] = 'text/csv'
         return response
-
     except Exception as e:
         current_app.logger.error(f"Failed to download CSV: {str(e)}", exc_info=True)
         return jsonify({"success": False, "error": str(e)}), 500
 
 
-@bp.route('/observations/<int:project_id>', methods=['GET'])
-@login_required
-def get_observations(project_id):
-    """Get observations for a project with pagination."""
+@bp.route('/taxons/<string:mx_id>/datasets', methods=['GET'])
+def get_datasets(mx_id):
+    """List datasets for a taxon grouped by dataset_id."""
     try:
-        page = request.args.get('page', 1, type=int)
-        per_page = min(int(request.args.get('per_page', 1000)), 1000)
-                
-        session = Session()
-        
-        offset = (page - 1) * per_page
-        params = {
-            'project_id': project_id,
-            'limit': per_page,
-            'offset': offset
-        }
+        db = Session()
+        taxon = db.query(Taxon).filter_by(mx_id=mx_id).first()
+        if not taxon:
+            db.close()
+            return jsonify({"success": False, "error": "Taxon not found"}), 404
 
-        query = text("""
-            SELECT 
-                id, dataset_id, dataset_name, dataset_url, created_at, properties,
-                ST_AsGeoJSON(geometry) as geometry_json,
-                COUNT(*) OVER() as total_count
+        result = db.execute(text("""
+            SELECT dataset_id, dataset_name, dataset_url,
+                   COUNT(*) as count, MIN(created_at) as created_at
             FROM observations
-            WHERE project_id = :project_id
-            ORDER BY id
-            LIMIT :limit OFFSET :offset
-        """)
-        
-        results = session.execute(query, params).fetchall()
-        
-        if not results:
-            session.close()
-            return jsonify({
-                "type": "FeatureCollection",
-                "features": [],
-                "project_id": project_id,
-                "pagination": {
-                    "page": page,
-                    "per_page": per_page,
-                    "total": 0,
-                    "pages": 0
-                }
-            })
-        
-        total = results[0].total_count
-        
-        features = []
-        for row in results:
-            props = dict(row.properties or {})
-            props['_db_id'] = row.id
-            props['_dataset_id'] = row.dataset_id
-            feature = {
-                "type": "Feature",
-                "properties": props,
-                "geometry": json.loads(row.geometry_json) if row.geometry_json else None
-            }
-            features.append(feature)
-        
-        session.close()
-        
-        total_pages = (total + per_page - 1) // per_page
-        dataset_name = results[0].dataset_name if hasattr(results[0], 'dataset_name') else None
+            WHERE taxon_id = :taxon_id
+            GROUP BY dataset_id, dataset_name, dataset_url
+            ORDER BY MIN(created_at) DESC
+        """), {'taxon_id': taxon.id}).fetchall()
+        db.close()
 
-        return jsonify({
-            "type": "FeatureCollection",
-            "features": features,
-            "dataset_name": dataset_name,
-            "project_id": project_id,
-            "pagination": {
-                "page": page,
-                "per_page": per_page,
-                "total": total,
-                "pages": total_pages
-            }
-        })
+        datasets = [{
+            "dataset_id": r.dataset_id,
+            "dataset_name": r.dataset_name,
+            "dataset_url": r.dataset_url,
+            "count": r.count,
+            "created_at": r.created_at.isoformat() if r.created_at else None
+        } for r in result]
+        return jsonify({"success": True, "datasets": datasets})
     except Exception as e:
-        current_app.logger.error(f"Failed to get observations: {str(e)}", exc_info=True)
         return jsonify({"success": False, "error": str(e)}), 500
 
 
-@bp.route('/observation/<int:obs_id>/exclude', methods=['POST'])
+@bp.route('/taxons/<string:mx_id>/datasets/<string:dataset_id>', methods=['DELETE'])
 @login_required
-def set_observation_excluded(obs_id):
-    """Set or unset the 'excluded' flag on an observation's properties JSONB."""
+def delete_dataset(mx_id, dataset_id):
+    """Delete all observations belonging to a dataset."""
     try:
-        data = request.get_json() or {}
-        excluded = bool(data.get('excluded', True))
+        db = Session()
+        taxon = db.query(Taxon).filter_by(mx_id=mx_id).first()
+        if not taxon:
+            db.close()
+            return jsonify({"success": False, "error": "Taxon not found"}), 404
 
-        session = Session()
-        obs = session.query(Observation).get(obs_id)
-        if not obs:
-            session.close()
-            return jsonify({"success": False, "error": "Observation not found"}), 404
-
-        props = dict(obs.properties or {})
-        props['excluded'] = excluded
-        obs.properties = props
-        try:
-            obs.excluded = excluded
-        except Exception:
-            pass
-        session.add(obs)
-        session.commit()
-        session.close()
-
-        return jsonify({"success": True, "excluded": excluded})
+        result = db.execute(
+            text("DELETE FROM observations WHERE taxon_id = :taxon_id AND dataset_id = :dataset_id"),
+            {'taxon_id': taxon.id, 'dataset_id': dataset_id}
+        )
+        db.commit()
+        db.close()
+        return jsonify({"success": True, "deleted": result.rowcount})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
@@ -412,7 +390,7 @@ def set_observation_excluded(obs_id):
 @bp.route('/observations/exclude', methods=['POST'])
 @login_required
 def set_observations_excluded():
-    """Set or unset 'excluded' for many observations in a single batch."""
+    """Batch-set the excluded flag on observations by DB id."""
     try:
         data = request.get_json() or {}
         ids = data.get('ids') or []
@@ -423,9 +401,10 @@ def set_observations_excluded():
             ids = [int(i) for i in ids]
         except Exception:
             return jsonify({"success": False, "error": "ids must be a list of integers"}), 400
-        session = Session()
+
+        db = Session()
         try:
-            sql = text("""
+            result = db.execute(text("""
                 WITH updated AS (
                     UPDATE observations
                     SET properties = jsonb_set(properties, '{excluded}', to_jsonb(CAST(:excluded AS boolean)), true),
@@ -434,20 +413,42 @@ def set_observations_excluded():
                     RETURNING id
                 )
                 SELECT id FROM updated
-            """)
-            result = session.execute(sql, {'excluded': bool(excluded), 'ids': ids})
+            """), {'excluded': bool(excluded), 'ids': ids})
             updated = [row[0] for row in result.fetchall()]
-            processed = len(updated)
-            failed = len(ids) - processed
-            session.commit()
-            return jsonify({"success": True, "processed": processed, "failed": failed, "updated_ids": updated})
+            db.commit()
+            return jsonify({"success": True, "processed": len(updated),
+                            "failed": len(ids) - len(updated), "updated_ids": updated})
         except Exception as e:
-            session.rollback()
+            db.rollback()
             raise e
         finally:
-            session.close()
+            db.close()
     except Exception as e:
         current_app.logger.error(f"Failed to set observations excluded: {str(e)}", exc_info=True)
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@bp.route('/observation/<int:obs_id>/exclude', methods=['POST'])
+@login_required
+def set_observation_excluded(obs_id):
+    """Set excluded flag on a single observation."""
+    try:
+        data = request.get_json() or {}
+        excluded = bool(data.get('excluded', True))
+        db = Session()
+        obs = db.query(Observation).get(obs_id)
+        if not obs:
+            db.close()
+            return jsonify({"success": False, "error": "Observation not found"}), 404
+        props = dict(obs.properties or {})
+        props['excluded'] = excluded
+        obs.properties = props
+        obs.excluded = excluded
+        db.add(obs)
+        db.commit()
+        db.close()
+        return jsonify({"success": True, "excluded": excluded})
+    except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
 
@@ -466,17 +467,15 @@ def update_observation_geometry(obs_id):
         except Exception as e:
             return jsonify({"success": False, "error": f"Invalid geometry: {str(e)}"}), 400
 
-        session = Session()
-        obs = session.query(Observation).get(obs_id)
+        db = Session()
+        obs = db.query(Observation).get(obs_id)
         if not obs:
-            session.close()
+            db.close()
             return jsonify({"success": False, "error": "Observation not found"}), 404
-
         obs.geometry = wkt_str
-        session.add(obs)
-        session.commit()
-        session.close()
-
+        db.add(obs)
+        db.commit()
+        db.close()
         return jsonify({"success": True, "obs_id": obs_id})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
