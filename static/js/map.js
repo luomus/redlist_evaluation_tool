@@ -359,17 +359,10 @@ function escapeHtml(text) {
     return text.replace(/[&<>"']/g, c => map[c]);
 }
 
-// Show/hide data panel
-function toggleMapDataPanel() {
-    const panel = document.getElementById('mapDataPanel');
-    if (panel) {
-        panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
-    }
-    // Load datasets when panel opens
-    if (panel && panel.style.display === 'block') {
-        loadMapDatasets();
-    }
-}
+// ============================================================================
+// DATA PANEL POPUP FUNCTIONS
+// (See data-panel-popups.js for popup management functions)
+// ============================================================================
 
 // Helper to show error messages
 function showMapError(message) {
@@ -420,20 +413,20 @@ function displayMapDatasets(datasets, container) {
 
 // Fetch data from Laji.fi URL
 async function fetchDataForMap() {
-    const url = (document.getElementById('mapUrlInput') || {}).value || '';
+    const url = (document.getElementById('lajifiUrlInput') || {}).value || '';
     if (!url.trim()) { 
         showMapError('Syötä URL-osoite'); 
         return; 
     }
 
-    const progressDiv = document.getElementById('mapFetchProgress');
-    const progressLog = document.getElementById('mapProgressLog');
+    const progressDiv = document.getElementById('lajifiProgress');
+    const progressLog = document.getElementById('lajifiProgressLog');
     if (progressDiv) progressDiv.style.display = 'block';
     if (progressLog) progressLog.innerHTML = '';
 
     try {
         await window.parseUrl(url, progressLog);
-        const saveSection = document.getElementById('mapSaveSection');
+        const saveSection = document.getElementById('lajifiSaveSection');
         if (saveSection) saveSection.style.display = 'block';
     } catch (err) {
         showMapError('Haun suoritus epäonnistui: ' + err.message);
@@ -468,14 +461,15 @@ async function saveDataForMap() {
         const result = await resp.json();
         if (result.success) {
             showMapError(`✓ Aineisto tallennettu! ${result.count} havaintoa.`);
-            document.getElementById('mapUrlInput').value = '';
-            const saveSection = document.getElementById('mapSaveSection');
+            document.getElementById('lajifiUrlInput').value = '';
+            const saveSection = document.getElementById('lajifiSaveSection');
             if (saveSection) saveSection.style.display = 'none';
-            const progressDiv = document.getElementById('mapFetchProgress');
+            const progressDiv = document.getElementById('lajifiProgress');
             if (progressDiv) progressDiv.style.display = 'none';
             window.currentFetchedData = null;
             window.currentFetchedUrl = null;
             await loadMapDatasets();
+            setTimeout(() => closePopup(), 1500);
         } else {
             showMapError('Tallennus epäonnistui: ' + result.error);
         }
@@ -487,13 +481,18 @@ async function saveDataForMap() {
 
 // Upload CSV file
 async function uploadCsvForMap() {
-    const fileInput = document.getElementById('mapFileInput');
+    const fileInput = document.getElementById('csvFileInput');
     if (!fileInput || !fileInput.files.length) {
         showMapError('Valitse CSV-tiedosto');
         return;
     }
     const form = new FormData();
     form.append('file', fileInput.files[0]);
+
+    const progressDiv = document.getElementById('csvProgress');
+    const progressLog = document.getElementById('csvProgressLog');
+    if (progressDiv) progressDiv.style.display = 'block';
+    if (progressLog) progressLog.innerHTML = '<div>Ladataan...</div>';
 
     try {
         const resp = await fetch(`/api/taxons/${datasetId}/upload_csv`, {
@@ -502,14 +501,19 @@ async function uploadCsvForMap() {
         });
         const result = await resp.json();
         if (result.success) {
+            if (progressLog) progressLog.innerHTML += `<div style="color:green;">✓ Ladattu ${result.count} havaintoa</div>`;
             showMapError(`✓ Ladattu ${result.count} havaintoa`);
             fileInput.value = '';
+            document.getElementById('csvPreview').style.display = 'none';
+            setTimeout(() => closePopup(), 1500);
             await loadMapDatasets();
         } else {
+            if (progressLog) progressLog.innerHTML += `<div style="color:red;">✗ Virhe: ${result.error}</div>`;
             showMapError('Lataus epäonnistui: ' + result.error);
         }
     } catch (err) {
         console.error('Upload error:', err);
+        if (progressLog) progressLog.innerHTML += `<div style="color:red;">✗ Lähetys epäonnistui</div>`;
         showMapError('Lähetys epäonnistui');
     }
 }
@@ -615,3 +619,7 @@ async function deleteMapDataset(datasetIdStr) {
         showMapError('Poisto epäonnistui');
     }
 }
+// Initialize datasets when page loads
+window.addEventListener('load', () => {
+    loadMapDatasets();
+});

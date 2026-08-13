@@ -17,7 +17,7 @@ bp = Blueprint('api_observations', __name__, url_prefix='/api')
 
 _SKIP_CSV_KEYS = {
     'lat', 'latitude', 'lon', 'lng', 'longitude', 'x', 'y',
-    'wkt', 'geometry', 'wgs84wkt', 'geometry_wkt', 'geom', 'geom_wkt'
+    'wkt', 'geometry', 'wgs84wkt', 'wgs84 wkt', 'geometry_wkt', 'geom', 'geom_wkt'
 }
 
 
@@ -182,16 +182,44 @@ def upload_csv(mx_id):
         dataset_id = request.form.get('dataset_id') or str(generate_id())
 
         content = f.stream.read().decode('utf-8', errors='replace')
-        reader = csv.DictReader(io.StringIO(content))
+        
+        # Remove BOM if present
+        if content.startswith('\ufeff'):
+            content = content[1:]
+        
+        # Auto-detect delimiter (comma, semicolon, or tab)
+        sample = content[:1024] if len(content) > 1024 else content
+        try:
+            sniffer = csv.Sniffer()
+            delimiter = sniffer.sniff(sample).delimiter
+        except csv.Error:
+            # Fall back to detecting common delimiters
+            if ';' in sample:
+                delimiter = ';'
+            elif '\t' in sample:
+                delimiter = '\t'
+            else:
+                delimiter = ','
+        
+        current_app.logger.info(f"Detected CSV delimiter: {repr(delimiter)}")
+        reader = csv.DictReader(io.StringIO(content), delimiter=delimiter)
+
+        if reader.fieldnames:
+            current_app.logger.info(f"CSV columns found: {reader.fieldnames}")
 
         features = []
+        row_num = 0
+        parse_errors = []
         for row in reader:
+            row_num += 1
             wkt_str = None
+            wkt_col_name = None
             for k, v in (row or {}).items():
                 if k is None or v is None:
                     continue
-                if k.strip().lower() in ('wkt', 'geometry', 'wgs84wkt', 'geometry_wkt', 'geom', 'geom_wkt') and v:
+                if k.strip().lower() in ('wgs84 wkt', 'wkt', 'geometry', 'wgs84wkt', 'geometry_wkt', 'geom', 'geom_wkt') and v:
                     wkt_str = v.strip()
+                    wkt_col_name = k
                     break
 
             lat = lon = None
@@ -205,19 +233,28 @@ def upload_csv(mx_id):
                     lon = v
 
             geom_obj = None
+            wkt_error = None
             if wkt_str:
                 try:
                     geom_obj = shapely_wkt.loads(wkt_str)
-                except Exception:
-                    pass
+                except Exception as e:
+                    wkt_error = str(e)
+                    current_app.logger.warning(f"Row {row_num}: WKT parsing failed for column '{wkt_col_name}': {wkt_error}")
 
             if geom_obj is None:
+                if wkt_str and wkt_error:
+                    parse_errors.append(f"Row {row_num}: WKT parsing error: {wkt_error}")
+                    continue
+                
                 try:
                     latf = float(lat) if lat is not None else None
                     lonf = float(lon) if lon is not None else None
-                except Exception:
-                    latf = lonf = None
+                except (ValueError, TypeError) as e:
+                    parse_errors.append(f"Row {row_num}: Invalid lat/lon values (lat={lat}, lon={lon})")
+                    continue
+                
                 if latf is None or lonf is None:
+                    parse_errors.append(f"Row {row_num}: Missing coordinates (lat={lat}, lon={lon})")
                     continue
                 feature_geometry = {"type": "Point", "coordinates": [lonf, latf]}
             else:
@@ -228,7 +265,13 @@ def upload_csv(mx_id):
             features.append({"type": "Feature", "properties": props, "geometry": feature_geometry})
 
         if not features:
-            return jsonify({"success": False, "error": "No valid rows with coordinates found in CSV"}), 400
+            error_msg = "No valid rows with coordinates found in CSV"
+            if reader.fieldnames:
+                error_msg += f". Columns found: {', '.join(reader.fieldnames)}"
+            if parse_errors:
+                error_msg += f". First errors: {'; '.join(parse_errors[:3])}"
+            current_app.logger.error(f"CSV upload failed: {error_msg}")
+            return jsonify({"success": False, "error": error_msg}), 400
 
         db = Session()
         taxon = db.query(Taxon).filter_by(mx_id=mx_id).first()
