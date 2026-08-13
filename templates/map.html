@@ -11,6 +11,8 @@
         crossorigin=""
     />
     <link rel="stylesheet" href="/static/css/map.css">
+    <link rel="stylesheet" href="/static/css/data-panel-buttons.css">
+    <link rel="stylesheet" href="/static/css/data-panel-popups.css">
 </head>
 <body>
     <header>
@@ -75,8 +77,8 @@
             <div class="data-download-panel">
                 <div id="mapDatasets" style="margin-bottom: 12px;">Ladataan…</div>
                 
-                <button onclick="openCsvUploadPopup()" style="width: 100%; padding: 8px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: 500; margin-bottom: 8px;">📁 Lataa CSV koneelta</button>
-                <button onclick="openLajifiPopup()" style="width: 100%; padding: 8px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: 500;">🌐 Lataa laji.fi:stä</button>
+                <button onclick="openCsvUploadPopup()" class="data-panel-button btn-csv-upload">📁 Lataa CSV koneelta</button>
+                <button onclick="openLajifiPopup()" class="data-panel-button btn-lajifi">🌐 Lataa laji.fi:stä</button>
                 
                 <!-- Hidden elements for reload functionality -->
                 <div id="mapFetchProgress" style="display:none;"></div>

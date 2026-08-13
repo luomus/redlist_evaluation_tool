@@ -1,0 +1,41 @@
+/* Data Panel Button Styles */
+
+/* Base styles for data panel buttons */
+.data-panel-button {
+    width: 100%;
+    padding: 8px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    color: white;
+    transition: opacity 0.2s ease;
+}
+
+.data-panel-button:hover {
+    opacity: 0.9;
+}
+
+.data-panel-button:active {
+    opacity: 0.8;
+}
+
+/* CSV Upload button */
+.btn-csv-upload {
+    background: #28a745;
+    margin-bottom: 8px;
+}
+
+.btn-csv-upload:hover {
+    background: #218838;
+}
+
+/* Laji.fi button */
+.btn-lajifi {
+    background: #007bff;
+}
+
+.btn-lajifi:hover {
+    background: #0056b3;
+}

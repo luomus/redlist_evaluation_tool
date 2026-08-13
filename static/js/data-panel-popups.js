@@ -10,28 +10,26 @@
 function createPopupWindow(title, content) {
     const overlay = document.createElement('div');
     overlay.id = 'popupOverlay';
-    overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:10000;';
     
     const popup = document.createElement('div');
     popup.id = 'popupWindow';
-    popup.style.cssText = 'background:white;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,0.3);max-width:600px;width:90%;max-height:90vh;overflow-y:auto;position:relative;';
     
     const header = document.createElement('div');
-    header.style.cssText = 'display:flex;justify-content:space-between;align-items:center;padding:16px;border-bottom:1px solid #eee;';
+    header.className = 'popup-header';
     
     const titleEl = document.createElement('h2');
+    titleEl.className = 'popup-title';
     titleEl.textContent = title;
-    titleEl.style.cssText = 'margin:0;font-size:18px;font-weight:600;';
     header.appendChild(titleEl);
     
     const closeBtn = document.createElement('button');
+    closeBtn.className = 'popup-close-btn';
     closeBtn.textContent = '✕';
-    closeBtn.style.cssText = 'background:none;border:none;font-size:24px;cursor:pointer;color:#666;padding:0;width:32px;height:32px;display:flex;align-items:center;justify-content:center;';
     closeBtn.onclick = () => closePopup();
     header.appendChild(closeBtn);
     
     const body = document.createElement('div');
-    body.style.cssText = 'padding:16px;';
+    body.className = 'popup-body';
     body.innerHTML = content;
     
     popup.appendChild(header);
@@ -59,24 +57,24 @@ function closePopup() {
  */
 function openCsvUploadPopup() {
     const content = `
-        <div style="display:flex;flex-direction:column;gap:16px;">
-            <div style="text-align:center;padding:32px;border:2px dashed #ccc;border-radius:8px;background:#fafafa;cursor:pointer;" id="dropZone" ondrop="handleCsvDrop(event)" ondragover="event.preventDefault();event.target.style.background='#f0f0f0'" ondragleave="event.target.style.background='#fafafa'">
-                <div style="font-size:32px;margin-bottom:8px;">📤</div>
-                <p style="margin:0 0 8px 0;font-weight:500;">Vedä ja pudota CSV-tiedosto tähän</p>
-                <p style="margin:0;color:#666;font-size:12px;">tai klikkaa valitaksesi tiedoston</p>
-                <input type="file" id="csvFileInput" accept=".csv" style="display:none;" onchange="handleCsvFileSelect(event)">
+        <div class="csv-container">
+            <div class="csv-drop-zone" id="dropZone" ondrop="handleCsvDrop(event)" ondragover="event.preventDefault();event.target.classList.add('csv-drop-zone--hover')" ondragleave="event.target.classList.remove('csv-drop-zone--hover')">
+                <div class="csv-drop-zone-icon">📤</div>
+                <p class="csv-drop-zone-text-main">Vedä ja pudota CSV-tiedosto tähän</p>
+                <p class="csv-drop-zone-text-sub">tai klikkaa valitaksesi tiedoston</p>
+                <input type="file" id="csvFileInput" accept=".csv" onchange="handleCsvFileSelect(event)">
             </div>
-            <div id="csvPreview" style="display:none;">
-                <div style="padding:12px;background:#f0f8ff;border-radius:4px;margin-bottom:12px;">
+            <div id="csvPreview">
+                <div class="csv-preview-info">
                     <strong id="csvFileName"></strong><br>
-                    <small id="csvFileSize" style="color:#666;"></small>
+                    <small id="csvFileSize"></small>
                 </div>
-                <button onclick="document.getElementById('csvFileInput').value=''; document.getElementById('csvPreview').style.display='none';" style="width:100%;padding:8px;background:#dc3545;color:white;border:none;border-radius:4px;cursor:pointer;font-size:12px;margin-bottom:12px;">Poista valinta</button>
-                <button onclick="uploadCsvForMap()" style="width:100%;padding:8px;background:#28a745;color:white;border:none;border-radius:4px;cursor:pointer;font-size:13px;font-weight:500;">Lataa CSV</button>
+                <button onclick="document.getElementById('csvFileInput').value=''; document.getElementById('csvPreview').style.display='none';" class="btn-csv-remove">Poista valinta</button>
+                <button onclick="uploadCsvForMap()" class="btn-csv-upload-action">Lataa CSV</button>
             </div>
-            <div id="csvProgress" style="display:none;">
-                <p style="margin:0 0 8px 0;font-weight:500;">Edistyminen:</p>
-                <div id="csvProgressLog" style="max-height:200px;overflow-y:auto;font-size:12px;border:1px solid #ddd;border-radius:4px;padding:8px;background:#fafafa;"></div>
+            <div id="csvProgress">
+                <p class="csv-progress-label">Edistyminen:</p>
+                <div id="csvProgressLog"></div>
             </div>
         </div>
     `;
@@ -114,21 +112,21 @@ function handleCsvFileSelect(e) {
  */
 function openLajifiPopup() {
     const content = `
-        <div style="display:flex;flex-direction:column;gap:16px;">
-            <div>
-                <label style="font-size:12px;font-weight:500;display:block;margin-bottom:8px;">
+        <div class="lajifi-container">
+            <div class="lajifi-label-group">
+                <label class="lajifi-label">
                     Liitä Laji.fi URL-osoite
-                    <span style="color:#666;font-size:11px;"> - Avaa laji.fi, rajaa havainnot ja kopioi URL</span>
+                    <span class="lajifi-label-hint"> - Avaa laji.fi, rajaa havainnot ja kopioi URL</span>
                 </label>
-                <input type="text" id="lajifiUrlInput" placeholder="https://laji.fi/observation/list?..." style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;font-size:12px;box-sizing:border-box;">
+                <input type="text" id="lajifiUrlInput" placeholder="https://laji.fi/observation/list?..." class="lajifi-input">
             </div>
-            <button onclick="fetchDataForMap()" style="width:100%;padding:10px;background:#007bff;color:white;border:none;border-radius:4px;cursor:pointer;font-size:13px;font-weight:500;">Hae aineistoa</button>
-            <div id="lajifiProgress" style="display:none;">
-                <p style="margin:0 0 8px 0;font-weight:500;">Edistyminen:</p>
-                <div id="lajifiProgressLog" style="max-height:300px;overflow-y:auto;font-size:12px;border:1px solid #ddd;border-radius:4px;padding:8px;background:#fafafa;"></div>
+            <button onclick="fetchDataForMap()" class="btn-lajifi-fetch">Hae aineistoa</button>
+            <div id="lajifiProgress">
+                <p class="lajifi-progress-label">Edistyminen:</p>
+                <div id="lajifiProgressLog"></div>
             </div>
-            <div id="lajifiSaveSection" style="display:none;">
-                <button onclick="saveDataForMap()" style="width:100%;padding:10px;background:#17a2b8;color:white;border:none;border-radius:4px;cursor:pointer;font-size:13px;font-weight:500;">Tallenna aineisto</button>
+            <div id="lajifiSaveSection">
+                <button onclick="saveDataForMap()" class="btn-lajifi-save">Tallenna aineisto</button>
             </div>
         </div>
     `;

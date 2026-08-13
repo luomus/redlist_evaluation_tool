@@ -1,0 +1,283 @@
+/* Data Panel Popup Modal Styles */
+
+/* Popup overlay backdrop */
+#popupOverlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+}
+
+/* Main popup window */
+#popupWindow {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+    max-width: 600px;
+    width: 90%;
+    max-height: 90vh;
+    overflow-y: auto;
+    position: relative;
+}
+
+/* Popup header */
+.popup-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px;
+    border-bottom: 1px solid #eee;
+}
+
+/* Popup title */
+.popup-title {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+}
+
+/* Popup close button */
+.popup-close-btn {
+    background: none;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+    color: #666;
+    padding: 0;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.2s ease;
+}
+
+.popup-close-btn:hover {
+    color: #333;
+}
+
+/* Popup body/content */
+.popup-body {
+    padding: 16px;
+}
+
+/* CSV Upload Popup Styles */
+
+.csv-container {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+/* Drop zone for CSV files */
+.csv-drop-zone {
+    text-align: center;
+    padding: 32px;
+    border: 2px dashed #ccc;
+    border-radius: 8px;
+    background: #fafafa;
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+
+.csv-drop-zone:hover {
+    background: #f0f0f0;
+}
+
+.csv-drop-zone--hover {
+    background: #f0f0f0;
+}
+
+.csv-drop-zone-icon {
+    font-size: 32px;
+    margin-bottom: 8px;
+}
+
+.csv-drop-zone-text-main {
+    margin: 0 0 8px 0;
+    font-weight: 500;
+}
+
+.csv-drop-zone-text-sub {
+    margin: 0;
+    color: #666;
+    font-size: 12px;
+}
+
+#csvFileInput {
+    display: none;
+}
+
+/* CSV preview section */
+#csvPreview {
+    display: none;
+}
+
+.csv-preview-info {
+    padding: 12px;
+    background: #f0f8ff;
+    border-radius: 4px;
+    margin-bottom: 12px;
+}
+
+.csv-preview-info strong {
+    display: block;
+    margin-bottom: 4px;
+}
+
+.csv-preview-info small {
+    color: #666;
+}
+
+/* CSV buttons */
+.btn-csv-remove,
+.btn-csv-upload-action {
+    width: 100%;
+    padding: 8px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    color: white;
+    transition: opacity 0.2s ease;
+}
+
+.btn-csv-remove {
+    background: #dc3545;
+    margin-bottom: 12px;
+}
+
+.btn-csv-remove:hover {
+    background: #c82333;
+}
+
+.btn-csv-upload-action {
+    background: #28a745;
+}
+
+.btn-csv-upload-action:hover {
+    background: #218838;
+}
+
+/* CSV progress section */
+#csvProgress {
+    display: none;
+}
+
+.csv-progress-label {
+    margin: 0 0 8px 0;
+    font-weight: 500;
+}
+
+#csvProgressLog {
+    max-height: 200px;
+    overflow-y: auto;
+    font-size: 12px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 8px;
+    background: #fafafa;
+}
+
+/* Laji.fi Popup Styles */
+
+.lajifi-container {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.lajifi-label-group {
+    display: flex;
+    flex-direction: column;
+}
+
+.lajifi-label {
+    font-size: 12px;
+    font-weight: 500;
+    display: block;
+    margin-bottom: 8px;
+}
+
+.lajifi-label-hint {
+    color: #666;
+    font-size: 11px;
+}
+
+.lajifi-input {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 12px;
+    box-sizing: border-box;
+    font-family: monospace;
+}
+
+.lajifi-input:focus {
+    outline: none;
+    border-color: #007bff;
+    box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+}
+
+/* Laji.fi buttons */
+.btn-lajifi-fetch,
+.btn-lajifi-save {
+    width: 100%;
+    padding: 10px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    color: white;
+    transition: opacity 0.2s ease;
+}
+
+.btn-lajifi-fetch {
+    background: #007bff;
+}
+
+.btn-lajifi-fetch:hover {
+    background: #0056b3;
+}
+
+.btn-lajifi-save {
+    background: #17a2b8;
+}
+
+.btn-lajifi-save:hover {
+    background: #138496;
+}
+
+/* Laji.fi progress section */
+#lajifiProgress {
+    display: none;
+}
+
+.lajifi-progress-label {
+    margin: 0 0 8px 0;
+    font-weight: 500;
+}
+
+#lajifiProgressLog {
+    max-height: 300px;
+    overflow-y: auto;
+    font-size: 12px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 8px;
+    background: #fafafa;
+}
+
+/* Laji.fi save section */
+#lajifiSaveSection {
+    display: none;
+}
