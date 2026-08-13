@@ -1,5 +1,6 @@
 body { margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
-header { padding: 12px 16px; border-bottom: 1px solid #eee; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+header { padding: 12px 16px; border-bottom: 1px solid #eee; display: flex; gap: 12px; align-items: flex-start; flex-wrap: wrap; }
+.panels-container { display: flex; gap: 16px; flex-wrap: wrap; }
 #map { width: 100%; height: calc(100vh - 68px); }
 .stats { margin-left: auto; color: #555; font-size: 14px; }
 .back-btn {
@@ -14,8 +15,32 @@ header { padding: 12px 16px; border-bottom: 1px solid #eee; display: flex; gap: 
     border: 1px solid #dee2e6;
     border-radius: 6px;
     padding: 12px;
-    margin-right: 12px;
-    min-width: 200px;
+    flex: 1;
+    min-width: 250px;
+}
+.data-download-panel {
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    padding: 12px;
+    flex: 1;
+    min-width: 250px;
+}
+.aoo-panel {
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    padding: 12px;
+    flex: 1;
+    min-width: 250px;
+}
+.eoo-panel {
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    padding: 12px;
+    flex: 1;
+    min-width: 250px;
 }
 .info-panel h3 {
     margin: 0 0 8px 0;
@@ -30,6 +55,14 @@ header { padding: 12px 16px; border-bottom: 1px solid #eee; display: flex; gap: 
 }
 .info-item:last-child {
     margin-bottom: 0;
+}
+.info-item.eoo-row {
+    flex-wrap: wrap;
+}
+.eoo-left {
+    display: flex;
+    align-items: center;
+    gap: 4px;
 }
 .info-label {
     color: #666;

@@ -3,7 +3,7 @@ import json
 from datetime import datetime
 from flask import Blueprint, jsonify, request, current_app
 from sqlalchemy import text
-from models import Taxon, ConvexHull
+from models import Taxon, ConvexHull, GridMetadata
 from data_loaders.database import Session
 from auth.decorators import login_required
 
@@ -145,18 +145,49 @@ def get_grid(mx_id):
             db.close()
             return jsonify({"success": False, "error": "Taxon not found"}), 404
 
-        rows = db.execute(
-            text("SELECT id, ST_AsGeoJSON(geom) as geom_json FROM grid_cells WHERE taxon_id = :taxon_id"),
+        grid = db.query(GridMetadata).filter_by(taxon_id=taxon.id).first()
+        if not grid or not grid.grid_geometry:
+            db.close()
+            return jsonify({
+                "type": "FeatureCollection",
+                "features": [],
+                "mx_id": mx_id,
+                "success": True,
+                "created_at": None,
+                "cell_count": 0
+            })
+
+        # Convert geometry to GeoJSON features
+        result = db.execute(
+            text("""
+            WITH geoms AS (
+                SELECT (ST_Dump(grid_geometry)).geom AS cell_geom
+                FROM grid_metadata
+                WHERE taxon_id = :taxon_id
+            )
+            SELECT ST_AsGeoJSON(cell_geom) as geom_json FROM geoms
+            """),
             {'taxon_id': taxon.id}
         ).fetchall()
-        db.close()
 
-        features = [
-            {"type": "Feature", "properties": {"_db_id": r.id},
-             "geometry": json.loads(r.geom_json) if r.geom_json else None}
-            for r in rows
-        ]
-        return jsonify({"type": "FeatureCollection", "features": features, "mx_id": mx_id, "success": True})
+        features = []
+        for row in result:
+            if row and row[0]:
+                features.append({
+                    "type": "Feature",
+                    "properties": {},
+                    "geometry": json.loads(row[0])
+                })
+
+        db.close()
+        return jsonify({
+            "type": "FeatureCollection",
+            "features": features,
+            "mx_id": mx_id,
+            "success": True,
+            "created_at": grid.calculated_at.isoformat() if grid.calculated_at else None,
+            "cell_count": grid.cell_count or len(features)
+        })
     except Exception as e:
         current_app.logger.error(f"Failed to get grid: {str(e)}", exc_info=True)
         return jsonify({"success": False, "error": str(e)}), 500
@@ -165,7 +196,7 @@ def get_grid(mx_id):
 @bp.route('/observations/<string:mx_id>/grid', methods=['POST'])
 @login_required
 def calculate_grid(mx_id):
-    """Generate 2km AOO grid cells for a taxon from the Finland base grid."""
+    """Generate 2km AOO grid cells for a taxon from the Finland base grid, store to the grid_metadata table."""
     db = Session()
     try:
         taxon = db.query(Taxon).filter_by(mx_id=mx_id).first()
@@ -173,26 +204,64 @@ def calculate_grid(mx_id):
             db.close()
             return jsonify({"success": False, "error": "Taxon not found"}), 404
 
-        db.execute(text("DELETE FROM grid_cells WHERE taxon_id = :taxon_id"), {'taxon_id': taxon.id})
-        db.execute(text("""
-            INSERT INTO grid_cells (taxon_id, geom)
-            SELECT DISTINCT :taxon_id, bg.geom_4326
-            FROM base_grid_cells bg
-            JOIN observations o
-              ON o.taxon_id = :taxon_id
-              AND o.geometry IS NOT NULL
-              AND (o.excluded IS NULL OR o.excluded = FALSE)
-              AND bg.geom_4326 && o.geometry
-              AND ST_Intersects(bg.geom_4326, o.geometry)
-        """), {'taxon_id': taxon.id})
-        db.commit()
-
-        cell_count = db.execute(
-            text("SELECT COUNT(*) FROM grid_cells WHERE taxon_id = :taxon_id"),
-            {'taxon_id': taxon.id}
+        obs_count = db.execute(
+            text("SELECT COUNT(*) FROM observations WHERE taxon_id = :tid"),
+            {'tid': taxon.id}
         ).scalar()
+        if not obs_count:
+            db.close()
+            return jsonify({"success": False, "error": "Taxon has no observations"}), 404
+
+        # Collect all intersecting grid cells
+        result = db.execute(text("""
+            WITH intersecting_cells AS (
+                SELECT DISTINCT bg.geom_4326
+                FROM base_grid_cells bg
+                JOIN observations o
+                  ON o.taxon_id = :taxon_id
+                  AND o.geometry IS NOT NULL
+                  AND (o.excluded IS NULL OR o.excluded = FALSE)
+                  AND bg.geom_4326 && o.geometry
+                  AND ST_Intersects(bg.geom_4326, o.geometry)
+            ),
+            collected AS (
+                SELECT ST_Collect(geom_4326) AS geom_collection FROM intersecting_cells
+            ),
+            cell_count AS (
+                SELECT COUNT(*) AS cnt FROM intersecting_cells
+            )
+            SELECT geom_collection, cnt FROM collected, cell_count
+        """), {'taxon_id': taxon.id}).fetchone()
+
+        if not result or not result[0]:
+            db.close()
+            return jsonify({"success": False, "error": "No intersecting grid cells found"}), 400
+
+        grid_geom, cell_count = result[0], int(result[1])
+        now = datetime.utcnow()
+
+        existing = db.query(GridMetadata).filter_by(taxon_id=taxon.id).first()
+        if existing:
+            existing.grid_geometry = grid_geom
+            existing.calculated_at = now
+            existing.cell_count = cell_count
+        else:
+            db.add(GridMetadata(
+                taxon_id=taxon.id,
+                grid_geometry=grid_geom,
+                calculated_at=now,
+                cell_count=cell_count
+            ))
+
+        db.commit()
         db.close()
-        return jsonify({"success": True, "mx_id": mx_id, "message": "Grid generated", "cell_count": cell_count})
+        return jsonify({
+            "success": True,
+            "mx_id": mx_id,
+            "calculated_at": now.isoformat(),
+            "cell_count": cell_count,
+            "message": "Grid generated"
+        })
     except Exception as e:
         db.rollback()
         db.close()

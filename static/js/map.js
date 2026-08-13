@@ -165,6 +165,12 @@ async function fetchAndDisplayGrid(fitMap = true) {
                 }
             }
             document.getElementById('cellsCount').textContent = `${polygons.length}`;
+            
+            // Update grid creation timestamp
+            const aooTimeEl = document.getElementById('aoo_calculated_at');
+            if (aooTimeEl && data.created_at) {
+                aooTimeEl.textContent = formatIsoTimestamp(data.created_at);
+            }
         } else {
             window.sharedGridFeatures = [];
             document.getElementById('cellsCount').textContent = '0';
@@ -328,6 +334,12 @@ fetchAllObservationsGeneric(datasetId,
             (stats.skipped > 0 ? ` | Skipattu: ${stats.skipped}` : '');
 
         updateStatus(statusMessage);
+        
+        // Update observation count in info-panel
+        const countEl = document.getElementById('observationCount');
+        if (countEl) {
+            countEl.textContent = stats.total;
+        }
         
         // Sync legend with actual feature exclusion state after all features are loaded
         if (typeof window.syncLegendWithFeatures === 'function') {

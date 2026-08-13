@@ -14,47 +14,67 @@
 </head>
 <body>
     <header>
-        <div class="info-panel">
-            <h3>{{ taxon.name }}</h3>
-            {% if taxon.category %}
-            <div class="info-item">
-                <span class="info-label">Luokka:</span>
-                <span class="info-value">{{ taxon.category }}</span>
+        <div class="panels-container">
+            <!-- Info Panel: Taxon info and EOO data -->
+            <div class="info-panel">
+                <h3>{{ taxon.name }}</h3>
+                {% if taxon.category %}
+                <div class="info-item">
+                    <span class="info-label">Luokka:</span>
+                    <span class="info-value">{{ taxon.category }}</span>
+                </div>
+                {% endif %}
+                {% if taxon.elio_ryhma %}
+                <div class="info-item">
+                    <span class="info-label">Eliöryhmä:</span>
+                    <span class="info-value">{{ taxon.elio_ryhma }}</span>
+                </div>
+                {% endif %}
+                <div class="info-item">
+                    <span class="info-label">Havaintoja ladattu:</span>
+                    <span class="info-value" id="observationCount">-</span>
+                </div>
             </div>
-            {% endif %}
-            {% if taxon.elio_ryhma %}
-            <div class="info-item">
-                <span class="info-label">Eliöryhmä:</span>
-                <span class="info-value">{{ taxon.elio_ryhma }}</span>
+            <div class="aoo-panel">
+                <div class="info-item">
+                    <span class="info-label">Ruutuja yht:</span>
+                    <span class="info-value" id="cellsCount">-</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Laskettu:</span>
+                    <span class="info-value" id="aoo_calculated_at">-</span>
+                </div>
+                <button id="genBtn" onclick="window.createGrid(false)" style="margin-top: 10px; padding: 8px 16px; background: #3388ff; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; width: 100%;">&#8635; Laske esiintymisalue</button>
             </div>
-            {% endif %}
-            <div class="info-item">
-                <span class="info-label">Ruutuja yht:</span>
-                <span class="info-value" id="cellsCount">-</span>
+            
+            <div class="eoo-panel">
+                <div class="info-item eoo-row" style="margin-top: 12px;">
+                    <span class="eoo-left">
+                        <span class="info-label" style="color:#ff7800;">&#9632;</span>
+                        <span class="info-label">Laaja EOO:</span>
+                        <span class="eoo-info" data-tip="Laaja levinneisyysalue (EOO). Lasketaan niin, että sisältää kaikkien geometrioiden kaikki pisteet.">?</span>
+                    </span>
+                    <span class="info-value" id="areaMax">-</span>
+                </div>
+                <div class="info-item eoo-row">
+                    <span class="eoo-left">
+                        <span class="info-label" style="color:#3388ff;">&#9632;</span>
+                        <span class="info-label">Minimaalinen EOO:</span>
+                        <span class="eoo-info" data-tip="Minimaalinen levinneisyysalue (EOO). Lasketaan vain aluemuotoisten havaintojen lähin nurkkaus.">?</span>
+                    </span>
+                    <span class="info-value" id="areaMin">-</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Laskettu:</span>
+                    <span class="info-value" id="calculated_at">-</span>
+                </div>
+                <button id="recalcBtn" onclick="window.createConvexHull(false)" style="margin-top: 10px; padding: 8px 16px; background: #3388ff; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; width: 100%;">&#8635; Laske levinneisyysalueet</button>
             </div>
-            <button id="genBtn" onclick="window.createGrid(false)" style="margin-top: 10px; padding: 8px 16px; background: #3388ff; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">&#8635; Laske esiintymisalue</button>
-            <div class="info-item">
-                <span class="info-label" style="color:#ff7800;">&#9632;</span>
-                <span class="info-label">Laaja EOO:</span>
-                <span class="eoo-info" data-tip="Laaja levinneisyysalue (EOO). Lasketaan niin, että sisältää kaikkien geometrioiden kaikki pisteet.">?</span>
-                <span class="info-value" id="areaMax">-</span>
-            </div>
-            <div class="info-item">
-                <span class="info-label" style="color:#3388ff;">&#9632;</span>
-                <span class="info-label">Minimaalinen EOO:</span>
-                <span class="eoo-info" data-tip="Minimaalinen levinneisyysalue (EOO). Lasketaan vain aluemuotoisten havaintojen lähin nurkkaus.">?</span>
-                <span class="info-value" id="areaMin">-</span>
-            </div>
-            <div class="info-item">
-                <span class="info-label">Laskettu:</span>
-                <span class="info-value" id="calculated_at">-</span>
-            </div>
-            <button id="recalcBtn" onclick="window.createConvexHull(false)" style="margin-top: 10px; padding: 8px 16px; background: #3388ff; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">&#8635; Laske levinneisyysalueet</button>
 
             <!-- Data Download Panel -->
-            <div style="margin-top: 16px; border-top: 1px solid #ddd; padding-top: 12px;">
-                <button onclick="toggleMapDataPanel()" style="width: 100%; padding: 8px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: 500;">📥 Hae / Lataa aineistoa</button>
-                <div id="mapDataPanel" class="map-data-panel" style="display: none; margin-top: 12px;">
+            <div class="data-download-panel">
+                <button onclick="toggleMapDataPanel()" style="width: 100%; padding: 8px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: 500; margin-bottom: 12px;">📥 Hae / Lataa aineistoa</button>
+                <div id="mapDataPanel" class="map-data-panel" style="display: none;">
                     <div id="mapDatasets" style="margin-bottom: 12px;">Ladataan…</div>
 
                     <h4 style="margin: 12px 0 8px 0; font-size: 13px; font-weight: 500;">Hae aineistoa Laji.fi:sta</h4>
@@ -108,6 +128,6 @@
     <script src="/static/js/map-shared.js"></script>
     <script src="/static/js/map-elements.js"></script>
     <script src="/static/js/fetch_data.js"></script>
-    <script src="/static/js/convex_hull.js"></script>
+    <script src="/static/js/map.js"></script>
 </body>
 </html>

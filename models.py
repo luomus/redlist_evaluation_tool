@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, Text, Float, ForeignKey, Boolean
+from sqlalchemy import Column, Integer, String, DateTime, Text, Float, ForeignKey, Boolean, UniqueConstraint
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import JSONB
@@ -20,7 +20,7 @@ class Taxon(Base):
 
     observations = relationship('Observation', back_populates='taxon', cascade='all, delete-orphan')
     convex_hulls = relationship('ConvexHull', back_populates='taxon', cascade='all, delete-orphan')
-    grid_cells = relationship('GridCell', back_populates='taxon', cascade='all, delete-orphan')
+    grid_metadata = relationship('GridMetadata', back_populates='taxon', cascade='all, delete-orphan', uselist=False)
 
 
 class Observation(Base):
@@ -41,6 +41,7 @@ class Observation(Base):
 
 class ConvexHull(Base):
     __tablename__ = 'convex_hulls'
+    __table_args__ = (UniqueConstraint('taxon_id', 'mode', name='ux_convex_hulls_taxon_mode'),)
 
     id = Column(Integer, primary_key=True)
     taxon_id = Column(Integer, ForeignKey('taxons.id', ondelete='CASCADE'), nullable=False, index=True)
@@ -52,15 +53,17 @@ class ConvexHull(Base):
     taxon = relationship('Taxon', back_populates='convex_hulls')
 
 
-class GridCell(Base):
-    __tablename__ = 'grid_cells'
+class GridMetadata(Base):
+    """Grid calculation metadata: stores aggregated 2km AOO grid for a taxon."""
+    __tablename__ = 'grid_metadata'
 
     id = Column(Integer, primary_key=True)
-    taxon_id = Column(Integer, ForeignKey('taxons.id', ondelete='CASCADE'), nullable=False, index=True)
-    geom = Column(Geometry(geometry_type='POLYGON', srid=4326))
-    created_at = Column(DateTime, default=datetime.utcnow)
+    taxon_id = Column(Integer, ForeignKey('taxons.id', ondelete='CASCADE'), nullable=False, index=True, unique=True)
+    grid_geometry = Column(Geometry(geometry_type='GEOMETRY', srid=4326))
+    calculated_at = Column(DateTime, default=datetime.utcnow, index=True)
+    cell_count = Column(Integer, default=0)
 
-    taxon = relationship('Taxon', back_populates='grid_cells')
+    taxon = relationship('Taxon', back_populates='grid_metadata')
 
 
 class BaseGridCell(Base):

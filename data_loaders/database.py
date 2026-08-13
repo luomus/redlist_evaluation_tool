@@ -49,11 +49,11 @@ def verify_tables_exist(engine):
         result = conn.execute(text(
             "SELECT table_name FROM information_schema.tables "
             "WHERE table_schema = 'public' AND table_name IN "
-            "('taxons','observations','convex_hulls','grid_cells','base_grid_cells')"
+            "('taxons','observations','convex_hulls','grid_metadata','base_grid_cells')"
         ))
         existing_tables = {row[0] for row in result}
 
-        required = {'taxons', 'observations', 'convex_hulls', 'grid_cells', 'base_grid_cells'}
+        required = {'taxons', 'observations', 'convex_hulls', 'grid_metadata', 'base_grid_cells'}
         if required.issubset(existing_tables):
             print("Database initialized successfully - all tables exist")
             return True
