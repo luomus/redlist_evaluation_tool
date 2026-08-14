@@ -186,6 +186,20 @@
     background: #fafafa;
 }
 
+/* Error state for CSV progress section */
+#csvProgress.csv-progress-error {
+    background: #f8d7da;
+    border: 1px solid #f5c6cb;
+    border-radius: 4px;
+    padding: 8px;
+    margin-top: 8px;
+}
+
+#csvProgress.csv-progress-error #csvProgressLog {
+    background: #fff5f5;
+    border-color: #dc3545;
+}
+
 /* Laji.fi Popup Styles */
 
 .lajifi-container {
@@ -280,4 +294,29 @@
 /* Laji.fi save section */
 #lajifiSaveSection {
     display: none;
+}
+
+/* Error state for progress section */
+#lajifiProgress.lajifi-progress-error {
+    background: #f8d7da;
+    border: 1px solid #f5c6cb;
+    border-radius: 4px;
+    padding: 8px;
+    margin-top: 8px;
+}
+
+#lajifiProgress.lajifi-progress-error #lajifiProgressLog {
+    background: #fff5f5;
+    border-color: #dc3545;
+}
+
+/* Disabled state for save button */
+.btn-lajifi-save:disabled {
+    background: #ccc;
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+.btn-lajifi-save:disabled:hover {
+    background: #ccc;
 }

@@ -42,13 +42,6 @@ const HULL_STYLES = {
 // Store all features (geometry + properties)
 const allFeatures = [];
 
-// Helper to format ISO timestamp into a readable local string
-function formatIsoTimestamp(iso) {
-    if (!iso) return '-';
-    const d = new Date(iso);
-    if (isNaN(d)) return iso;
-    return d.toLocaleString();
-}
 
 // Fetch and display one hull mode. Returns the response data or null.
 async function fetchAndDisplayHull(mode) {
@@ -284,69 +277,107 @@ window.fetchAndDisplayGrid = fetchAndDisplayGrid;
 // Collect all features before rendering for optimal performance
 const allFeaturesToRender = [];
 
-// Start loading data when page loads
-// Use generic fetcher and then fetch hull from backend
-fetchAllObservationsGeneric(datasetId,
-    (feature) => {
-        // Just collect features without drawing yet
-        allFeaturesToRender.push(feature);
-    },
-    updateStatus,
-    ({ datasetName, total }) => {
-        // Now render all features at once
-        const nameForStatus = projectName || datasetName || `Laji ${datasetId}`;
-        updateStatus(`${nameForStatus}: Näytetään ${allFeaturesToRender.length} havaintoa...`);
-        
-        const layers = [];
-        
-        // Create all layers
-        allFeaturesToRender.forEach(feature => {
-            if (feature.geometry) {
-                allFeatures.push(feature); // Store complete feature with properties
-                try {
-                    const layer = createGeometryLayers(feature.geometry, feature.properties || {});
-                    if (layer) {
-                        if (Array.isArray(layer)) layers.push(...layer);
-                        else layers.push(layer);
-                        stats.total++;
+// Function to load and render observations on the map
+function loadObservationsOnMap() {
+    // Use generic fetcher and then fetch hull from backend
+    fetchAllObservationsGeneric(datasetId,
+        (feature) => {
+            // Just collect features without drawing yet
+            allFeaturesToRender.push(feature);
+        },
+        updateStatus,
+        ({ datasetName, total }) => {
+            // Now render all features at once
+            const nameForStatus = projectName || datasetName || `Laji ${datasetId}`;
+            updateStatus(`${nameForStatus}: Näytetään ${allFeaturesToRender.length} havaintoa...`);
+            
+            const layers = [];
+            
+            // Create all layers
+            allFeaturesToRender.forEach(feature => {
+                if (feature.geometry) {
+                    allFeatures.push(feature); // Store complete feature with properties
+                    try {
+                        const layer = createGeometryLayers(feature.geometry, feature.properties || {});
+                        if (layer) {
+                            if (Array.isArray(layer)) layers.push(...layer);
+                            else layers.push(layer);
+                            stats.total++;
+                        }
+                    } catch (err) {
+                        console.error('Error creating layer:', err);
+                        stats.skipped++;
                     }
-                } catch (err) {
-                    console.error('Error creating layer:', err);
+                } else {
                     stats.skipped++;
                 }
-            } else {
-                stats.skipped++;
+            });
+            
+            // Add all layers to map in a single operation
+            if (layers.length > 0) {
+                layers.forEach(layer => geometryLayer.addLayer(layer));
             }
-        });
-        
-        // Add all layers to map in a single operation
-        if (layers.length > 0) {
-            layers.forEach(layer => geometryLayer.addLayer(layer));
-        }
-        
-        stats.total = total || stats.total;
-        
-        // Fetch both overlays after observations are loaded.
-        fetchAndDisplayGrid(false);
-        fetchAndDisplayConvexHull(true);
+            
+            stats.total = total || stats.total;
+            
+            // Fetch both overlays after observations are loaded.
+            fetchAndDisplayGrid(false);
+            fetchAndDisplayConvexHull(true);
 
-        const statusMessage = `${nameForStatus}: ${stats.total} havaintoa ladattu` +
-            (stats.skipped > 0 ? ` | Skipattu: ${stats.skipped}` : '');
+            const statusMessage = `${nameForStatus}: ${stats.total} havaintoa ladattu` +
+                (stats.skipped > 0 ? ` | Skipattu: ${stats.skipped}` : '');
 
-        updateStatus(statusMessage);
-        
-        // Update observation count in info-panel
-        const countEl = document.getElementById('observationCount');
-        if (countEl) {
-            countEl.textContent = stats.total;
+            updateStatus(statusMessage);
+            
+            // Update observation count in info-panel
+            const countEl = document.getElementById('observationCount');
+            if (countEl) {
+                countEl.textContent = stats.total;
+            }
+            
+            // Sync legend with actual feature exclusion state after all features are loaded
+            if (typeof window.syncLegendWithFeatures === 'function') {
+                try { window.syncLegendWithFeatures(); } catch (e) { console.warn('Legend sync failed:', e); }
+            }
         }
-        
-        // Sync legend with actual feature exclusion state after all features are loaded
-        if (typeof window.syncLegendWithFeatures === 'function') {
-            try { window.syncLegendWithFeatures(); } catch (e) { console.warn('Legend sync failed:', e); }
-        }
+    );
+}
+
+// Function to reload observations after new data has been uploaded/imported
+async function reloadMapObservations() {
+    updateStatus('Päivitetään karttanäkymä...');
+    
+    // Clear existing geometry layer
+    geometryLayer.clearLayers();
+    
+    // Reset stats and feature arrays
+    allFeatures.length = 0;
+    allFeaturesToRender.length = 0;
+    stats.total = 0;
+    stats.skipped = 0;
+    
+    // Clear convex hull layers
+    if (hullLayers.max) {
+        map.removeLayer(hullLayers.max);
+        hullLayers.max = null;
     }
-);
+    if (hullLayers.min) {
+        map.removeLayer(hullLayers.min);
+        hullLayers.min = null;
+    }
+    
+    // Clear grid layer
+    if (gridLayer) {
+        map.removeLayer(gridLayer);
+        gridLayer = null;
+    }
+    
+    // Reload observations
+    loadObservationsOnMap();
+}
+
+// Start loading data when page loads
+loadObservationsOnMap();
 
 // ============================================================================
 // MAP VIEW DATA MANAGEMENT - Download/Upload functionality
@@ -374,62 +405,53 @@ function showMapError(message) {
     }
 }
 
-// Load datasets for this species from the backend
-async function loadMapDatasets() {
-    const container = document.getElementById('mapDatasets');
-    if (!container) return;
-    try {
-        const resp = await fetch(`/api/taxons/${datasetId}/datasets`);
-        const data = await resp.json();
-        displayMapDatasets(data.datasets || [], container);
-    } catch (err) {
-        console.error('Error loading datasets:', err);
-        container.innerHTML = '<p>Aineistojen lataus epäonnistui</p>';
-    }
-}
 
-function displayMapDatasets(datasets, container) {
-    if (datasets.length === 0) {
-        container.innerHTML = '<p style="color:#999; font-size:12px;">Ei vielä aineistoja.</p>';
-        return;
-    }
-    let html = '<div style="border: 1px solid #ddd; border-radius: 3px; padding: 8px; font-size: 12px;">';
-    for (const ds of datasets) {
-        html += `
-        <div style="margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid #eee;">
-            <div><strong>${escapeHtml(ds.dataset_name || 'Nimetön')}</strong></div>
-            <div style="color: #666; font-size: 11px;">Havainnot: ${ds.count}</div>
-            <div style="color: #666; font-size: 11px;">Lisätty: ${new Date(ds.created_at).toLocaleString()}</div>
-            <div style="margin-top: 4px; display: flex; gap: 4px;">
-                <button onclick="downloadMapDataset('${ds.dataset_id}')" style="padding: 4px 8px; background: #007bff; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 11px;">Lataa</button>
-                ${ds.dataset_url ? `<button onclick="reloadMapDataset('${ds.dataset_id}', '${encodeURIComponent(ds.dataset_url)}')" style="padding: 4px 8px; background: #17a2b8; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 11px;">Päivitä</button>` : ''}
-                <button onclick="deleteMapDataset('${ds.dataset_id}')" style="padding: 4px 8px; background: #dc3545; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 11px;">Poista</button>
-            </div>
-        </div>`;
-    }
-    html += '</div>';
-    container.innerHTML = html;
-}
 
 // Fetch data from Laji.fi URL
 async function fetchDataForMap() {
     const url = (document.getElementById('lajifiUrlInput') || {}).value || '';
     if (!url.trim()) { 
-        showMapError('Syötä URL-osoite'); 
+        const progressDiv = document.getElementById('lajifiProgress');
+        const progressLog = document.getElementById('lajifiProgressLog');
+        if (progressDiv) {
+            progressDiv.style.display = 'block';
+            progressDiv.classList.add('lajifi-progress-error');
+        }
+        if (progressLog) {
+            progressLog.innerHTML = '';
+            addProgressLog('Virhe: Syötä URL-osoite', 'error', progressLog);
+        }
         return; 
     }
 
     const progressDiv = document.getElementById('lajifiProgress');
     const progressLog = document.getElementById('lajifiProgressLog');
-    if (progressDiv) progressDiv.style.display = 'block';
+    if (progressDiv) {
+        progressDiv.style.display = 'block';
+        progressDiv.classList.remove('lajifi-progress-error');
+    }
     if (progressLog) progressLog.innerHTML = '';
+
+    // Clear any previous error state
+    window.currentFetchedData = null;
+    const saveSectionBtn = document.querySelector('.btn-lajifi-save');
+    if (saveSectionBtn) saveSectionBtn.disabled = false;
 
     try {
         await window.parseUrl(url, progressLog);
         const saveSection = document.getElementById('lajifiSaveSection');
         if (saveSection) saveSection.style.display = 'block';
     } catch (err) {
-        showMapError('Haun suoritus epäonnistui: ' + err.message);
+        // Mark progress section as error state
+        if (progressDiv) progressDiv.classList.add('lajifi-progress-error');
+        // Disable save button on error
+        if (saveSectionBtn) saveSectionBtn.disabled = true;
+        // Clear fetched data to prevent saving
+        window.currentFetchedData = null;
+        // Add error message directly to progress log
+        if (progressLog) {
+            addProgressLog('Virhe: ' + err.message, 'error', progressLog);
+        }
     }
 }
 
@@ -441,7 +463,15 @@ function generateMapDatasetId() {
 // Save fetched data to database
 async function saveDataForMap() {
     if (!window.currentFetchedData) {
-        showMapError('Ei tallennettavaa dataa. Hae data ensin.');
+        const progressDiv = document.getElementById('lajifiProgress');
+        const progressLog = document.getElementById('lajifiProgressLog');
+        if (progressDiv) {
+            progressDiv.style.display = 'block';
+            progressDiv.classList.add('lajifi-progress-error');
+        }
+        if (progressLog) {
+            addProgressLog('Virhe: Ei tallennettavaa dataa. Hae data ensin.', 'error', progressLog);
+        }
         return;
     }
     const currentApiUrl = window.currentFetchedUrl || '';
@@ -468,22 +498,50 @@ async function saveDataForMap() {
             if (progressDiv) progressDiv.style.display = 'none';
             window.currentFetchedData = null;
             window.currentFetchedUrl = null;
-            await loadMapDatasets();
+            // Reload observations on the map without refreshing the page
+            await reloadMapObservations();
+            // Refresh legend after data changes
+            if (typeof window.refreshDatasetLegend === 'function') {
+                await window.refreshDatasetLegend();
+            }
             setTimeout(() => closePopup(), 1500);
         } else {
-            showMapError('Tallennus epäonnistui: ' + result.error);
+            const progressDiv = document.getElementById('lajifiProgress');
+            const progressLog = document.getElementById('lajifiProgressLog');
+            if (progressDiv) {
+                progressDiv.style.display = 'block';
+                progressDiv.classList.add('lajifi-progress-error');
+            }
+            if (progressLog) addProgressLog('Virhe: Tallennus epäonnistui - ' + result.error, 'error', progressLog);
         }
     } catch (err) {
         console.error('Error saving data:', err);
-        showMapError('Tallennus epäonnistui');
-    }
-}
+        const progressDiv = document.getElementById('lajifiProgress');
+        const progressLog = document.getElementById('lajifiProgressLog');
+        if (progressDiv) {
+            progressDiv.style.display = 'block';
+            progressDiv.classList.add('lajifi-progress-error');
+        }
+        if (progressLog) addProgressLog('Virhe: Tallennus epäonnistui - ' + err.message, 'error', progressLog);
+    }    // Refresh legend after data changes
+    if (typeof window.refreshDatasetLegend === 'function') {
+        await window.refreshDatasetLegend();
+    }}
 
 // Upload CSV file
 async function uploadCsvForMap() {
     const fileInput = document.getElementById('csvFileInput');
     if (!fileInput || !fileInput.files.length) {
-        showMapError('Valitse CSV-tiedosto');
+        const progressDiv = document.getElementById('csvProgress');
+        const progressLog = document.getElementById('csvProgressLog');
+        if (progressDiv) {
+            progressDiv.style.display = 'block';
+            progressDiv.classList.add('csv-progress-error');
+        }
+        if (progressLog) {
+            progressLog.innerHTML = '';
+            addProgressLog('Virhe: Valitse CSV-tiedosto', 'error', progressLog);
+        }
         return;
     }
     const form = new FormData();
@@ -491,7 +549,10 @@ async function uploadCsvForMap() {
 
     const progressDiv = document.getElementById('csvProgress');
     const progressLog = document.getElementById('csvProgressLog');
-    if (progressDiv) progressDiv.style.display = 'block';
+    if (progressDiv) {
+        progressDiv.style.display = 'block';
+        progressDiv.classList.remove('csv-progress-error');
+    }
     if (progressLog) progressLog.innerHTML = '<div>Ladataan...</div>';
 
     try {
@@ -502,102 +563,24 @@ async function uploadCsvForMap() {
         const result = await resp.json();
         if (result.success) {
             if (progressLog) progressLog.innerHTML += `<div style="color:green;">✓ Ladattu ${result.count} havaintoa</div>`;
-            showMapError(`✓ Ladattu ${result.count} havaintoa`);
+            if (progressLog) addProgressLog(`✓ Ladattu ${result.count} havaintoa`, 'success', progressLog);
             fileInput.value = '';
             document.getElementById('csvPreview').style.display = 'none';
+            // Reload observations on the map without refreshing the page
+            await reloadMapObservations();
+            // Refresh legend after data changes
+            if (typeof window.refreshDatasetLegend === 'function') {
+                await window.refreshDatasetLegend();
+            }
             setTimeout(() => closePopup(), 1500);
-            await loadMapDatasets();
         } else {
-            if (progressLog) progressLog.innerHTML += `<div style="color:red;">✗ Virhe: ${result.error}</div>`;
-            showMapError('Lataus epäonnistui: ' + result.error);
+            if (progressDiv) progressDiv.classList.add('csv-progress-error');
+            if (progressLog) addProgressLog('Virhe: ' + result.error, 'error', progressLog);
         }
     } catch (err) {
         console.error('Upload error:', err);
-        if (progressLog) progressLog.innerHTML += `<div style="color:red;">✗ Lähetys epäonnistui</div>`;
-        showMapError('Lähetys epäonnistui');
-    }
-}
-
-// Download dataset as CSV
-async function downloadMapDataset(datasetIdStr) {
-    try {
-        const resp = await fetch(`/api/taxons/${datasetId}/download_csv?dataset_id=${encodeURIComponent(datasetIdStr)}`);
-        if (!resp.ok) {
-            const err = await resp.json();
-            showMapError('Lataus epäonnistui: ' + (err.error || resp.statusText));
-            return;
-        }
-        const blob = await resp.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `dataset_${datasetIdStr}.csv`;
-        document.body.appendChild(a);
-        a.click();
-        window.URL.revokeObjectURL(url);
-        document.body.removeChild(a);
-        showMapError('✓ Aineisto ladattu');
-    } catch (err) {
-        console.error('Download error:', err);
-        showMapError('Lataus epäonnistui');
-    }
-}
-
-// Reload dataset from URL
-async function reloadMapDataset(datasetIdStr, encodedUrl) {
-    try {
-        const url = decodeURIComponent(encodedUrl || '');
-        if (!url) { 
-            showMapError('Ei lähde-URL-osoitetta'); 
-            return; 
-        }
-        if (!confirm('Uudelleenlataus korvaa olemassa olevan aineiston. Jatketaanko?')) return;
-
-        const progressDiv = document.getElementById('mapFetchProgress');
-        const progressLog = document.getElementById('mapProgressLog');
-        if (progressDiv && progressLog) {
-            progressDiv.style.display = 'block';
-            progressLog.innerHTML = '';
-        }
-
-        await window.parseUrl(url, progressLog);
-
-        // Save the reloaded data with same dataset ID
-        if (!window.currentFetchedData) {
-            showMapError('Haun suoritus epäonnistui.');
-            return;
-        }
-
-        try {
-            const resp = await fetch('/api/observations', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    mx_id: datasetId,
-                    dataset_id: datasetIdStr,  // Reuse existing dataset ID
-                    dataset_name: `Dataset ${new Date().toLocaleString()}`,
-                    dataset_url: url,
-                    features: window.currentFetchedData.features,
-                    replace_existing: true
-                })
-            });
-            const result = await resp.json();
-            if (result.success) {
-                showMapError(`✓ Aineisto päivitetty! ${result.count} havaintoa.`);
-                const progressDiv = document.getElementById('mapFetchProgress');
-                if (progressDiv) progressDiv.style.display = 'none';
-                window.currentFetchedData = null;
-                window.currentFetchedUrl = null;
-                await loadMapDatasets();
-            } else {
-                showMapError('Päivitys epäonnistui: ' + result.error);
-            }
-        } catch (err) {
-            console.error('Error updating dataset:', err);
-            showMapError('Päivitys epäonnistui');
-        }
-    } catch (e) {
-        showMapError('Virheellinen URL');
+        if (progressDiv) progressDiv.classList.add('csv-progress-error');
+        if (progressLog) addProgressLog('Virhe: Lähetys epäonnistui - ' + err.message, 'error', progressLog);
     }
 }
 
@@ -610,7 +593,12 @@ async function deleteMapDataset(datasetIdStr) {
         const result = await resp.json();
         if (result.success) {
             showMapError('✓ Aineisto poistettu');
-            await loadMapDatasets();
+            // Reload observations on the map without refreshing the page
+            await reloadMapObservations();
+            // Refresh legend after deletion
+            if (typeof window.refreshDatasetLegend === 'function') {
+                await window.refreshDatasetLegend();
+            }
         } else {
             showMapError('Poisto epäonnistui: ' + result.error);
         }
@@ -619,7 +607,3 @@ async function deleteMapDataset(datasetIdStr) {
         showMapError('Poisto epäonnistui');
     }
 }
-// Initialize datasets when page loads
-window.addEventListener('load', () => {
-    loadMapDatasets();
-});

@@ -38,42 +38,12 @@ window.createSharedMap = function(containerId = 'map', center = [60.1699, 24.938
     // Initialize dataset layers mapping and attempt to create the legend control
     window.datasetLayers = window.datasetLayers || {}; // dataset_id -> { group: L.LayerGroup, name, count }
     
-    // Initialize biogeographical regions layer from local GeoJSON file
-    window.bioRegionsLayer = L.geoJSON(null, {
-        style: {
-            color: '#ff7800',
-            weight: 2,
-            opacity: 0.6,
-            dashArray: '5,5',
-            fill: false
-        },
-        onEachFeature: function(feature, layer) {
-            if (feature.properties && feature.properties.name) {
-                layer.bindPopup(feature.properties.name);
-            }
-        }
-    });
-    window.bioRegionsVisible = false;
-    
-    // Load biogeographical regions data from local file
-    fetch('/static/resources/biogeographicalProvinces.json')
-        .then(r => {
-            console.log('Biogeographical regions fetch response:', r.status, r.statusText);
-            if (!r.ok) throw new Error(`HTTP ${r.status}: ${r.statusText}`);
-            return r.json();
-        })
-        .then(data => {
-            console.log('Biogeographical regions data loaded:', data);
-            if (data && data.features && data.features.length > 0) {
-                console.log(`Adding ${data.features.length} biogeographical regions to map`);
-                window.bioRegionsLayer.addData(data);
-            } else {
-                console.warn('No features found in biogeographical regions data');
-            }
-        })
-        .catch(err => {
-            console.error('Failed to load biogeographical regions:', err);
+    // Initialize biogeographical regions layer asynchronously (see bioregions.js)
+    if (typeof window.initializeBioRegionsLayer === 'function') {
+        window.initializeBioRegionsLayer().catch(err => {
+            console.warn('Biogeographical regions initialization failed:', err);
         });
+    }
     
     try { if (typeof window.createLegendControl === 'function') { window.createLegendControl(); } } catch (e) { console.warn('Legend control initialization failed:', e); }
 
@@ -282,22 +252,6 @@ window.fetchAllObservationsGeneric = async function(datasetId, perFeature, updat
     }
 };
 
-// Helper function: determine accuracy class from coordinateAccuracy value (in meters)
-// Classes: 1-10m, 11-100m, 101-1000m, 1001-10000m, 10001-100000m
-window.getAccuracyClass = function(coordinateAccuracy) {
-    if (!coordinateAccuracy) return null;
-    
-    const accuracy = parseFloat(coordinateAccuracy);
-    if (isNaN(accuracy)) return null;
-    
-    if (accuracy <= 10) return 'accuracy-1-10';
-    if (accuracy <= 100) return 'accuracy-11-100';
-    if (accuracy <= 1000) return 'accuracy-101-1000';
-    if (accuracy <= 10000) return 'accuracy-1001-10000';
-    if (accuracy <= 100000) return 'accuracy-10001-100000';
-    
-    return null;
-};
 
 // Compute centroid [lat, lng] of a GeoJSON Polygon or MultiPolygon geometry
 window.polygonCentroid = function(geometry) {

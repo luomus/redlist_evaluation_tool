@@ -578,10 +578,10 @@ window.createLegendControl = function() {
                 <label><input type="checkbox" id="bioregions-toggle"> Biogeographical Regions</label>
             </div>
             <div class="legend-divider"></div>
-            <div class="legend-header" style="margin-top: 8px;"><strong>Aineistot:</strong></div>
+            <div class="legend-header"><strong>Aineistot:</strong></div>
             <div id="dataset-legend-list" class="legend-list">Ladataan…</div>
             <div class="legend-divider"></div>
-            <div class="legend-header" style="margin-top: 8px;"><strong>Koordinaattien tarkkuus</strong></div>
+            <div class="legend-header"><strong>Koordinaattien tarkkuus</strong></div>
             <div class="legend-accuracy">
                 <div><span class="legend-swatch accuracy-1-10"></span>1–10 m</div>
                 <div><span class="legend-swatch accuracy-11-100"></span>11–100 m</div>
@@ -590,7 +590,7 @@ window.createLegendControl = function() {
                 <div><span class="legend-swatch accuracy-10001-100000"></span>10001–100000 m</div>
                 <div><span class="legend-swatch no-accuracy"></span>Ei arvoa *</div>
             </div>
-            <div class="legend-note" style="font-size:11px; color:#444; margin-top:4px;">
+            <div class="legend-note">
                 (*) jos havaintoa ei ole tarkkuusarvoa, se näkyy kartalla oletusvärillä (punainen/harmaa).<br>
                 punainen = analyysiin sisällytetty, harmaa = poistettu.
             </div>
@@ -629,150 +629,134 @@ window.createLegendControl = function() {
         });
     }
 
+    // Helper function to add a dataset item to the legend
+    function addDatasetItemToLegend(list, dsId, dsName, dsCount) {
+        const safe = sanitizeDomId(dsId);
+        window.datasetLayers = window.datasetLayers || {};
+        if (!window.datasetLayers[dsId]) {
+            window.datasetLayers[dsId] = { group: L.layerGroup().addTo(window.sharedMap), name: dsName, count: dsCount || 0 };
+        } else {
+            window.datasetLayers[dsId].name = dsName;
+        }
+        
+        const item = document.createElement('div');
+        item.className = 'legend-item';
+        
+        const label = document.createElement('label');
+        label.innerHTML = `<input type="checkbox" id="legend-cb-${safe}" checked data-dsid="${dsId}"> ${dsName} <span class="legend-count" id="legend-count-${safe}">${window.datasetLayers[dsId].count || 0}</span>`;
+        
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'legend-delete-btn';
+        deleteBtn.textContent = '✕';
+        deleteBtn.onclick = async function(e) {
+            e.stopPropagation();
+            if (window.deleteMapDataset) {
+                await window.deleteMapDataset(dsId);
+            }
+        };
+        
+        item.appendChild(label);
+        item.appendChild(deleteBtn);
+        list.appendChild(item);
+        
+        document.getElementById('legend-cb-' + safe).addEventListener('change', async function () {
+            const dsid = this.getAttribute('data-dsid');
+            const entry = window.datasetLayers[dsid];
+            if (!entry) return;
+            const checked = this.checked;
+            const exclude = !checked;
+
+            // Compute how many features would actually be affected by this operation
+            let affectedCount = 0;
+            try {
+                if (entry.group && typeof entry.group.eachLayer === 'function') {
+                    entry.group.eachLayer(function(layer) {
+                        const props = (layer.feature && layer.feature.properties) || layer.feature || {};
+                        const id = props && (props._db_id || props.db_id);
+                        if (!id) return;
+                        const isExcluded = props.excluded === true || props.excluded === '1' || props.excluded === 1;
+                        if ((exclude && !isExcluded) || (!exclude && isExcluded)) affectedCount++;
+                    });
+                }
+            } catch (e) { console.warn('Error counting affected features for dataset', dsid, e); }
+
+            // Fallback to total count if none found in the group
+            if (affectedCount === 0) {
+                affectedCount = entry.count || 0;
+            }
+
+            if (affectedCount === 0) {
+                alert(`Tässä aineistossa ei ole havaintoja, joita voisi ${exclude ? 'poistaa käytöstä' : 'ottaa käyttöön'}.`);
+                this.checked = !checked;
+                return;
+            }
+
+            this.disabled = true;
+            try {
+                await window.toggleDatasetExclude(dsid, exclude);
+            } catch (err) {
+                console.error('Error toggling dataset exclude:', err);
+                alert('Virhe muutettaessa aineistoa: ' + (err && err.message || err));
+                this.checked = !checked;
+            } finally {
+                this.disabled = false;
+            }
+        });
+    }
+
     // Populate the legend from server dataset list
     const mxId = window.MX_ID || null;
     const datasetsUrl = mxId ? `/api/taxons/${encodeURIComponent(mxId)}/datasets` : null;
+    
+    // Function to load and populate datasets in legend
+    window.refreshDatasetLegend = async function() {
+        if (!datasetsUrl) return;
+        try {
+            const r = await fetch(datasetsUrl);
+            const data = await r.json();
+            const list = document.getElementById('dataset-legend-list');
+            if (!list) return;
+            list.innerHTML = '';
+            const datasets = (data && data.datasets) || [];
+            
+            if (datasets.length === 0) {
+                list.innerHTML = '<div style="color:#999; font-size:12px; padding: 8px;">Ei aineistoja</div>';
+                return;
+            }
+            
+            datasets.forEach(ds => {
+                const dsId = ds.dataset_id || ds.id || ds.name;
+                const dsName = ds.dataset_name || ds.name || dsId;
+                addDatasetItemToLegend(list, dsId, dsName, ds.count || 0);
+            });
+
+            // Also list any existing datasetLayers not returned by server
+            for (const kd in window.datasetLayers) {
+                if (!datasets.find(d => String(d.dataset_id || d.id || d.name) === String(kd))) {
+                    const dsName = window.datasetLayers[kd].name || kd;
+                    addDatasetItemToLegend(list, kd, dsName, window.datasetLayers[kd].count || 0);
+                }
+            }
+            
+            if (typeof window.syncLegendWithFeatures === 'function') {
+                setTimeout(() => {
+                    try { window.syncLegendWithFeatures(); } catch (e) { console.warn('Legend sync failed:', e); }
+                }, 100);
+            }
+        } catch (err) {
+            const list = document.getElementById('dataset-legend-list');
+            if (list) list.textContent = 'Aineistojen lataus epäonnistui';
+            console.warn('Failed to load datasets for legend', err);
+        }
+    };
+
+    // Initial load of datasets
     if (!datasetsUrl) {
         const list = document.getElementById('dataset-legend-list');
         if (list) list.textContent = 'Taksonin tunniste puuttuu';
-        return control;
+    } else {
+        window.refreshDatasetLegend();
     }
-    fetch(datasetsUrl).then(r => r.json()).then(data => {
-        const list = document.getElementById('dataset-legend-list');
-        list.innerHTML = '';
-        const datasets = (data && data.datasets) || [];
-        datasets.forEach(ds => {
-            // Normalize dataset id and name (both endpoints use slightly different keys)
-            const dsId = ds.dataset_id || ds.id || ds.name;
-            const dsName = ds.dataset_name || ds.name || dsId;
-            const safe = sanitizeDomId(dsId);
-            window.datasetLayers = window.datasetLayers || {};
-            if (!window.datasetLayers[dsId]) {
-                window.datasetLayers[dsId] = { group: L.layerGroup().addTo(window.sharedMap), name: dsName, count: ds.count || 0 };
-            } else {
-                window.datasetLayers[dsId].name = dsName;
-            }
-            const checked = true;
-            const item = document.createElement('div');
-            item.className = 'legend-item';
-            item.innerHTML = `<label><input type="checkbox" id="legend-cb-${safe}" ${checked ? 'checked' : ''} data-dsid="${dsId}"> ${dsName} <span class="legend-count" id="legend-count-${safe}">${window.datasetLayers[dsId].count || 0}</span></label>`;
-            list.appendChild(item);
-            document.getElementById('legend-cb-' + safe).addEventListener('change', async function () {
-                const dsid = this.getAttribute('data-dsid');
-                const entry = window.datasetLayers[dsid];
-                if (!entry) return;
-                const checked = this.checked;
-                const exclude = !checked;
-
-                // Compute how many features would actually be affected by this operation
-                let affectedCount = 0;
-                try {
-                    if (entry.group && typeof entry.group.eachLayer === 'function') {
-                        entry.group.eachLayer(function(layer) {
-                            const props = (layer.feature && layer.feature.properties) || layer.feature || {};
-                            const id = props && (props._db_id || props.db_id);
-                            if (!id) return;
-                            const isExcluded = props.excluded === true || props.excluded === '1' || props.excluded === 1;
-                            if ((exclude && !isExcluded) || (!exclude && isExcluded)) affectedCount++;
-                        });
-                    }
-                } catch (e) { console.warn('Error counting affected features for dataset', dsid, e); }
-
-                // Fallback to total count if none found in the group
-                if (affectedCount === 0) {
-                    // If group has no DB-backed features yet, fall back to known total count
-                    affectedCount = entry.count || 0;
-                }
-
-                if (affectedCount === 0) {
-                    alert(`Tässä aineistossa ei ole havaintoja, joita voisi ${exclude ? 'poistaa käytöstä' : 'ottaa käyttöön'}.`);
-                    this.checked = !checked; // revert
-                    return;
-                }
-
-                this.disabled = true;
-                try {
-                    await window.toggleDatasetExclude(dsid, exclude);
-                } catch (err) {
-                    console.error('Error toggling dataset exclude:', err);
-                    alert('Virhe muutettaessa aineistoa: ' + (err && err.message || err));
-                    this.checked = !checked;
-                } finally {
-                    this.disabled = false;
-                }
-            });
-        });
-
-        // Also list any existing datasetLayers not returned by server (e.g., unknown)
-        for (const kd in window.datasetLayers) {
-            if (!datasets.find(d => String(d.dataset_id || d.id || d.name) === String(kd))) {
-                const dsId = kd;
-                const dsName = window.datasetLayers[kd].name || kd;
-                const safe = sanitizeDomId(dsId);
-                if (document.getElementById('legend-cb-' + safe)) continue;
-                const item = document.createElement('div');
-                item.className = 'legend-item';
-                item.innerHTML = `<label><input type="checkbox" id="legend-cb-${safe}" checked data-dsid="${dsId}"> ${dsName} <span class="legend-count" id="legend-count-${safe}">${window.datasetLayers[kd].count || 0}</span></label>`;
-                list.appendChild(item);
-                document.getElementById('legend-cb-' + safe).addEventListener('change', async function () {
-                    const dsid = this.getAttribute('data-dsid');
-                    const entry = window.datasetLayers[dsid];
-                    if (!entry) return;
-                    const checked = this.checked;
-                    const exclude = !checked;
-
-                    // Compute how many features would actually be affected by this operation
-                    let affectedCount = 0;
-                    try {
-                        if (entry.group && typeof entry.group.eachLayer === 'function') {
-                            entry.group.eachLayer(function(layer) {
-                                const props = (layer.feature && layer.feature.properties) || layer.feature || {};
-                                const id = props && (props._db_id || props.db_id);
-                                if (!id) return;
-                                const isExcluded = props.excluded === true || props.excluded === '1' || props.excluded === 1;
-                                if ((exclude && !isExcluded) || (!exclude && isExcluded)) affectedCount++;
-                            });
-                        }
-                    } catch (e) { console.warn('Error counting affected features for dataset', dsid, e); }
-
-                    // Fallback to total count if none found in the group
-                    if (affectedCount === 0) {
-                        // If group has no DB-backed features yet, fall back to known total count
-                        affectedCount = entry.count || 0;
-                    }
-
-                    if (affectedCount === 0) {
-                        alert(`Tässä aineistossa ei ole havaintoja, joita voisi ${exclude ? 'poistaa käytöstä' : 'ottaa käyttöön'}.`);
-                        this.checked = !checked; // revert
-                        return;
-                    }
-
-                    this.disabled = true;
-                    try {
-                        await window.toggleDatasetExclude(dsid, exclude);
-                    } catch (err) {
-                        console.error('Error toggling dataset exclude:', err);
-                        alert('Virhe muutettaessa aineistoa: ' + (err && err.message || err));
-                        this.checked = !checked;
-                    } finally {
-                        this.disabled = false;
-                    }
-                });
-            }
-        }
-        
-        // Sync legend with actual feature state after legend is created
-        // This handles the case where features were loaded before the legend was created
-        if (typeof window.syncLegendWithFeatures === 'function') {
-            setTimeout(() => {
-                try { window.syncLegendWithFeatures(); } catch (e) { console.warn('Initial legend sync failed:', e); }
-            }, 100);
-        }
-    }).catch(err => {
-        const list = document.getElementById('dataset-legend-list');
-        if (list) list.textContent = 'Aineistojen lataus epäonnistui';
-        console.warn('Failed to load datasets for legend', err);
-    });
 
     return control;
 };

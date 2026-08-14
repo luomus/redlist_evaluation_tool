@@ -105,6 +105,12 @@ async function fetchAllPages(baseUrl, config, logElement) {
                 pageSize = data.pageSize;
                 const recordCount = data.features ? data.features.length : 0;
                 addProgressLog(`Page ${currentPage}: ${recordCount} records fetched in ${pageTime.toFixed(2)}s (Total available: ${data.total || 'unknown'})`, 'success', logElement);
+                
+                // Validate that total pages does not exceed 10
+                if (lastPage > 10) {
+                    const errorMsg = 'liian monta havaintoa. Rajaa hakua (max. 10000)';
+                    throw new Error(errorMsg);
+                }
             } else {
                 const recordCount = data.features ? data.features.length : 0;
                 addProgressLog(`Page ${currentPage}: ${recordCount} records fetched in ${pageTime.toFixed(2)}s`, 'success', logElement);
@@ -152,7 +158,6 @@ async function fetchAllPages(baseUrl, config, logElement) {
         
     } catch (error) {
         console.error('Error fetching pages:', error);
-        addProgressLog(`Error on page ${currentPage}: ${error.message}`, 'error', logElement);
         throw error;
     }
 }
