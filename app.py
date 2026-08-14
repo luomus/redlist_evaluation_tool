@@ -5,6 +5,7 @@ from proxy.mml import bp as proxy_mml_bp
 from proxy.laji import bp as proxy_laji_bp
 from api.observations import bp as api_observations_bp
 from api.spatial import bp as api_spatial_bp
+from utils.helpers import get_taxon_by_name
 from models import Taxon
 
 app = Flask(__name__)
@@ -26,9 +27,8 @@ with app.app_context():
 
 @app.route('/map/<string:mx_id>')
 def taxon_map(mx_id):
-    db = Session()
-    taxon = db.query(Taxon).filter_by(mx_id=mx_id).first()
-    db.close()
+    with Session() as db:
+        taxon = db.query(Taxon).filter_by(mx_id=mx_id).first()
     if not taxon:
         abort(404)
     return render_template('map.html', taxon=taxon)
