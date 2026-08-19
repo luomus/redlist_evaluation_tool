@@ -66,10 +66,10 @@ async function fetchAndDisplayHull(mode) {
         const latLngs = coords.map(c => [c[1], c[0]]);
         hullLayers[mode] = L.polygon(latLngs, HULL_STYLES[mode]).addTo(map);
         hullLayers[mode].bindTooltip(
-            mode === 'max' ? `Laaja EOO: ${data.area_km2.toFixed(2)} km²`
-                           : `Minimaalinen EOO: ${data.area_km2.toFixed(2)} km²`
+            mode === 'max' ? `Laaja EOO: ${formatAreaKm2(data.area_km2)} km²`
+                           : `Suppea EOO: ${formatAreaKm2(data.area_km2)} km²`
         );
-        if (areaEl) areaEl.textContent = `${data.area_km2.toFixed(2)} km²`;
+        if (areaEl) areaEl.textContent = `${formatAreaKm2(data.area_km2)} km²`;
         return data;
     } catch (error) {
         console.error(`Error fetching convex hull (${mode}):`, error);
@@ -158,6 +158,7 @@ async function fetchAndDisplayGrid(fitMap = true) {
                 }
             }
             document.getElementById('cellsCount').textContent = `${polygons.length}`;
+            document.getElementById('aooArea').textContent = `${formatAreaKm2(polygons.length * 4)} km²`;
             
             // Update grid creation timestamp
             const aooTimeEl = document.getElementById('aoo_calculated_at');
@@ -167,11 +168,13 @@ async function fetchAndDisplayGrid(fitMap = true) {
         } else {
             window.sharedGridFeatures = [];
             document.getElementById('cellsCount').textContent = '0';
+            document.getElementById('aooArea').textContent = '0 km²';
         }
     } catch (error) {
         console.error('Error fetching grid:', error);
         updateStatus(`Virhe: ${error.message}`);
         document.getElementById('cellsCount').textContent = 'Virhe';
+        document.getElementById('aooArea').textContent = 'Virhe';
     }
 }
 

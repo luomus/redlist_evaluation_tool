@@ -25,7 +25,7 @@ window.getAccuracyClass = function(coordinateAccuracy) {
 };
 
 /**
- * Format ISO 8601 timestamp into readable local string
+ * Format ISO 8601 timestamp using Finnish date and time conventions.
  * 
  * @param {string} iso - ISO 8601 formatted timestamp
  * @returns {string} - Formatted date/time string or original input if invalid
@@ -34,5 +34,17 @@ window.formatIsoTimestamp = function(iso) {
     if (!iso) return '-';
     const d = new Date(iso);
     if (isNaN(d)) return iso;
-    return d.toLocaleString();
+    return d.toLocaleString('fi-FI');
+};
+
+/**
+ * Format an area as whole square kilometres with Finnish thousands separators.
+ *
+ * @param {number|string} areaKm2 - Area in square kilometres
+ * @returns {string} Formatted area or '-' if invalid
+ */
+window.formatAreaKm2 = function(areaKm2) {
+    const area = Number(areaKm2);
+    if (!Number.isFinite(area)) return '-';
+    return Math.round(area).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
 };
