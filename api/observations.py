@@ -443,6 +443,43 @@ def set_observations_excluded():
         return jsonify({"success": False, "error": str(e)}), 500
 
 
+@bp.route('/observations/convert-polygons-to-points', methods=['POST'])
+@login_required
+def convert_observations_to_points():
+    """Convert selected polygon observations to interior points."""
+    try:
+        data = request.get_json() or {}
+        ids = data.get('ids') or []
+        if not ids or not isinstance(ids, list):
+            return jsonify({"success": False, "error": "ids must be a non-empty list"}), 400
+        try:
+            ids = [int(i) for i in ids]
+        except Exception:
+            return jsonify({"success": False, "error": "ids must be a list of integers"}), 400
+
+        with Session() as db:
+            result = db.execute(text("""
+                WITH updated AS (
+                    UPDATE observations
+                    SET geometry = ST_PointOnSurface(geometry)
+                    WHERE id = ANY(:ids)
+                      AND GeometryType(geometry) IN ('POLYGON', 'MULTIPOLYGON')
+                    RETURNING id
+                )
+                SELECT id FROM updated
+            """), {'ids': ids})
+            updated = [row[0] for row in result.fetchall()]
+            db.commit()
+            return jsonify({
+                "success": True,
+                "processed": len(updated),
+                "skipped": len(ids) - len(updated),
+                "updated_ids": updated,
+            })
+    except Exception as e:
+        current_app.logger.error(f"Failed to convert polygons to points: {str(e)}", exc_info=True)
+        return jsonify({"success": False, "error": str(e)}), 500
+
 @bp.route('/observation/<int:obs_id>/exclude', methods=['POST'])
 @login_required
 def set_observation_excluded(obs_id):

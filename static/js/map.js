@@ -379,6 +379,8 @@ async function reloadMapObservations() {
     loadObservationsOnMap();
 }
 
+window.reloadMapObservations = reloadMapObservations;
+
 // Start loading data when page loads
 loadObservationsOnMap();
 

@@ -346,7 +346,7 @@ function getPopupOpts(layer) {
 function createMultiFeaturePopup(features) {
     let content = '<div class="multi-feature-popup">';
     content += `<div class="popup-header"><strong>${features.length} havaintoa tässä sijainnissa</strong></div>`;
-    content += `<div class="multi-feature-actions"><button onclick="window.applyMultiFeatureExclude(true)">Poista kaikki analyysista</button> <button onclick="window.applyMultiFeatureExclude(false)">Sisällytä kaikki analyysiin</button></div>`;
+    content += `<div class="multi-feature-actions"><button onclick="window.applyMultiFeatureExclude(true)">Poista kaikki analyysista</button> <button onclick="window.applyMultiFeatureExclude(false)">Sisällytä kaikki analyysiin</button> <button onclick="window.convertMultiFeaturePolygonsToPoints()">Muunna polygonit pisteiksi</button></div>`;
 
     features.forEach((layer, index) => {
         const props = layer.feature.properties || {};
@@ -460,6 +460,44 @@ window.applyMultiFeatureExclude = async function(exclude) {
     }
 };
 
+// Convert polygon observations currently shown in the multi-feature popup to points.
+window.convertMultiFeaturePolygonsToPoints = async function() {
+    const features = window._currentMultiFeatures || [];
+    const ids = [...new Set(features
+        .filter(function(layer) { return layer instanceof L.Polygon; })
+        .map(function(layer) {
+            const props = (layer.feature && layer.feature.properties) || {};
+            return props._db_id || props.db_id;
+        })
+        .filter(Boolean))];
+
+    if (!ids.length) {
+        alert('Valituissa havainnoissa ei ole polygoneja.');
+        return;
+    }
+    if (!confirm(`Haluatko muuntaa ${ids.length} polygonihavaintoa pisteiksi? Piste sijoitetaan polygonin sisälle.`)) return;
+
+    try {
+        const res = await fetch('/api/observations/convert-polygons-to-points', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ids: ids })
+        });
+        const data = await res.json().catch(function() { return {}; });
+        if (!res.ok || !data.success) {
+            throw new Error(data.error || res.statusText || 'request-failed');
+        }
+
+        if (window.sharedMap) window.sharedMap.closePopup();
+        if (typeof window.reloadMapObservations === 'function') {
+            await window.reloadMapObservations();
+        }
+        alert(`Muunnettu ${data.processed} polygonihavaintoa pisteiksi.`);
+    } catch (e) {
+        console.error('Multi-feature polygon conversion error', e);
+        alert('Muunnos epäonnistui: ' + (e && e.message));
+    }
+};
 // Toggle feature details in multi-feature popup
 window.toggleFeatureDetails = function(index, element) {
     const detailsDiv = document.getElementById(`feature-details-${index}`);
