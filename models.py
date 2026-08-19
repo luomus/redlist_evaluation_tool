@@ -35,6 +35,9 @@ class Observation(Base):
     excluded = Column(Boolean, default=False, index=True)
     properties = Column(JSONB, nullable=False)
     geometry = Column(Geometry(geometry_type='GEOMETRY', srid=4326))
+    # Set on the first user-driven geometry edit; the current geometry remains
+    # in `geometry` so existing map and export behaviour is unchanged.
+    original_geometry = Column(Geometry(geometry_type='GEOMETRY', srid=4326))
 
     taxon = relationship('Taxon', back_populates='observations')
 

@@ -719,6 +719,7 @@ window._confirmPolygonToPoint = async function() {
 
         // Create new point layer with original properties (geometry updated in-memory too)
         const newProps = Object.assign({}, state.savedProperties);
+        newProps._has_modified_geometry = true;
         const newLayers = window.createGeometryLayers(newGeometry, newProps);
         if (newLayers) {
             (function addLayer(l) {

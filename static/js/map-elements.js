@@ -328,6 +328,9 @@ function createPopupContent(properties, opts) {
         if (opts && opts.showMoveBtn && parseFloat(resolvedProps['gathering.interpretations.coordinateAccuracy']) >= 10) {
             content += ` <button class="move-point-btn" onclick="window.startPointMoveConversion(${dbId}); return false;">Siirrä pistettä</button>`;
         }
+        if (resolvedProps._has_modified_geometry) {
+            content += ` <button class="restore-geometry-btn" onclick="window.restoreOriginalGeometry(${dbId}); return false;">Palauta alkuperäinen geometria</button>`;
+        }
         content += `</div>`;
     }
 
@@ -460,6 +463,20 @@ window.applyMultiFeatureExclude = async function(exclude) {
     }
 };
 
+window.restoreOriginalGeometry = async function(obsId) {
+    if (!await window.mapDialogs.confirm('Haluatko palauttaa havainnon alkuperäisen geometrian?')) return;
+    try {
+        const res = await fetch('/api/observation/' + obsId + '/restore-original-geometry', { method: 'POST' });
+        const data = await res.json().catch(function() { return {}; });
+        if (!res.ok || !data.success) throw new Error(data.error || res.statusText || 'request-failed');
+        if (window.sharedMap) window.sharedMap.closePopup();
+        if (data.restored && typeof window.reloadMapObservations === 'function') await window.reloadMapObservations();
+        window.mapDialogs.notify(data.restored ? 'Alkuperäinen geometria palautettiin.' : 'Geometria oli jo alkuperäinen.');
+    } catch (e) {
+        console.error('Original geometry restore error', e);
+        window.mapDialogs.notify('Alkuperäisen geometrian palautus epäonnistui: ' + (e && e.message));
+    }
+};
 // Convert polygon observations currently shown in the multi-feature popup to points.
 window.convertMultiFeaturePolygonsToPoints = async function() {
     const features = window._currentMultiFeatures || [];

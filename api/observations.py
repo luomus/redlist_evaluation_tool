@@ -67,6 +67,9 @@ def get_observations(mx_id):
                 SELECT
                     id, dataset_id, dataset_name, dataset_url, created_at, properties,
                     ST_AsGeoJSON(geometry) as geometry_json,
+                    CASE WHEN original_geometry IS NOT NULL
+                              AND NOT ST_Equals(geometry, original_geometry)
+                         THEN true ELSE false END as has_modified_geometry,
                     COUNT(*) OVER() as total_count
                 FROM observations
                 WHERE taxon_id = :taxon_id
@@ -88,6 +91,7 @@ def get_observations(mx_id):
             props = dict(row.properties or {})
             props['_db_id'] = row.id
             props['_dataset_id'] = row.dataset_id
+            props['_has_modified_geometry'] = row.has_modified_geometry
             features.append({
                 "type": "Feature",
                 "properties": props,
@@ -461,7 +465,8 @@ def convert_observations_to_points():
             result = db.execute(text("""
                 WITH updated AS (
                     UPDATE observations
-                    SET geometry = ST_PointOnSurface(geometry)
+                    SET original_geometry = COALESCE(original_geometry, geometry),
+                        geometry = ST_PointOnSurface(geometry)
                     WHERE id = ANY(:ids)
                       AND GeometryType(geometry) IN ('POLYGON', 'MULTIPOLYGON')
                     RETURNING id
@@ -521,9 +526,34 @@ def update_observation_geometry(obs_id):
             obs = db.query(Observation).get(obs_id)
             if not obs:
                 return jsonify({"success": False, "error": "Observation not found"}), 404
+            # Retain the source location once. Assigning the current geometry
+            # before replacing it works for point moves and polygon conversions.
+            if obs.original_geometry is None:
+                obs.original_geometry = obs.geometry
             obs.geometry = wkt_str
             db.add(obs)
             db.commit()
             return jsonify({"success": True, "obs_id": obs_id})
     except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@bp.route('/observation/<int:obs_id>/restore-original-geometry', methods=['POST'])
+@login_required
+def restore_observation_original_geometry(obs_id):
+    """Restore an observation's source geometry after a user edit."""
+    try:
+        with Session() as db:
+            result = db.execute(text("""
+                UPDATE observations
+                SET geometry = original_geometry
+                WHERE id = :obs_id
+                  AND original_geometry IS NOT NULL
+                  AND NOT ST_Equals(geometry, original_geometry)
+                RETURNING id
+            """), {'obs_id': obs_id})
+            restored = result.scalar() is not None
+            db.commit()
+            return jsonify({"success": True, "obs_id": obs_id, "restored": restored})
+    except Exception as e:
+        current_app.logger.error(f"Failed to restore observation geometry: {str(e)}", exc_info=True)
         return jsonify({"success": False, "error": str(e)}), 500
