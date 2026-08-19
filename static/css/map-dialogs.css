@@ -1,0 +1,95 @@
+/* In-app dialogs used by the map controls. */
+.map-dialog-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 20000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    background: rgba(0, 0, 0, 0.5);
+}
+
+.map-dialog {
+    width: min(100%, 480px);
+    overflow: hidden;
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+}
+
+.map-dialog__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 16px 20px;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.map-dialog__title {
+    margin: 0;
+    font-size: 18px;
+}
+
+.map-dialog__close {
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    color: #4b5563;
+    font-size: 24px;
+    line-height: 1;
+    background: transparent;
+    border: 0;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.map-dialog__close:hover,
+.map-dialog__close:focus-visible {
+    color: #111827;
+    background: #f3f4f6;
+}
+
+.map-dialog__body {
+    padding: 20px;
+    color: #1f2937;
+    line-height: 1.5;
+    white-space: pre-wrap;
+}
+
+.map-dialog__actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 0 20px 20px;
+}
+
+.map-dialog__button {
+    padding: 8px 14px;
+    color: #fff;
+    font: inherit;
+    font-weight: 600;
+    background: #2563eb;
+    border: 1px solid #2563eb;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.map-dialog__button:hover,
+.map-dialog__button:focus-visible {
+    background: #1d4ed8;
+    border-color: #1d4ed8;
+}
+
+.map-dialog__button--secondary {
+    color: #374151;
+    background: #fff;
+    border-color: #9ca3af;
+}
+
+.map-dialog__button--secondary:hover,
+.map-dialog__button--secondary:focus-visible {
+    background: #f3f4f6;
+    border-color: #6b7280;
+}

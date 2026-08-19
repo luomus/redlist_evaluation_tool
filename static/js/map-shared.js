@@ -15,6 +15,14 @@ window.createSharedMap = function(containerId = 'map', center = [60.1699, 24.938
 
     const geometryLayer = L.featureGroup().addTo(map);
 
+    // Keep point and line observations above polygons so they remain clickable.
+    const polygonPane = map.createPane('observationPolygonPane');
+    polygonPane.style.zIndex = 410;
+    const linePane = map.createPane('observationLinePane');
+    linePane.style.zIndex = 420;
+    const pointPane = map.createPane('observationPointPane');
+    pointPane.style.zIndex = 430;
+
     // Expose map and geometry layer globally so other helpers can access them
     window.sharedMap = map;
     window.sharedGeometryLayer = geometryLayer;
@@ -318,6 +326,7 @@ window.createGeometryLayers = function(geometry, properties) {
             const marker = L.circleMarker([lat, lon], {
                 radius: 7,
                 className: className,
+                pane: 'observationPointPane',
                 weight: 1,
                 opacity: 1,
                 fillOpacity: 0.8
@@ -329,7 +338,7 @@ window.createGeometryLayers = function(geometry, properties) {
             return marker;
         } else if (geom.type === 'LineString') {
             const latLngs = geom.coordinates.map(c => [c[1], c[0]]);
-            const line = L.polyline(latLngs, { className: className, weight: 7, opacity: 0.8 });
+            const line = L.polyline(latLngs, { className: className, pane: 'observationLinePane', weight: 7, opacity: 0.8 });
             line.bindPopup(popupContent);
             line.feature = line.feature || {};
             line.feature.properties = properties || {};
@@ -338,7 +347,7 @@ window.createGeometryLayers = function(geometry, properties) {
             return line;
         } else if (geom.type === 'Polygon') {
             const latLngs = geom.coordinates.map(ring => ring.map(c => [c[1], c[0]]));
-            const poly = L.polygon(latLngs, { className: className, weight: 2, opacity: 0.8, fillOpacity: 0.3 });
+            const poly = L.polygon(latLngs, { className: `${className} geom-polygon`, pane: 'observationPolygonPane', weight: 2, opacity: 0.8, fillOpacity: 0.2 });
             const polyDbId = properties && (properties._db_id || properties.db_id);
             const polyPopup = polyDbId
                 ? createPopupContent(properties || {}, { showConvertBtn: true })
@@ -386,7 +395,7 @@ window.toggleExclude = async function(obsId, btn) {
 
         const data = await window.setExclude(obsId, newValue);
         if (!data || !data.success) {
-            alert('Päivitys epäonnistui: ' + (data && data.error ? data.error : 'tuntematon virhe'));
+            window.mapDialogs.notify('Päivitys epäonnistui: ' + (data && data.error ? data.error : 'tuntematon virhe'));
             return;
         }
 
@@ -416,7 +425,7 @@ window.toggleExclude = async function(obsId, btn) {
         // Note: the actual layer styling and legend sync have already been handled by setExcludeBatch
     } catch (e) {
         console.error('Error toggling exclude:', e);
-        alert('Virhe poiston vaihtamisessa: ' + e.message);
+        window.mapDialogs.notify('Virhe poiston vaihtamisessa: ' + e.message);
     }
 };
 
@@ -557,7 +566,7 @@ window.startPolygonToPointConversion = function(obsId) {
 
     // Prevent two concurrent conversions
     if (window._conversionActiveObs) {
-        alert('Muunnos on jo käynnissä. Tallenna tai peruuta se ensin.');
+        window.mapDialogs.notify('Muunnos on jo käynnissä. Tallenna tai peruuta se ensin.');
         return;
     }
 
@@ -581,7 +590,7 @@ window.startPolygonToPointConversion = function(obsId) {
     }
 
     if (!foundLayers.length || !savedGeometry) {
-        alert('Havaintoa ei löytynyt kartalta.');
+        window.mapDialogs.notify('Havaintoa ei löytynyt kartalta.');
         return;
     }
 
@@ -698,7 +707,7 @@ window._confirmPolygonToPoint = async function() {
 
         if (!res.ok) {
             const err = await res.json().catch(function() { return {}; });
-            alert('Muunnos epäonnistui: ' + (err.error || res.statusText));
+            window.mapDialogs.notify('Muunnos epäonnistui: ' + (err.error || res.statusText));
             if (panel) panel.querySelectorAll('button').forEach(function(b) { b.disabled = false; });
             return;
         }
@@ -727,7 +736,7 @@ window._confirmPolygonToPoint = async function() {
 
     } catch (e) {
         console.error('Error confirming polygon to point conversion:', e);
-        alert('Virhe muunnoksen tallennuksessa: ' + e.message);
+        window.mapDialogs.notify('Virhe muunnoksen tallennuksessa: ' + e.message);
         if (panel) panel.querySelectorAll('button').forEach(function(b) { b.disabled = false; });
         return;
     }
@@ -773,7 +782,7 @@ window.startPointMoveConversion = function(obsId) {
     if (!obsId) return;
 
     if (window._conversionActiveObs) {
-        alert('Muunnos on jo käynnissä. Tallenna tai peruuta se ensin.');
+        window.mapDialogs.notify('Muunnos on jo käynnissä. Tallenna tai peruuta se ensin.');
         return;
     }
 
@@ -796,7 +805,7 @@ window.startPointMoveConversion = function(obsId) {
     }
 
     if (!foundLayer || !savedGeometry) {
-        alert('Havaintoa ei löytynyt kartalta.');
+        window.mapDialogs.notify('Havaintoa ei löytynyt kartalta.');
         return;
     }
 
@@ -804,7 +813,7 @@ window.startPointMoveConversion = function(obsId) {
         savedProperties['gathering.interpretations.coordinateAccuracy']
     );
     if (!accuracyMeters || isNaN(accuracyMeters) || accuracyMeters < 10) {
-        alert('Pistettä ei voi siirtää: koordinaattien tarkkuus on alle 10 metriä tai se puuttuu.');
+        window.mapDialogs.notify('Pistettä ei voi siirtää: koordinaattien tarkkuus on alle 10 metriä tai se puuttuu.');
         return;
     }
 

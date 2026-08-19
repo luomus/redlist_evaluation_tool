@@ -197,6 +197,11 @@ header { padding: 12px 16px; border-bottom: 1px solid #eee; display: flex; gap: 
     fill-opacity: 0.85;
 }
 
+/* Polygon observations stay translucent so underlying observations remain visible. */
+/* .leaflet-interactive.geom-polygon {
+/*    fill-opacity: 0.2;
+/* }
+
 /* tooltip badge for EOO explanation */
 .eoo-info {
     display: inline-block;

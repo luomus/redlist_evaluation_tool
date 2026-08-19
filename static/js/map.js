@@ -591,7 +591,7 @@ async function uploadCsvForMap() {
 
 // Delete dataset
 async function deleteMapDataset(datasetIdStr) {
-    if (!confirm('Haluatko varmasti poistaa tämän aineiston?')) return;
+    if (!await window.mapDialogs.confirm('Haluatko varmasti poistaa tämän aineiston?')) return;
 
     try {
         const resp = await fetch(`/api/taxons/${datasetId}/datasets/${datasetIdStr}`, { method: 'DELETE' });

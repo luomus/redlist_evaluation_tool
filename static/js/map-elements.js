@@ -91,7 +91,7 @@ function setupPolygonSelector(map, geometryLayer) {
     // Finish drawing and create selection polygon
     function finishDrawing() {
         if (points.length < 3) {
-            alert('Piirrä monikulmio, jossa on vähintään 3 pistettä.');
+            window.mapDialogs.notify('Piirrä monikulmio, jossa on vähintään 3 pistettä.');
             return;
         }
         selectionPolygon = L.polygon(points, { color: '#f39c12', weight: 2, fillOpacity: 0.15 }).addTo(map);
@@ -216,24 +216,24 @@ function setupPolygonSelector(map, geometryLayer) {
 
     async function applyExcludeToSelection(exclude) {
         const layers = getLayersInSelection();
-        if (!layers.length) { alert('Valinnan sisällä ei löytynyt havaintoja.'); return; }
+        if (!layers.length) { window.mapDialogs.notify('Valinnan sisällä ei löytynyt havaintoja.'); return; }
         const dbIds = [];
         layers.forEach(l => {
             const props = (l.feature && l.feature.properties) || l.feature || {};
             const id = props && (props._db_id || props.db_id);
             if (id) dbIds.push(id);
         });
-        if (!dbIds.length) { alert('Valinnassa ei ole tietokantaan tallennettuja havaintoja.'); return; }
+        if (!dbIds.length) { window.mapDialogs.notify('Valinnassa ei ole tietokantaan tallennettuja havaintoja.'); return; }
 
-        if (!confirm(`Haluatko ${exclude ? 'poistaa käytöstä' : 'ottaa käyttöön'} ${dbIds.length} havaintoa?`)) return;
+        if (!await window.mapDialogs.confirm(`Haluatko ${exclude ? 'poistaa käytöstä' : 'ottaa käyttöön'} ${dbIds.length} havaintoa?`)) return;
         try {
             const res = await window.setExcludeBatch(dbIds, exclude);
             map.closePopup();
             if (selectionPolygon) { map.removeLayer(selectionPolygon); selectionPolygon = null; }
-            alert(`Käsitelty ${res.processed} havaintoa (${res.failed} epäonnistui).`);
+            window.mapDialogs.notify(`Käsitelty ${res.processed} havaintoa (${res.failed} epäonnistui).`);
         } catch (e) {
             console.error('Batch exclude encountered an error', e);
-            alert('Valinnan käsittely epäonnistui: ' + (e && e.message));
+            window.mapDialogs.notify('Valinnan käsittely epäonnistui: ' + (e && e.message));
         }
     }
 }
@@ -448,15 +448,15 @@ window.applyMultiFeatureExclude = async function(exclude) {
         const id = props._db_id || props.db_id;
         if (id) dbIds.push(id);
     });
-    if (!dbIds.length) { alert('Valituissa havainnoissa ei ole tietokantaan tallennettuja havaintoja.'); return; }
-    if (!confirm(`Haluatko ${exclude ? 'poistaa analyysista' : 'sisällyttää analyysiin'} ${dbIds.length} havaintoa?`)) return;
+    if (!dbIds.length) { window.mapDialogs.notify('Valituissa havainnoissa ei ole tietokantaan tallennettuja havaintoja.'); return; }
+    if (!await window.mapDialogs.confirm(`Haluatko ${exclude ? 'poistaa analyysista' : 'sisällyttää analyysiin'} ${dbIds.length} havaintoa?`)) return;
     try {
         const res = await window.setExcludeBatch(dbIds, exclude);
         if (window.sharedMap) window.sharedMap.closePopup();
-        alert(`Käsitelty ${res.processed} havaintoa (${res.failed} epäonnistui).`);
+        window.mapDialogs.notify(`Käsitelty ${res.processed} havaintoa (${res.failed} epäonnistui).`);
     } catch (e) {
         console.error('Multi-feature exclude error', e);
-        alert('Käsittely epäonnistui: ' + (e && e.message));
+        window.mapDialogs.notify('Käsittely epäonnistui: ' + (e && e.message));
     }
 };
 
@@ -472,10 +472,10 @@ window.convertMultiFeaturePolygonsToPoints = async function() {
         .filter(Boolean))];
 
     if (!ids.length) {
-        alert('Valituissa havainnoissa ei ole polygoneja.');
+        window.mapDialogs.notify('Valituissa havainnoissa ei ole polygoneja.');
         return;
     }
-    if (!confirm(`Haluatko muuntaa ${ids.length} polygonihavaintoa pisteiksi? Piste sijoitetaan polygonin sisälle.`)) return;
+    if (!await window.mapDialogs.confirm(`Haluatko muuntaa ${ids.length} polygonihavaintoa pisteiksi? Piste sijoitetaan polygonin sisälle.`)) return;
 
     try {
         const res = await fetch('/api/observations/convert-polygons-to-points', {
@@ -492,10 +492,10 @@ window.convertMultiFeaturePolygonsToPoints = async function() {
         if (typeof window.reloadMapObservations === 'function') {
             await window.reloadMapObservations();
         }
-        alert(`Muunnettu ${data.processed} polygonihavaintoa pisteiksi.`);
+        window.mapDialogs.notify(`Muunnettu ${data.processed} polygonihavaintoa pisteiksi.`);
     } catch (e) {
         console.error('Multi-feature polygon conversion error', e);
-        alert('Muunnos epäonnistui: ' + (e && e.message));
+        window.mapDialogs.notify('Muunnos epäonnistui: ' + (e && e.message));
     }
 };
 // Toggle feature details in multi-feature popup
@@ -724,7 +724,7 @@ window.createLegendControl = function() {
             }
 
             if (affectedCount === 0) {
-                alert(`Tässä aineistossa ei ole havaintoja, joita voisi ${exclude ? 'poistaa käytöstä' : 'ottaa käyttöön'}.`);
+                window.mapDialogs.notify(`Tässä aineistossa ei ole havaintoja, joita voisi ${exclude ? 'poistaa käytöstä' : 'ottaa käyttöön'}.`);
                 this.checked = !checked;
                 return;
             }
@@ -734,7 +734,7 @@ window.createLegendControl = function() {
                 await window.toggleDatasetExclude(dsid, exclude);
             } catch (err) {
                 console.error('Error toggling dataset exclude:', err);
-                alert('Virhe muutettaessa aineistoa: ' + (err && err.message || err));
+                window.mapDialogs.notify('Virhe muutettaessa aineistoa: ' + (err && err.message || err));
                 this.checked = !checked;
             } finally {
                 this.disabled = false;
