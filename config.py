@@ -16,7 +16,7 @@ if not SECRET_KEY:
 MAX_CONTENT_LENGTH = 100 * 1024 * 1024  # 100 MB
 
 # ===== AUTHENTICATION =====
-USE_AUTHENTICATION = os.getenv('USE_AUTHENTICATION', 'false').lower() == 'true'
+USE_AUTHENTICATION = os.getenv('USE_AUTHENTICATION', 'true').lower() == 'true'
 
 # LajiAuth – only validated when USE_AUTHENTICATION=true
 TARGET = os.getenv("TARGET")
@@ -46,5 +46,9 @@ def get_flask_config():
         'DEBUG': DEBUG,
         'SECRET_KEY': SECRET_KEY,
         'MAX_CONTENT_LENGTH': MAX_CONTENT_LENGTH,
+        'SESSION_COOKIE_SECURE': False,  # Set to True in production with HTTPS
+        'SESSION_COOKIE_HTTPONLY': True,
+        'SESSION_COOKIE_SAMESITE': 'Lax',
+        'PERMANENT_SESSION_LIFETIME': 86400,  # 24 hours
     }
 

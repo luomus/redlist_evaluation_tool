@@ -1,18 +1,18 @@
 ﻿"""Spatial analysis API endpoints (convex hull, grid)."""
 import json
 from datetime import datetime
-from flask import Blueprint, jsonify, request, current_app
+from flask import Blueprint, jsonify, request
 from sqlalchemy import text
 from models import ConvexHull, GridMetadata
 from data_loaders.database import Session
 from auth.decorators import login_required
-from utils.helpers import get_taxon_by_name
 from models import Taxon
 
 bp = Blueprint('api_spatial', __name__, url_prefix='/api')
 
 
 @bp.route('/observations/<string:mx_id>/convex_hull', methods=['GET'])
+@login_required
 def get_convex_hull(mx_id):
     """Get the pre-calculated convex hull for a taxon."""
     try:
@@ -46,7 +46,7 @@ def get_convex_hull(mx_id):
             "calculated_at": hull.calculated_at.isoformat() if hull.calculated_at else None
         })
     except Exception as e:
-        current_app.logger.error(f"Failed to get convex hull: {str(e)}", exc_info=True)
+        print(f"Failed to get convex hull: {str(e)}", exc_info=True)
         return jsonify({"success": False, "error": str(e)}), 500
 
 
@@ -125,11 +125,12 @@ def calculate_convex_hull(mx_id):
             "min": {"area_km2": min_area}
         })
     except Exception as e:
-        current_app.logger.error(f"Failed to calculate convex hull: {str(e)}", exc_info=True)
+        print(f"Failed to calculate convex hull: {str(e)}", exc_info=True)
         return jsonify({"success": False, "error": str(e)}), 500
 
 
 @bp.route('/observations/<string:mx_id>/grid', methods=['GET'])
+@login_required
 def get_grid(mx_id):
     """Get stored grid cells for a taxon as GeoJSON FeatureCollection."""
     try:
@@ -180,7 +181,7 @@ def get_grid(mx_id):
             "cell_count": grid.cell_count or len(features)
         })
     except Exception as e:
-        current_app.logger.error(f"Failed to get grid: {str(e)}", exc_info=True)
+        print(f"Failed to get grid: {str(e)}", exc_info=True)
         return jsonify({"success": False, "error": str(e)}), 500
 
 
@@ -251,5 +252,5 @@ def calculate_grid(mx_id):
             })
         except Exception as e:
             db.rollback()
-            current_app.logger.error(f"Failed to calculate grid: {str(e)}", exc_info=True)
+            print(f"Failed to calculate grid: {str(e)}", exc_info=True)
             return jsonify({"success": False, "error": str(e)}), 500

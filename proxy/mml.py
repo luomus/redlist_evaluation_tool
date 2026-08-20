@@ -6,6 +6,7 @@ import os
 import base64
 import requests
 from flask import Blueprint, request, jsonify, current_app
+from auth.decorators import login_required
 
 bp = Blueprint('proxy_mml', __name__, url_prefix='/mml')
 
@@ -28,9 +29,9 @@ def _build_mml_headers_and_params(user_id_from_request=None):
             token = base64.b64encode(f"{api_key}:".encode('utf-8')).decode('ascii')
             headers['Authorization'] = f'Basic {token}'
             params['user-id'] = api_key
-            current_app.logger.debug('MML proxy: using server-side MML_API_KEY')
+            print('MML proxy: using server-side MML_API_KEY')
         except Exception as e:
-            current_app.logger.warning(f'Failed to build MML auth header: {e}')
+            print(f'Failed to build MML auth header: {e}')
         return headers, params
     
     # Fallback: client-provided user-id (less secure, but forward it if given)
@@ -40,7 +41,7 @@ def _build_mml_headers_and_params(user_id_from_request=None):
             token = base64.b64encode(f"{user_id}:".encode('utf-8')).decode('ascii')
             headers['Authorization'] = f'Basic {token}'
             params['user-id'] = user_id
-            current_app.logger.debug('MML proxy: forwarded client-provided user-id')
+            print('MML proxy: forwarded client-provided user-id')
         except Exception:
             pass
     
@@ -58,12 +59,12 @@ def _proxy_mml_tile(layer_name, z, x, y):
         
         headers, params = _build_mml_headers_and_params()
         
-        current_app.logger.debug(f'MML proxy ({layer_name}): fetching tile {z}/{y}/{x}')
+        print(f'MML proxy ({layer_name}): fetching tile {z}/{y}/{x}')
         resp = requests.get(tile_url, headers=headers, params=(params or None), timeout=10, stream=True)
         
         if resp.status_code != 200:
             sent_auth = 'Authorization' in headers
-            current_app.logger.warning(
+            print(
                 f'MML {layer_name} tile fetch failed: status={resp.status_code} sent_auth={sent_auth} '
                 f'params={params or {}} body_preview={(resp.text or "")[:200]}'
             )
@@ -78,11 +79,12 @@ def _proxy_mml_tile(layer_name, z, x, y):
         return response
     
     except Exception as e:
-        current_app.logger.exception(f'MML {layer_name} tile proxy failed')
+        print(f'MML {layer_name} tile proxy failed')
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @bp.route('/taustakartta/<int:z>/<int:x>/<int:y>.png')
+@login_required
 def mml_taustakartta_tile(z, x, y):
     """
     Server-side proxy for MML `taustakartta` WMTS tiles.
@@ -93,6 +95,7 @@ def mml_taustakartta_tile(z, x, y):
 
 
 @bp.route('/maastokartta/<int:z>/<int:x>/<int:y>.png')
+@login_required
 def mml_maastokartta_tile(z, x, y):
     """
     Server-side proxy for MML `maastokartta` WMTS tiles (same behavior as taustakartta).

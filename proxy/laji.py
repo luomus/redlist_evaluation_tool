@@ -4,12 +4,14 @@ Forwards requests to the configured LAJI API with authentication headers.
 """
 import os
 import requests
-from flask import Blueprint, request, session, jsonify, current_app
+from flask import Blueprint, request, session, jsonify
+from auth.decorators import login_required
 
 bp = Blueprint('proxy_laji', __name__, url_prefix='/api')
 
 
 @bp.route('/laji', methods=['GET'])
+@login_required
 def laji_proxy():
     """
     Proxy GET requests to the configured LAJI API base URL to avoid CORS.
@@ -45,7 +47,7 @@ def laji_proxy():
             'Accept-Language': request.headers.get('Accept-Language', 'fi')
         }
         
-        current_app.logger.debug(f"Proxying request to LAJI API: {target_url}")
+        print(f"Proxying request to LAJI API: {target_url}")
         
         resp = requests.get(target_url, headers=forward_headers, timeout=30)
         
@@ -54,5 +56,5 @@ def laji_proxy():
         return (resp.content, resp.status_code, {'Content-Type': content_type})
     
     except Exception as e:
-        current_app.logger.error(f"LAJI proxy request failed: {str(e)}", exc_info=True)
+        print(f"LAJI proxy request failed: {str(e)}", exc_info=True)
         return jsonify({"success": False, "error": str(e)}), 500

@@ -4,7 +4,7 @@ import io
 import json
 import os
 from datetime import datetime
-from flask import Blueprint, jsonify, request, current_app, make_response
+from flask import Blueprint, jsonify, request, make_response
 from sqlalchemy import text, insert
 from shapely.geometry import shape
 from shapely import wkt as shapely_wkt
@@ -23,6 +23,7 @@ SKIP_CSV_KEYS = LAT_COLUMNS + LON_COLUMNS + WKT_COLUMNS
 
 
 @bp.route('/config', methods=['GET'])
+@login_required
 def get_config():
     """Return client-side configuration."""
     return jsonify({
@@ -32,6 +33,7 @@ def get_config():
 
 
 @bp.route('/taxons/<string:mx_id>', methods=['GET'])
+@login_required
 def get_taxon(mx_id):
     """Return taxon metadata by MX identifier."""
     with Session() as db:
@@ -51,6 +53,7 @@ def get_taxon(mx_id):
 
 
 @bp.route('/observations/<string:mx_id>', methods=['GET'])
+@login_required
 def get_observations(mx_id):
     """Return paginated observations for a taxon."""
     try:
@@ -107,7 +110,7 @@ def get_observations(mx_id):
             "pagination": {"page": page, "per_page": per_page, "total": total, "pages": total_pages}
         })
     except Exception as e:
-        current_app.logger.error(f"Failed to get observations: {str(e)}", exc_info=True)
+        print(f"Failed to get observations: {str(e)}", exc_info=True)
         return jsonify({"success": False, "error": str(e)}), 500
 
 
@@ -187,11 +190,11 @@ def upload_csv(mx_id):
         
         delimiter = guess_delimeter(content)
         
-        current_app.logger.info(f"Detected CSV delimiter: {repr(delimiter)}")
+        print(f"Detected CSV delimiter: {repr(delimiter)}")
         reader = csv.DictReader(io.StringIO(content), delimiter=delimiter)
 
         if reader.fieldnames:
-            current_app.logger.info(f"CSV columns found: {reader.fieldnames}")
+            print(f"CSV columns found: {reader.fieldnames}")
 
         features = []
         row_num = 0
@@ -225,7 +228,7 @@ def upload_csv(mx_id):
                     geom_obj = shapely_wkt.loads(wkt_str)
                 except Exception as e:
                     wkt_error = str(e)
-                    current_app.logger.warning(f"Row {row_num}: WKT parsing failed for column '{wkt_col_name}': {wkt_error}")
+                    print(f"Row {row_num}: WKT parsing failed for column '{wkt_col_name}': {wkt_error}")
 
             if geom_obj is None:
                 if wkt_str and wkt_error:
@@ -256,7 +259,7 @@ def upload_csv(mx_id):
                 error_msg += f". Columns found: {', '.join(reader.fieldnames)}"
             if parse_errors:
                 error_msg += f". First errors: {'; '.join(parse_errors[:3])}"
-            current_app.logger.error(f"CSV upload failed: {error_msg}")
+            print(f"CSV upload failed: {error_msg}")
             return jsonify({"success": False, "error": error_msg}), 400
 
         with Session() as db:
@@ -293,11 +296,12 @@ def upload_csv(mx_id):
                 db.rollback()
                 raise e
     except Exception as e:
-        current_app.logger.error(f"Failed to upload CSV: {str(e)}", exc_info=True)
+        print(f"Failed to upload CSV: {str(e)}", exc_info=True)
         return jsonify({"success": False, "error": str(e)}), 500
 
 
 @bp.route('/taxons/<string:mx_id>/download_csv', methods=['GET'])
+@login_required
 def download_csv(mx_id):
     """Download observations for a taxon as CSV."""
     try:
@@ -353,7 +357,7 @@ def download_csv(mx_id):
         response.headers['Content-Type'] = 'text/csv'
         return response
     except Exception as e:
-        current_app.logger.error(f"Failed to download CSV: {str(e)}", exc_info=True)
+        print(f"Failed to download CSV: {str(e)}", exc_info=True)
         return jsonify({"success": False, "error": str(e)}), 500
 
 
@@ -443,7 +447,7 @@ def set_observations_excluded():
                 db.rollback()
                 raise e
     except Exception as e:
-        current_app.logger.error(f"Failed to set observations excluded: {str(e)}", exc_info=True)
+        print(f"Failed to set observations excluded: {str(e)}", exc_info=True)
         return jsonify({"success": False, "error": str(e)}), 500
 
 
@@ -482,7 +486,7 @@ def convert_observations_to_points():
                 "updated_ids": updated,
             })
     except Exception as e:
-        current_app.logger.error(f"Failed to convert polygons to points: {str(e)}", exc_info=True)
+        print(f"Failed to convert polygons to points: {str(e)}", exc_info=True)
         return jsonify({"success": False, "error": str(e)}), 500
 
 @bp.route('/observation/<int:obs_id>/exclude', methods=['POST'])
@@ -555,5 +559,5 @@ def restore_observation_original_geometry(obs_id):
             db.commit()
             return jsonify({"success": True, "obs_id": obs_id, "restored": restored})
     except Exception as e:
-        current_app.logger.error(f"Failed to restore observation geometry: {str(e)}", exc_info=True)
+        print(f"Failed to restore observation geometry: {str(e)}", exc_info=True)
         return jsonify({"success": False, "error": str(e)}), 500

@@ -1,6 +1,7 @@
 from flask import Flask, render_template, abort
 from data_loaders.database import init_db, Session
 from config import DEBUG, USE_AUTHENTICATION, get_flask_config
+from auth.decorators import login_required
 from proxy.mml import bp as proxy_mml_bp
 from proxy.laji import bp as proxy_laji_bp
 from api.observations import bp as api_observations_bp
@@ -11,6 +12,7 @@ from models import Taxon
 app = Flask(__name__)
 app.debug = DEBUG
 app.config.update(get_flask_config())
+app.logger.info(f'Application started with USE_AUTHENTICATION={USE_AUTHENTICATION}')
 
 if USE_AUTHENTICATION:
     from auth.routes import auth_bp
@@ -26,6 +28,7 @@ with app.app_context():
 
 
 @app.route('/map/<string:mx_id>')
+@login_required
 def taxon_map(mx_id):
     with Session() as db:
         taxon = db.query(Taxon).filter_by(mx_id=mx_id).first()
