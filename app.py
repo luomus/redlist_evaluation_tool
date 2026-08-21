@@ -36,6 +36,9 @@ def taxon_map(mx_id):
         abort(404)
     return render_template('map.html', taxon=taxon)
 
+@app.route('/')
+def frontpage():
+    return render_template('index.html')
 
 if __name__ == "__main__":
     from livereload import Server
