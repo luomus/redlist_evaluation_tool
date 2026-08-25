@@ -28,7 +28,7 @@ def laji_proxy():
         if not laji_api_base_url:
             return jsonify({"success": False, "error": "LAJI_API_BASE_URL not configured on server"}), 500
         
-        target_url = f"{laji_api_base_url}?{query}"
+        target_url = f"{laji_api_base_url}/warehouse/query/unit/list?{query}"
         
         # Validate tokens
         laji_api_access_token = os.getenv('LAJI_API_ACCESS_TOKEN')

@@ -8,7 +8,8 @@ def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if USE_AUTHENTICATION and 'token' not in session:
-            return redirect(url_for('auth.login', next=request.url))
+            next_path = request.full_path.rstrip('?')
+            return redirect(url_for('auth.login', next=next_path))
         return f(*args, **kwargs)
     return decorated_function
 
