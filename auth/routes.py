@@ -16,13 +16,14 @@ def login():
     with a token in the query string.
     """
 
-    next_url = request.args.get('next')
+    next_url = request.args.get('next') or '/'
     session['post_login_redirect'] = next_url
     provider_next = f"{request.host_url.rstrip('/')}{next_url}"
 
     params = {
         'target': TARGET,
-        'next': provider_next
+        'next': provider_next,
+        'redirectMethod': 'GET',
     }
 
     laji_auth_login_url = f"{LAJIAUTH_URL}login?{urlencode(params)}"
@@ -30,12 +31,12 @@ def login():
     
     return redirect(laji_auth_login_url)
 
-@auth_bp.route("/login/callback", methods=["POST", "GET"])
+@auth_bp.route("/login/callback", methods=["GET", "POST"])
 def login_callback():
     """Handle callback from laji-auth system"""
     print("Received login callback from LajiAuth")
-    token = request.form.get('token')
-    next_url = request.form.get('next')
+    token = request.args.get('token') or request.form.get('token')
+    next_url = request.args.get('next') or request.form.get('next')
     if not token:
         return jsonify({"success": False, "error": "No token provided"}), 400
     
@@ -109,8 +110,9 @@ def _delete_authentication_token(token):
     :return: true if user was successfully logged out
     """
     try:
-        url = LAJIAUTH_URL + "token/" + token
-        response = requests.delete(url, timeout=SECRET_TIMEOUT_PERIOD)
+        url = LAJI_API_BASE_URL + "/authentication-event"
+        headers = {'accept':'application/json', 'Api-Version': '1', 'Person-Token': token, 'Authorization': f'Bearer {LAJI_API_ACCESS_TOKEN}', 'Accept-Language': 'fi'}
+        response = requests.delete(url, headers=headers)
         return response.status_code == 200
     except Exception as e:
         # Use app.logger if available; fallback to print for now
