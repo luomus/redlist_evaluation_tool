@@ -27,7 +27,6 @@ def login():
     }
 
     laji_auth_login_url = f"{LAJIAUTH_URL}login?{urlencode(params)}"
-    print(f"Redirecting to LajiAuth login: {laji_auth_login_url}")
     
     return redirect(laji_auth_login_url)
 
@@ -64,8 +63,6 @@ def login_callback():
     session['user_roles'] = user_roles
     session.modified = True  # Explicitly mark session as modified to ensure cookie is set
     
-    # Redirect to the original page or home
-    print(f"redirecting to {next_url}")
     return redirect(next_url)
 
 def _get_authentication_info(token):
