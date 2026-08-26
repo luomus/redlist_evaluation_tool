@@ -36,14 +36,17 @@ def taxon_map(mx_id):
         abort(404)
     return render_template('map.html', taxon=taxon)
 
+_frontpage_cache = None
+
 @app.route('/')
 def frontpage():
-    from itertools import groupby
-    with Session() as db:
-        taxons = db.query(Taxon).order_by(Taxon.name).all()
-    # Group alphabetically by the first letter of the taxon nameq
-    grouped = [(letter, list(group)) for letter, group in groupby(taxons, key=lambda t: t.name[0].upper())]
-    return render_template('index.html', grouped=grouped)
+    global _frontpage_cache
+    if _frontpage_cache is None:
+        from itertools import groupby
+        with Session() as db:
+            taxons = db.query(Taxon).order_by(Taxon.name).all()
+        _frontpage_cache = [(letter, list(group)) for letter, group in groupby(taxons, key=lambda t: t.name[0].upper())]
+    return render_template('index.html', grouped=_frontpage_cache)
 
 if __name__ == "__main__":
     from livereload import Server

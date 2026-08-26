@@ -110,7 +110,8 @@ function handleCsvFileSelect(e) {
 /**
  * Opens the Laji.fi fetch popup for URL-based data import
  */
-function openLajifiPopup() {
+function openLajifiPopup(mxCode) {
+    const defaultUrl = mxCode ? `https://laji.fi/observation/list?target=${mxCode}` : '';
     const content = `
         <div class="lajifi-container">
             <div class="lajifi-label-group">
@@ -118,7 +119,7 @@ function openLajifiPopup() {
                     Liitä Laji.fi URL-osoite
                     <span class="lajifi-label-hint"> - Avaa laji.fi, rajaa havainnot ja kopioi URL</span>
                 </label>
-                <input type="text" id="lajifiUrlInput" placeholder="https://laji.fi/observation/list?..." class="lajifi-input">
+                <input type="text" id="lajifiUrlInput" placeholder="https://laji.fi/observation/list?..." class="lajifi-input" value="${defaultUrl}">
             </div>
             <button onclick="fetchDataForMap()" class="btn-lajifi-fetch">Hae aineistoa</button>
             <div id="lajifiProgress">
