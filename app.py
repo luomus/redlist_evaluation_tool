@@ -38,7 +38,12 @@ def taxon_map(mx_id):
 
 @app.route('/')
 def frontpage():
-    return render_template('index.html')
+    from itertools import groupby
+    with Session() as db:
+        taxons = db.query(Taxon).order_by(Taxon.name).all()
+    # Group alphabetically by the first letter of the taxon nameq
+    grouped = [(letter, list(group)) for letter, group in groupby(taxons, key=lambda t: t.name[0].upper())]
+    return render_template('index.html', grouped=grouped)
 
 if __name__ == "__main__":
     from livereload import Server

@@ -4,8 +4,33 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Etusivu</title>
+    <style>
+        body { font-family: sans-serif; max-width: 800px; margin: 2rem auto; padding: 0 1rem; }
+        h1 { margin-bottom: 1rem; }
+        .jump-links { margin-bottom: 2rem; line-height: 2; }
+        .jump-links a { margin-right: 0.4rem; text-decoration: none; color: #1a73e8; font-weight: bold; }
+        .jump-links a:hover { text-decoration: underline; }
+        h2 { margin-top: 2rem; border-bottom: 1px solid #ccc; padding-bottom: 0.25rem; }
+        ul { list-style: none; padding: 0; }
+        li { padding: 0.2rem 0; }
+        a { text-decoration: none; color: #1a73e8; }
+        a:hover { text-decoration: underline; }
+    </style>
 </head>
 <body>
-    <p>Tervetuloa! Oikea osoite on /map/MX.12345, jossa MX.koodi riippuu lajista.</p>
+    <h1>Lajit</h1>
+    <div class="jump-links">
+        {% for letter, _ in grouped %}
+        <a href="#{{ letter }}">{{ letter }}</a>
+        {% endfor %}
+    </div>
+    {% for letter, species in grouped %}
+    <h2 id="{{ letter }}">{{ letter }}</h2>
+    <ul>
+        {% for taxon in species %}
+        <li><a href="/map/{{ taxon.mx_id }}">{{ taxon.name }}</a></li>
+        {% endfor %}
+    </ul>
+    {% endfor %}
 </body>
 </html>
