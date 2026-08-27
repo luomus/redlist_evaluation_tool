@@ -121,6 +121,13 @@ function openLajifiPopup(mxCode) {
                 </label>
                 <input type="text" id="lajifiUrlInput" placeholder="https://laji.fi/observation/list?..." class="lajifi-input" value="${defaultUrl}">
             </div>
+            <div class="lajifi-label-group">
+                <label class="lajifi-label">
+                    Koordinaattien maksimitarkkuus
+                    <span class="lajifi-label-hint"> - Jätä tyhjäksi, jos et halua suodattaa</span>
+                </label>
+                <input type="number" id="lajifiAccuracyMaxInput" placeholder="esim. 10000" class="lajifi-input" min="0" step="100">
+            </div>
             <button onclick="fetchDataForMap()" class="btn-lajifi-fetch">Hae aineistoa</button>
             <div id="lajifiProgress">
                 <p class="lajifi-progress-label">Edistyminen:</p>

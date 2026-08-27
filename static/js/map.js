@@ -414,7 +414,7 @@ function showMapError(message) {
 
 // Fetch data from Laji.fi URL
 async function fetchDataForMap() {
-    const url = (document.getElementById('lajifiUrlInput') || {}).value || '';
+    let url = (document.getElementById('lajifiUrlInput') || {}).value || '';
     if (!url.trim()) { 
         const progressDiv = document.getElementById('lajifiProgress');
         const progressLog = document.getElementById('lajifiProgressLog');
@@ -427,6 +427,16 @@ async function fetchDataForMap() {
             addProgressLog('Virhe: Syötä URL-osoite', 'error', progressLog);
         }
         return; 
+    }
+
+    // Append coordinateAccuracyMax parameter if set
+    const accuracyMaxInput = document.getElementById('lajifiAccuracyMaxInput');
+    if (accuracyMaxInput && accuracyMaxInput.value) {
+        const accuracyMax = parseInt(accuracyMaxInput.value, 10);
+        if (!isNaN(accuracyMax) && accuracyMax >= 0) {
+            const separator = url.includes('?') ? '&' : '?';
+            url += separator + 'coordinateAccuracyMax=' + accuracyMax;
+        }
     }
 
     const progressDiv = document.getElementById('lajifiProgress');
