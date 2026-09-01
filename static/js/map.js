@@ -498,7 +498,7 @@ async function saveDataForMap() {
             body: JSON.stringify({
                 mx_id: datasetId,
                 dataset_id: generateMapDatasetId(),
-                dataset_name: `Dataset ${new Date().toLocaleString()}`,
+                dataset_name: `Laji.fi: ${new Date().toLocaleString()}`,
                 dataset_url: currentApiUrl,
                 features: window.currentFetchedData.features
             })

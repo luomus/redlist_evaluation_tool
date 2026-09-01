@@ -29,6 +29,7 @@ services:
       - SECRET_KEY=${SECRET_KEY:-change-me-in-production}
       - USE_AUTHENTICATION=${USE_AUTHENTICATION:-false}
       - MML_API_KEY=${MML_API_KEY:-}
+      - CARTO_BASEMAP_API_KEY=${CARTO_BASEMAP_API_KEY:-}
       - LAJI_API_BASE_URL=${LAJI_API_BASE_URL:-}
       - LAJI_API_ACCESS_TOKEN=${LAJI_API_ACCESS_TOKEN:-}
     depends_on:

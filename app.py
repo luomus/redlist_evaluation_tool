@@ -1,6 +1,6 @@
 from flask import Flask, render_template, abort
 from data_loaders.database import init_db, Session
-from config import DEBUG, USE_AUTHENTICATION, get_flask_config
+from config import CARTO_BASEMAP_API_KEY, DEBUG, USE_AUTHENTICATION, get_flask_config
 from auth.decorators import login_required
 from proxy.mml import bp as proxy_mml_bp
 from proxy.laji import bp as proxy_laji_bp
@@ -34,7 +34,7 @@ def taxon_map(mx_id):
         taxon = db.query(Taxon).filter_by(mx_id=mx_id).first()
     if not taxon:
         abort(404)
-    return render_template('map.html', taxon=taxon)
+    return render_template('map.html', taxon=taxon, carto_basemap_api_key=CARTO_BASEMAP_API_KEY)
 
 _frontpage_cache = None
 

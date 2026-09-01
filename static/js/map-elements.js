@@ -549,7 +549,7 @@ window.basemaps = {
     cartodark: {
         name: 'CartoDB Positron',
         tileLayers: [
-            L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png' + (window.CARTO_BASEMAP_API_KEY ? '?key=' + encodeURIComponent(window.CARTO_BASEMAP_API_KEY) : ''), {
                 attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
                 subdomains: 'abcd',
                 maxZoom: 20

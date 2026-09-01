@@ -36,6 +36,7 @@ LAJI_API_BASE_URL = os.getenv("LAJI_API_BASE_URL", "")
 
 # ===== MML TILES =====
 MML_API_KEY = os.getenv('MML_API_KEY', '')
+CARTO_BASEMAP_API_KEY = os.getenv('CARTO_BASEMAP_API_KEY', '')
 
 # ===== CACHE =====
 STATS_CACHE_TTL_SECONDS = 300

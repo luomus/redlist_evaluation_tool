@@ -122,7 +122,7 @@ def save_observations():
         data = request.json
         mx_id = data.get('mx_id')
         dataset_id = data.get('dataset_id')
-        dataset_name = data.get('dataset_name', 'Unnamed Dataset')
+        dataset_name = data.get('dataset_name')
         dataset_url = data.get('dataset_url', '')
         features = data.get('features', [])
 
