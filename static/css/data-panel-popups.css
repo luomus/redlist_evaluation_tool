@@ -67,6 +67,61 @@
     padding: 16px;
 }
 
+#popupWindow.dataset-table-popup {
+    width: min(1200px, 95vw);
+    max-width: 95vw;
+    overflow: hidden;
+}
+
+.dataset-table-popup .popup-body {
+    padding: 0;
+}
+
+.dataset-table-container {
+    max-height: calc(90vh - 68px);
+    overflow: auto;
+}
+
+.dataset-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+.dataset-table th,
+.dataset-table td {
+    max-width: 360px;
+    padding: 7px 9px;
+    border-bottom: 1px solid #ddd;
+    border-right: 1px solid #eee;
+    overflow: hidden;
+    text-align: left;
+    text-overflow: ellipsis;
+}
+
+.dataset-table th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: #f4f5f6;
+    font-weight: 600;
+}
+
+.dataset-table tbody tr:hover {
+    background: #f7f9fa;
+}
+
+.dataset-table-state {
+    padding: 32px 16px;
+    color: #555;
+    text-align: center;
+}
+
+.dataset-table-error {
+    color: #b42318;
+}
+
 /* CSV Upload Popup Styles */
 
 .csv-container {

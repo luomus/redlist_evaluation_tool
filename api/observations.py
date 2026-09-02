@@ -59,6 +59,7 @@ def get_observations(mx_id):
     try:
         page = request.args.get('page', 1, type=int)
         per_page = min(int(request.args.get('per_page', 1000)), 1000)
+        dataset_id = request.args.get('dataset_id')
 
         with Session() as db:
             taxon = db.query(Taxon).filter_by(mx_id=mx_id).first()
@@ -66,19 +67,24 @@ def get_observations(mx_id):
                 return jsonify({"success": False, "error": "Taxon not found"}), 404
 
             offset = (page - 1) * per_page
-            results = db.execute(text("""
+            dataset_filter = " AND dataset_id = :dataset_id" if dataset_id else ""
+            query = text("""
                 SELECT
-                    id, dataset_id, dataset_name, dataset_url, created_at, properties,
+                    id, dataset_id, dataset_name, dataset_url, created_at, excluded, properties,
                     ST_AsGeoJSON(geometry) as geometry_json,
                     CASE WHEN original_geometry IS NOT NULL
                               AND NOT ST_Equals(geometry, original_geometry)
                          THEN true ELSE false END as has_modified_geometry,
                     COUNT(*) OVER() as total_count
                 FROM observations
-                WHERE taxon_id = :taxon_id
+                WHERE taxon_id = :taxon_id{dataset_filter}
                 ORDER BY id
                 LIMIT :limit OFFSET :offset
-            """), {'taxon_id': taxon.id, 'limit': per_page, 'offset': offset}).fetchall()
+            """.format(dataset_filter=dataset_filter))
+            query_params = {'taxon_id': taxon.id, 'limit': per_page, 'offset': offset}
+            if dataset_id:
+                query_params['dataset_id'] = dataset_id
+            results = db.execute(query, query_params).fetchall()
 
         if not results:
             return jsonify({
@@ -95,6 +101,7 @@ def get_observations(mx_id):
             props['_db_id'] = row.id
             props['_dataset_id'] = row.dataset_id
             props['_has_modified_geometry'] = row.has_modified_geometry
+            props['excluded'] = row.excluded
             features.append({
                 "type": "Feature",
                 "properties": props,

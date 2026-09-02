@@ -719,7 +719,32 @@ window.createLegendControl = function() {
         item.className = 'legend-item';
         
         const label = document.createElement('label');
-        label.innerHTML = `<input type="checkbox" id="legend-cb-${safe}" checked data-dsid="${dsId}"> ${dsName} <span class="legend-count" id="legend-count-${safe}">${window.datasetLayers[dsId].count || 0}</span>`;
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.id = `legend-cb-${safe}`;
+        checkbox.checked = true;
+        checkbox.setAttribute('data-dsid', dsId);
+        label.appendChild(checkbox);
+        label.appendChild(document.createTextNode(`${dsName} `));
+
+        const count = document.createElement('span');
+        count.className = 'legend-count';
+        count.id = `legend-count-${safe}`;
+        count.textContent = window.datasetLayers[dsId].count || 0;
+        label.appendChild(count);
+
+        const tableBtn = document.createElement('button');
+        tableBtn.className = 'legend-table-btn';
+        tableBtn.type = 'button';
+        tableBtn.textContent = '▦';
+        tableBtn.title = 'Näytä taulukkona';
+        tableBtn.setAttribute('aria-label', `Näytä aineisto ${dsName} taulukkona`);
+        tableBtn.onclick = function(e) {
+            e.stopPropagation();
+            if (window.openDatasetTable) {
+                window.openDatasetTable(dsId, dsName);
+            }
+        };
         
         const deleteBtn = document.createElement('button');
         deleteBtn.className = 'legend-delete-btn';
@@ -732,6 +757,7 @@ window.createLegendControl = function() {
         };
         
         item.appendChild(label);
+        item.appendChild(tableBtn);
         item.appendChild(deleteBtn);
         list.appendChild(item);
         

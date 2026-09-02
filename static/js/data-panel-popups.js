@@ -1,6 +1,8 @@
 // Data Panel Popup Management
 // Handles modal popups for CSV uploads and Laji.fi data fetching
 
+let popupRequestId = 0;
+
 /**
  * Creates a modal popup window with a title, content, and close button
  * @param {string} title - The title of the popup
@@ -48,9 +50,129 @@ function createPopupWindow(title, content) {
  * Closes the current popup window
  */
 function closePopup() {
+    popupRequestId++;
     const overlay = document.getElementById('popupOverlay');
     if (overlay) overlay.remove();
 }
+
+function setDatasetTableState(body, message, className) {
+    const state = document.createElement('div');
+    state.className = `dataset-table-state ${className}`;
+    state.textContent = message;
+    body.replaceChildren(state);
+}
+
+function formatDatasetTableValue(value) {
+    if (value === null || typeof value === 'undefined') return '';
+
+    let formatted = value;
+    if (typeof value === 'object') {
+        try {
+            formatted = JSON.stringify(value);
+        } catch (error) {
+            formatted = String(value);
+        }
+    }
+
+    const text = String(formatted);
+    return text.length > 500 ? `${text.slice(0, 500)}...` : text;
+}
+
+function renderDatasetTable(body, datasetName, features) {
+    if (features.length === 0) {
+        setDatasetTableState(body, 'Aineistossa ei ole havaintoja.', 'dataset-table-empty');
+        return;
+    }
+
+    const internalKeys = new Set(['_db_id', '_dataset_id', '_has_modified_geometry', 'excluded']);
+    const columns = new Set();
+    features.forEach(feature => {
+        Object.keys(feature.properties || {}).forEach(key => {
+            if (!internalKeys.has(key)) columns.add(key);
+        });
+    });
+
+    const propertyColumns = Array.from(columns).sort((left, right) => left.localeCompare(right, 'fi'));
+    const wrapper = document.createElement('div');
+    wrapper.className = 'dataset-table-container';
+    const table = document.createElement('table');
+    table.className = 'dataset-table';
+    const head = document.createElement('thead');
+    const headerRow = document.createElement('tr');
+    ['ID', 'Geometria', 'Pois käytöstä', ...propertyColumns].forEach(column => {
+        const th = document.createElement('th');
+        th.textContent = column;
+        headerRow.appendChild(th);
+    });
+    head.appendChild(headerRow);
+    table.appendChild(head);
+
+    const tableBody = document.createElement('tbody');
+    features.forEach(feature => {
+        const properties = feature.properties || {};
+        const row = document.createElement('tr');
+        const values = [
+            properties._db_id,
+            feature.geometry ? feature.geometry.type : '',
+            properties.excluded ? 'Kyllä' : 'Ei',
+            ...propertyColumns.map(column => properties[column])
+        ];
+        values.forEach(value => {
+            const cell = document.createElement('td');
+            cell.textContent = formatDatasetTableValue(value);
+            row.appendChild(cell);
+        });
+        tableBody.appendChild(row);
+    });
+    table.appendChild(tableBody);
+    wrapper.appendChild(table);
+    body.replaceChildren(wrapper);
+
+    const title = body.parentElement.querySelector('.popup-title');
+    if (title) title.textContent = `${datasetName} (${features.length})`;
+}
+
+window.openDatasetTable = async function(datasetId, datasetName) {
+    closePopup();
+    const body = createPopupWindow(datasetName, '');
+    body.parentElement.classList.add('dataset-table-popup');
+    const requestId = ++popupRequestId;
+    setDatasetTableState(body, 'Ladataan havaintoja...', 'dataset-table-loading');
+
+    try {
+        const features = [];
+        let page = 1;
+        let totalPages = 1;
+
+        do {
+            const params = new URLSearchParams({
+                dataset_id: datasetId,
+                page: String(page),
+                per_page: '1000'
+            });
+            const response = await fetch(`/api/observations/${encodeURIComponent(window.MX_ID)}?${params}`);
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+            const data = await response.json();
+            if (requestId !== popupRequestId || !body.isConnected) return;
+
+            features.push(...(data.features || []));
+            totalPages = Math.max(1, (data.pagination && data.pagination.pages) || 1);
+            page++;
+            if (page <= totalPages) {
+                setDatasetTableState(body, `Ladataan havaintoja (${page} / ${totalPages})...`, 'dataset-table-loading');
+            }
+        } while (page <= totalPages);
+
+        if (requestId === popupRequestId && body.isConnected) {
+            renderDatasetTable(body, datasetName, features);
+        }
+    } catch (error) {
+        if (requestId === popupRequestId && body.isConnected) {
+            setDatasetTableState(body, `Aineiston lataaminen epäonnistui: ${error.message}`, 'dataset-table-error');
+        }
+    }
+};
 
 /**
  * Opens the CSV upload popup with drag-and-drop support

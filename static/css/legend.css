@@ -68,6 +68,24 @@
     background: #c82333;
 }
 
+.legend-table-btn {
+    margin-left: 6px;
+    padding: 2px 6px;
+    background: #fff;
+    color: #333;
+    border: 1px solid #aaa;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+}
+
+.legend-table-btn:hover,
+.legend-table-btn:focus-visible {
+    background: #e9ecef;
+    border-color: #666;
+}
+
 /* Accuracy legend swatches (used in the legend control)
    colours match the corresponding map styling classes */
 .legend-accuracy {
