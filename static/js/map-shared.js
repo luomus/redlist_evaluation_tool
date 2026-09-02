@@ -52,6 +52,13 @@ window.createSharedMap = function(containerId = 'map', center = [60.1699, 24.938
             console.warn('Biogeographical regions initialization failed:', err);
         });
     }
+
+    // Initialize threatened species evaluation zones layer asynchronously (see threatened_zones.js)
+    if (typeof window.initializeThreatenedZonesLayer === 'function') {
+        window.initializeThreatenedZonesLayer().catch(err => {
+            console.warn('Threatened species evaluation zones initialization failed:', err);
+        });
+    }
     
     try { if (typeof window.createLegendControl === 'function') { window.createLegendControl(); } } catch (e) { console.warn('Legend control initialization failed:', e); }
 

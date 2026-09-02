@@ -630,7 +630,10 @@ window.createLegendControl = function() {
             </div>
             <div class="legend-divider"></div>
             <div class="legend-item">
-                <label><input type="checkbox" id="bioregions-toggle"> Biogeographical Regions</label>
+                <label><input type="checkbox" id="bioregions-toggle"> Eliömaakunnat</label>
+            </div>
+            <div class="legend-item">
+                <label><input type="checkbox" id="threatened-zones-toggle"> Uhanalaisuusarviointialueet</label>
             </div>
             <div class="legend-divider"></div>
             <div class="legend-header"><strong>Aineistot:</strong></div>
@@ -679,6 +682,24 @@ window.createLegendControl = function() {
                 if (window.bioRegionsLayer && window.sharedMap) {
                     window.sharedMap.removeLayer(window.bioRegionsLayer);
                     window.bioRegionsVisible = false;
+                }
+            }
+        });
+    }
+
+    // Setup threatened species evaluation zones toggle
+    const threatenedZonesToggle = document.getElementById('threatened-zones-toggle');
+    if (threatenedZonesToggle) {
+        threatenedZonesToggle.addEventListener('change', function() {
+            if (this.checked) {
+                if (window.threatenedZonesLayer && window.sharedMap) {
+                    window.threatenedZonesLayer.addTo(window.sharedMap);
+                    window.threatenedZonesVisible = true;
+                }
+            } else {
+                if (window.threatenedZonesLayer && window.sharedMap) {
+                    window.sharedMap.removeLayer(window.threatenedZonesLayer);
+                    window.threatenedZonesVisible = false;
                 }
             }
         });
