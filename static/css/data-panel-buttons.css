@@ -40,6 +40,28 @@
     background: #0056b3;
 }
 
+/* Calculation buttons (AOO, EOO recalculation) */
+.btn-calculation {
+    width: 100%;
+    margin-top: 10px;
+    padding: 8px 16px;
+    background: #3388ff;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background 0.2s ease;
+}
+
+.btn-calculation:hover {
+    background: #1e66cc;
+}
+
+.btn-calculation:active {
+    background: #1a5aa0;
+}
+
 /* Outdated state for calculation buttons */
 button.outdated::after {
     content: ' ⚠️';
