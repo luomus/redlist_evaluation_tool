@@ -78,6 +78,12 @@ function formatDatasetTableValue(value) {
     return text.length > 500 ? `${text.slice(0, 500)}...` : text;
 }
 
+// Store sorting state for dataset tables
+const datasetTableSortState = {
+    sortBy: null,      // Column index
+    sortDir: 'asc'     // 'asc' or 'desc'
+};
+
 function toggleDatasetObservationExclude(dbId, btn, tableBody) {
     if (!dbId) return;
     
@@ -114,6 +120,59 @@ function toggleDatasetObservationExclude(dbId, btn, tableBody) {
     }
 }
 
+function sortDatasetTableColumn(columnIndex, columnName, features, propertyColumns) {
+    // Toggle direction if same column is clicked, otherwise reset to ascending
+    if (datasetTableSortState.sortBy === columnIndex) {
+        datasetTableSortState.sortDir = datasetTableSortState.sortDir === 'asc' ? 'desc' : 'asc';
+    } else {
+        datasetTableSortState.sortBy = columnIndex;
+        datasetTableSortState.sortDir = 'asc';
+    }
+
+    // Map column index to data accessor
+    const columnMap = ['Toiminto', 'ID', 'Geometria', 'Pois käytöstä', ...propertyColumns];
+    const columnHeader = columnMap[columnIndex];
+
+    // Sort features
+    const sorted = [...features].sort((a, b) => {
+        let aVal, bVal;
+
+        if (columnIndex === 0) return 0; // Don't sort by action column
+        if (columnIndex === 1) {
+            aVal = a.properties._db_id;
+            bVal = b.properties._db_id;
+        } else if (columnIndex === 2) {
+            aVal = a.geometry ? a.geometry.type : '';
+            bVal = b.geometry ? b.geometry.type : '';
+        } else if (columnIndex === 3) {
+            aVal = a.properties.excluded ? 1 : 0;
+            bVal = b.properties.excluded ? 1 : 0;
+        } else {
+            const propCol = propertyColumns[columnIndex - 4];
+            aVal = a.properties[propCol];
+            bVal = b.properties[propCol];
+        }
+
+        // Handle null/undefined
+        if (aVal == null && bVal == null) return 0;
+        if (aVal == null) return datasetTableSortState.sortDir === 'asc' ? 1 : -1;
+        if (bVal == null) return datasetTableSortState.sortDir === 'asc' ? -1 : 1;
+
+        // Numeric comparison
+        if (typeof aVal === 'number' && typeof bVal === 'number') {
+            return datasetTableSortState.sortDir === 'asc' ? aVal - bVal : bVal - aVal;
+        }
+
+        // String comparison
+        const aStr = String(aVal);
+        const bStr = String(bVal);
+        const cmp = aStr.localeCompare(bStr, 'fi');
+        return datasetTableSortState.sortDir === 'asc' ? cmp : -cmp;
+    });
+
+    return sorted;
+}
+
 function renderDatasetTable(body, datasetName, features) {
     if (features.length === 0) {
         setDatasetTableState(body, 'Aineistossa ei ole havaintoja.', 'dataset-table-empty');
@@ -129,22 +188,53 @@ function renderDatasetTable(body, datasetName, features) {
     });
 
     const propertyColumns = Array.from(columns).sort((left, right) => left.localeCompare(right, 'fi'));
+    
+    // Sort features if a sort column is selected
+    let sortedFeatures = features;
+    if (datasetTableSortState.sortBy !== null) {
+        sortedFeatures = sortDatasetTableColumn(datasetTableSortState.sortBy, null, features, propertyColumns);
+    }
+
     const wrapper = document.createElement('div');
     wrapper.className = 'dataset-table-container';
     const table = document.createElement('table');
     table.className = 'dataset-table';
     const head = document.createElement('thead');
     const headerRow = document.createElement('tr');
-    ['Toiminto', 'ID', 'Geometria', 'Pois käytöstä', ...propertyColumns].forEach(column => {
+    
+    const columnHeaders = ['Toiminto', 'ID', 'Geometria', 'Pois käytöstä', ...propertyColumns];
+    columnHeaders.forEach((column, colIndex) => {
         const th = document.createElement('th');
-        th.textContent = column;
+        th.className = 'dataset-table-header';
+        
+        // Make headers clickable (except action column)
+        if (colIndex !== 0) {
+            th.style.cursor = 'pointer';
+            th.onclick = () => {
+                sortedFeatures = sortDatasetTableColumn(colIndex, column, features, propertyColumns);
+                renderDatasetTableWithSorted(body, datasetName, sortedFeatures, propertyColumns);
+            };
+        }
+        
+        // Add sort indicator if this column is sorted
+        const content = document.createElement('span');
+        content.textContent = column;
+        th.appendChild(content);
+        
+        if (datasetTableSortState.sortBy === colIndex) {
+            const arrow = document.createElement('span');
+            arrow.className = 'dataset-table-sort-arrow';
+            arrow.textContent = datasetTableSortState.sortDir === 'asc' ? ' ↑' : ' ↓';
+            th.appendChild(arrow);
+        }
+        
         headerRow.appendChild(th);
     });
     head.appendChild(headerRow);
     table.appendChild(head);
 
     const tableBody = document.createElement('tbody');
-    features.forEach(feature => {
+    sortedFeatures.forEach(feature => {
         const properties = feature.properties || {};
         const row = document.createElement('tr');
         const dbId = properties._db_id;
@@ -184,8 +274,107 @@ function renderDatasetTable(body, datasetName, features) {
     if (title) title.textContent = `${datasetName} (${features.length})`;
 }
 
+function renderDatasetTableWithSorted(body, datasetName, sortedFeatures, propertyColumns) {
+    // Preserve the current scroll position
+    const oldContainer = body.querySelector('.dataset-table-container');
+    const scrollLeft = oldContainer ? oldContainer.scrollLeft : 0;
+    
+    const internalKeys = new Set(['_db_id', '_dataset_id', '_has_modified_geometry', 'excluded']);
+    const columns = new Set();
+    sortedFeatures.forEach(feature => {
+        Object.keys(feature.properties || {}).forEach(key => {
+            if (!internalKeys.has(key)) columns.add(key);
+        });
+    });
+
+    const wrapper = document.createElement('div');
+    wrapper.className = 'dataset-table-container';
+    const table = document.createElement('table');
+    table.className = 'dataset-table';
+    const head = document.createElement('thead');
+    const headerRow = document.createElement('tr');
+    
+    const columnHeaders = ['Toiminto', 'ID', 'Geometria', 'Pois käytöstä', ...propertyColumns];
+    columnHeaders.forEach((column, colIndex) => {
+        const th = document.createElement('th');
+        th.className = 'dataset-table-header';
+        
+        // Make headers clickable (except action column)
+        if (colIndex !== 0) {
+            th.style.cursor = 'pointer';
+            th.onclick = () => {
+                const reSorted = sortDatasetTableColumn(colIndex, column, sortedFeatures, propertyColumns);
+                renderDatasetTableWithSorted(body, datasetName, reSorted, propertyColumns);
+            };
+        }
+        
+        // Add sort indicator if this column is sorted
+        const content = document.createElement('span');
+        content.textContent = column;
+        th.appendChild(content);
+        
+        if (datasetTableSortState.sortBy === colIndex) {
+            const arrow = document.createElement('span');
+            arrow.className = 'dataset-table-sort-arrow';
+            arrow.textContent = datasetTableSortState.sortDir === 'asc' ? ' ↑' : ' ↓';
+            th.appendChild(arrow);
+        }
+        
+        headerRow.appendChild(th);
+    });
+    head.appendChild(headerRow);
+    table.appendChild(head);
+
+    const tableBody = document.createElement('tbody');
+    sortedFeatures.forEach(feature => {
+        const properties = feature.properties || {};
+        const row = document.createElement('tr');
+        const dbId = properties._db_id;
+        const isExcluded = properties.excluded;
+        
+        // Create action button cell
+        const actionCell = document.createElement('td');
+        actionCell.className = 'dataset-table-action-cell';
+        const actionBtn = document.createElement('button');
+        actionBtn.className = isExcluded ? 'btn-dataset-include' : 'btn-dataset-exclude';
+        actionBtn.textContent = isExcluded ? 'Sisällytä' : 'Poista';
+        actionBtn.setAttribute('data-excluded', isExcluded ? '1' : '0');
+        actionBtn.setAttribute('data-db-id', dbId);
+        actionBtn.onclick = () => toggleDatasetObservationExclude(dbId, actionBtn, tableBody);
+        actionCell.appendChild(actionBtn);
+        row.appendChild(actionCell);
+        
+        // Add other cells
+        const values = [
+            dbId,
+            feature.geometry ? feature.geometry.type : '',
+            isExcluded ? 'Kyllä' : 'Ei',
+            ...propertyColumns.map(column => properties[column])
+        ];
+        values.forEach(value => {
+            const cell = document.createElement('td');
+            cell.textContent = formatDatasetTableValue(value);
+            row.appendChild(cell);
+        });
+        tableBody.appendChild(row);
+    });
+    table.appendChild(tableBody);
+    wrapper.appendChild(table);
+    body.replaceChildren(wrapper);
+    
+    // Restore the scroll position
+    wrapper.scrollLeft = scrollLeft;
+
+    const title = body.parentElement.querySelector('.popup-title');
+    if (title) title.textContent = `${datasetName} (${sortedFeatures.length})`;
+}
+
 window.openDatasetTable = async function(datasetId, datasetName) {
     closePopup();
+    // Reset sort state for new table
+    datasetTableSortState.sortBy = null;
+    datasetTableSortState.sortDir = 'asc';
+    
     const body = createPopupWindow(datasetName, '');
     body.parentElement.classList.add('dataset-table-popup');
     const requestId = ++popupRequestId;

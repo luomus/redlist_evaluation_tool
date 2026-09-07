@@ -411,3 +411,20 @@
 .btn-dataset-include:hover {
     background: #218838;
 }
+
+/* Dataset Table Headers with Sorting */
+
+.dataset-table-header {
+    user-select: none;
+}
+
+.dataset-table-header[style*="cursor: pointer"]:hover {
+    background: #e8eaed;
+}
+
+.dataset-table-sort-arrow {
+    font-size: 12px;
+    font-weight: 700;
+    opacity: 0.7;
+    margin-left: 4px;
+}
