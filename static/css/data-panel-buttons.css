@@ -39,3 +39,26 @@
 .btn-lajifi:hover {
     background: #0056b3;
 }
+
+/* Outdated state for calculation buttons */
+button.outdated::after {
+    content: ' ⚠️';
+    margin-left: 4px;
+}
+
+button.outdated {
+    opacity: 0.75;
+    position: relative;
+}
+
+button.outdated::before {
+    content: '';
+    position: absolute;
+    top: -2px;
+    right: -2px;
+    width: 8px;
+    height: 8px;
+    background: #ff6b6b;
+    border-radius: 50%;
+    box-shadow: 0 0 3px rgba(255, 107, 107, 0.8);
+}

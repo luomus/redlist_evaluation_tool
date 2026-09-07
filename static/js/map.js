@@ -39,6 +39,64 @@ const HULL_STYLES = {
     min: { color: '#3388ff', weight: 2, opacity: 0.9, fillColor: '#3388ff', fillOpacity: 0.12, dashArray: '6 4' }
 };
 
+// State tracking for whether calculations are up-to-date
+const calculationState = {
+    aooOutdated: false,
+    eooOutdated: false
+};
+
+/**
+ * Mark a calculation as outdated (needs recalculation)
+ * @param {string} type - 'aoo' for occurrence area, 'eoo' for distribution areas, or 'all' for both
+ */
+window.markCalculationOutdated = function(type = 'all') {
+    if (type === 'aoo' || type === 'all') {
+        calculationState.aooOutdated = true;
+        updateButtonState('aoo');
+    }
+    if (type === 'eoo' || type === 'all') {
+        calculationState.eooOutdated = true;
+        updateButtonState('eoo');
+    }
+};
+
+/**
+ * Clear the outdated flag for a calculation
+ * @param {string} type - 'aoo' for occurrence area, 'eoo' for distribution areas, or 'all' for both
+ */
+window.clearCalculationOutdated = function(type = 'all') {
+    if (type === 'aoo' || type === 'all') {
+        calculationState.aooOutdated = false;
+        updateButtonState('aoo');
+    }
+    if (type === 'eoo' || type === 'all') {
+        calculationState.eooOutdated = false;
+        updateButtonState('eoo');
+    }
+};
+
+/**
+ * Update button visual state based on outdated flag
+ * @param {string} type - 'aoo' or 'eoo'
+ */
+function updateButtonState(type) {
+    const buttonId = type === 'aoo' ? 'genBtn' : 'recalcBtn';
+    const btn = document.getElementById(buttonId);
+    if (!btn) return;
+
+    const isOutdated = type === 'aoo' ? calculationState.aooOutdated : calculationState.eooOutdated;
+    
+    if (isOutdated) {
+        btn.classList.add('outdated');
+        btn.title = type === 'aoo' 
+            ? 'Havaintojen muutosten jälkeen laskettu esiintymisalue ei ole enää ajankohtainen' 
+            : 'Havaintojen muutosten jälkeen lasketut levinneisyysalueet eivät ole enää ajankohtaisia';
+    } else {
+        btn.classList.remove('outdated');
+        btn.title = '';
+    }
+}
+
 // Store all features (geometry + properties)
 const allFeatures = [];
 
@@ -102,6 +160,8 @@ async function fetchAndDisplayConvexHull(fitMap = true) {
             window.sharedGeometryLayer.bringToFront();
         }
     } catch (e) { /* ignore */ }
+    // Clear the outdated flag since we just displayed fresh hull data
+    window.clearCalculationOutdated('eoo');
 }
 
 // Fetch and display grid from the backend
@@ -170,6 +230,8 @@ async function fetchAndDisplayGrid(fitMap = true) {
             document.getElementById('cellsCount').textContent = '0';
             document.getElementById('aooArea').textContent = '0 km²';
         }
+        // Clear the outdated flag since we just displayed fresh grid data
+        window.clearCalculationOutdated('aoo');
     } catch (error) {
         console.error('Error fetching grid:', error);
         updateStatus(`Virhe: ${error.message}`);

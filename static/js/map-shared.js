@@ -196,6 +196,11 @@ window.setExcludeBatch = async function(obsIds, excluded, batchSize = 100) {
         try { window.syncLegendWithFeatures(); } catch (e) { console.warn('Legend sync failed:', e); }
     }
 
+    // Mark calculations as outdated if observations were actually updated
+    if (processed > 0 && typeof window.markCalculationOutdated === 'function') {
+        try { window.markCalculationOutdated('all'); } catch (e) { console.warn('Could not mark calculations as outdated:', e); }
+    }
+
     return { processed, failed };
 }
 
@@ -740,6 +745,11 @@ window._confirmPolygonToPoint = async function() {
         }
         if (typeof window.recalculateGrid === 'function') {
             try { window.recalculateGrid(); } catch (e) {}
+        }
+        
+        // Mark calculations as outdated since geometry was modified
+        if (typeof window.markCalculationOutdated === 'function') {
+            try { window.markCalculationOutdated('all'); } catch (e) { console.warn('Could not mark calculations as outdated:', e); }
         }
 
     } catch (e) {
