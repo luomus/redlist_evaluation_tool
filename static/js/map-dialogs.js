@@ -1,5 +1,4 @@
-// Reusable, non-blocking dialogs for map actions. These replace browser alert()
-// and confirm() calls, whose "do not show again" setting can disable workflows.
+// Reusable dialogs for map actions. 
 (function () {
     let activeDialog = null;
 

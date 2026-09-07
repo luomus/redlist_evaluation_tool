@@ -1,9 +1,14 @@
 /* global L */
 
-// Shared map utilities for handling geometries
+// ─────────────────────────────────────────────────────────────────────────
+// Core map initialization and API operations (observation data management)
+// Depends on: map-geometry.js, map-utils.js, map-dialogs.js, map-legend.js, map-ui.js
+// ─────────────────────────────────────────────────────────────────────────
 
-// Create a shared Leaflet map and helper objects. Returns an object with
-// `{ map, geometryLayer, stats, updateStatus }`.
+/**
+ * Create a shared Leaflet map and helper objects. Returns an object with
+ * `{ map, geometryLayer, stats, updateStatus }`.
+ */
 window.createSharedMap = function(containerId = 'map', center = [60.1699, 24.9384], zoom = 6) {
     const map = L.map(containerId).setView(center, zoom);
 
@@ -68,8 +73,10 @@ window.createSharedMap = function(containerId = 'map', center = [60.1699, 24.938
     return { map, geometryLayer, stats, updateStatus };
 };
 
-// Set exclude status to a specific value (true/false) for an observation ID
-// This now delegates to the efficient batch path so updates happen in a single-pass
+/**
+ * Set exclude status to a specific value (true/false) for an observation ID
+ * This delegates to the efficient batch path so updates happen in a single-pass
+ */
 window.setExclude = async function(obsId, excluded) {
     try {
         if (!obsId) return { success: false, error: 'no-id' };
@@ -88,11 +95,13 @@ window.setExclude = async function(obsId, excluded) {
         console.error('Error setting exclude:', e);
         return { success: false, error: e && e.message };
     }
-}
+};
 
-// Batch set exclude for many observation IDs. Sends requests in parallel chunks
-// and applies the same layer update logic as `window.setExclude` for each
-// successful response. Returns a summary {processed, failed}.
+/**
+ * Batch set exclude for many observation IDs. Sends requests in parallel chunks
+ * and applies the same layer update logic as `window.setExclude` for each
+ * successful response. Returns a summary {processed, failed}.
+ */
 window.setExcludeBatch = async function(obsIds, excluded, batchSize = 100) {
     if (!Array.isArray(obsIds) || obsIds.length === 0) return { processed: 0, failed: 0 };
     const ids = obsIds.map(id => String(id));
@@ -202,11 +211,13 @@ window.setExcludeBatch = async function(obsIds, excluded, batchSize = 100) {
     }
 
     return { processed, failed };
-}
+};
 
-// Generic paginated observations fetcher. Calls `perFeature(feature)` for
-// each feature and `onComplete(meta)` once all pages are processed. Expects
-// an `updateStatus` function to display progress.
+/**
+ * Generic paginated observations fetcher. Calls `perFeature(feature)` for
+ * each feature and `onComplete(meta)` once all pages are processed.
+ * Expects an `updateStatus` function to display progress.
+ */
 window.fetchAllObservationsGeneric = async function(datasetId, perFeature, updateStatus, onComplete) {
     updateStatus('Ladataan havaintoja...');
     try {
@@ -272,52 +283,11 @@ window.fetchAllObservationsGeneric = async function(datasetId, perFeature, updat
     }
 };
 
-
-// Compute centroid [lat, lng] of a GeoJSON Polygon or MultiPolygon geometry
-window.polygonCentroid = function(geometry) {
-    let coords = [];
-    if (geometry.type === 'Polygon') {
-        coords = geometry.coordinates[0] || [];
-    } else if (geometry.type === 'MultiPolygon') {
-        geometry.coordinates.forEach(poly => {
-            (poly[0] || []).forEach(c => coords.push(c));
-        });
-    }
-    if (!coords.length) return { lat: 0, lng: 0 };
-    let sumLng = 0, sumLat = 0;
-    coords.forEach(c => { sumLng += c[0]; sumLat += c[1]; });
-    return { lat: sumLat / coords.length, lng: sumLng / coords.length };
-};
-
-// Ray-casting point-in-polygon test. point = [lng, lat], ring = [[lng,lat], ...]
-window.pointInPolygonRing = function(point, ring) {
-    const x = point[0], y = point[1];
-    let inside = false;
-    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-        const xi = ring[i][0], yi = ring[i][1];
-        const xj = ring[j][0], yj = ring[j][1];
-        const intersect = ((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
-        if (intersect) inside = !inside;
-    }
-    return inside;
-};
-
-// Check whether point [lng, lat] is inside a GeoJSON Polygon or MultiPolygon geometry
-window.pointInPolygonGeometry = function(point, geometry) {
-    if (!geometry) return false;
-    if (geometry.type === 'Polygon') {
-        return window.pointInPolygonRing(point, geometry.coordinates[0] || []);
-    } else if (geometry.type === 'MultiPolygon') {
-        for (const poly of geometry.coordinates) {
-            if (window.pointInPolygonRing(point, poly[0] || [])) return true;
-        }
-        return false;
-    }
-    return false;
-};
-
-// Function to create geometry layers without adding to map (for batch processing)
-// Returns the created layer(s) or array of layers
+/**
+ * Function to create geometry layers without adding to map (for batch processing)
+ * Returns the created layer(s) or array of layers
+ * Depends on: createPopupContent from map-ui.js
+ */
 window.createGeometryLayers = function(geometry, properties) {
     if (!geometry || !geometry.type) return null;
 
@@ -397,8 +367,10 @@ window.createGeometryLayers = function(geometry, properties) {
     return createLayer(geometry);
 };
 
-// Toggle excluded flag for an observation by DB id. Button element passed as `btn`.
-// Uses `setExclude` (which routes through the efficient batch path) and only updates UI
+/**
+ * Toggle excluded flag for an observation by DB id
+ * Button element passed as `btn`. Uses `setExclude` and updates UI.
+ */
 window.toggleExclude = async function(obsId, btn) {
     try {
         if (!obsId) return;
@@ -441,132 +413,36 @@ window.toggleExclude = async function(obsId, btn) {
     }
 };
 
-// Helper: sanitize DOM id for dataset entry
-function sanitizeDomId(s) {
-    return 'ds-' + String(s || '').replace(/[^a-z0-9_-]/ig, '_');
-}
-
-// Update legend checkbox state based on actual feature exclusion state
-// A dataset checkbox should be checked (enabled) only if at least one feature is included (not excluded)
-window.syncLegendWithFeatures = function() {
-    if (!window.datasetLayers) return;
-    
-    for (const dsId in window.datasetLayers) {
-        const entry = window.datasetLayers[dsId];
-        if (!entry || !entry.group) continue;
-        
-        let hasIncludedFeatures = false;
-        let totalFeatures = 0;
-        let includedFeatures = 0;
-        
-        // Check all layers in this dataset
-        try {
-            entry.group.eachLayer(function(layer) {
-                totalFeatures++;
-                const props = (layer.feature && layer.feature.properties) || layer.feature || {};
-                const excluded = props.excluded === true || props.excluded === '1' || props.excluded === 1;
-                if (!excluded) {
-                    hasIncludedFeatures = true;
-                    includedFeatures++;
-                }
-            });
-        } catch (e) {
-            console.warn('Error checking layers for dataset', dsId, e);
-        }
-        
-        // Update the legend checkbox without triggering change event
-        const safe = sanitizeDomId(dsId);
-        const checkbox = document.getElementById('legend-cb-' + safe);
-        if (checkbox && totalFeatures > 0) {
-            const shouldBeChecked = hasIncludedFeatures;
-            if (checkbox.checked !== shouldBeChecked) {
-                // Temporarily disable to prevent change event
-                const changeHandler = checkbox.onchange;
-                checkbox.onchange = null;
-                checkbox.checked = shouldBeChecked;
-                checkbox.onchange = changeHandler;
-            }
-        }
-        
-        // Update the count display to show included/total
-        const countEl = document.getElementById('legend-count-' + safe);
-        if (countEl) {
-            countEl.textContent = `${includedFeatures}/${totalFeatures}`;
-        }
-    }
-};
-
-// Ensure dataset layer exists and return it
-function ensureDatasetLayer(dsId, dsName) {
-    window.datasetLayers = window.datasetLayers || {};
-    if (!window.datasetLayers[dsId]) {
-        const g = L.layerGroup().addTo(window.sharedMap);
-        window.datasetLayers[dsId] = { group: g, name: dsName || dsId, count: 0 };
-    }
-    return window.datasetLayers[dsId];
-}
-
-// Add a created Leaflet layer to the dataset group and update counts/UI
+// Helper: Add a created Leaflet layer to the dataset group and update counts/UI
+// (moved from map-shared.js, kept here because it's used by createGeometryLayers)
 function addToDataset(layer, properties) {
     try {
         const dsId = (properties && (properties._dataset_id || properties.dataset_id)) || 'unknown';
         const dsName = (properties && (properties.dataset_name || properties.dataset_name)) || dsId;
-        const dsEntry = ensureDatasetLayer(dsId, dsName);
+        
+        // Ensure dataset layer exists
+        window.datasetLayers = window.datasetLayers || {};
+        if (!window.datasetLayers[dsId]) {
+            const g = L.layerGroup().addTo(window.sharedMap);
+            window.datasetLayers[dsId] = { group: g, name: dsName || dsId, count: 0 };
+        }
+        
+        const dsEntry = window.datasetLayers[dsId];
         dsEntry.group.addLayer(layer);
         dsEntry.count = (dsEntry.count || 0) + 1;
-        const countEl = document.getElementById('legend-count-' + sanitizeDomId(dsId));
+        
+        // Update count display if it exists
+        const safe = 'ds-' + String(dsId || '').replace(/[^a-z0-9_-]/ig, '_');
+        const countEl = document.getElementById('legend-count-' + safe);
         if (countEl) countEl.textContent = dsEntry.count;
     } catch (e) {
         console.warn('addToDataset error', e);
     }
 }
 
-// Toggle exclude for all observations in a dataset (by dataset id)
-window.toggleDatasetExclude = async function(dsid, exclude) {
-    if (!dsid) throw new Error('No dataset id');
-    window._datasetTogglePending = window._datasetTogglePending || {};
-    if (window._datasetTogglePending[dsid]) throw new Error('Operation already in progress');
-    const entry = window.datasetLayers && window.datasetLayers[dsid];
-    if (!entry) throw new Error('Dataset not found');
-
-    // Gather DB ids from dataset group's layers
-    const ids = [];
-    try {
-        entry.group.eachLayer(function(layer) {
-            const props = (layer.feature && layer.feature.properties) || layer.feature || {};
-            const id = props && (props._db_id || props.db_id);
-            if (id) ids.push(id);
-        });
-    } catch (e) {
-        console.error('Error gathering IDs for dataset', dsid, e);
-    }
-
-    if (!ids.length) throw new Error('No DB-backed features in dataset');
-
-    window._datasetTogglePending[dsid] = true;
-    try {
-        const res = await window.setExcludeBatch(ids, exclude);
-        // After batch operation, legend sync is already called by setExcludeBatch
-        // But also explicitly update this specific checkbox to ensure it reflects the operation
-        const safe = sanitizeDomId(dsid);
-        const checkbox = document.getElementById('legend-cb-' + safe);
-        if (checkbox) {
-            // If we excluded all, checkbox should be unchecked; if we included all, it should be checked
-            const shouldBeChecked = !exclude;
-            if (checkbox.checked !== shouldBeChecked) {
-                const changeHandler = checkbox.onchange;
-                checkbox.onchange = null;
-                checkbox.checked = shouldBeChecked;
-                checkbox.onchange = changeHandler;
-            }
-        }
-        return res;
-    } finally {
-        window._datasetTogglePending[dsid] = false;
-    }
-};
-
-// ─── Polygon → Point conversion ─────────────────────────────────────────────
+/**
+ * Polygon → Point conversion functions
+ */
 
 /**
  * Enter conversion mode for a polygon observation.
@@ -788,7 +664,9 @@ window._cancelPolygonToPoint = function() {
     window._conversionActiveObs = null;
 };
 
-// ─── Move point within uncertainty radius ────────────────────────────────────
+/**
+ * Move point within uncertainty radius
+ */
 
 /**
  * Enter move mode for a point observation.

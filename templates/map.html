@@ -107,12 +107,19 @@
         crossorigin=""
     ></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.9.2/proj4.min.js"></script>
+    <!-- Configuration and pure utilities (no dependencies) -->
+    <script src="/static/js/map-config.js"></script>
     <script src="/static/js/map-utils.js"></script>
+    <script src="/static/js/map-dialogs.js"></script>
+    <script src="/static/js/map-geometry.js"></script>
+    <!-- External data layers -->
     <script src="/static/js/bioregions.js"></script>
     <script src="/static/js/threatened_zones.js"></script>
-    <script src="/static/js/map-dialogs.js"></script>
-    <script src="/static/js/map-shared.js"></script>
-    <script src="/static/js/map-elements.js"></script>
+    <!-- Core map and UI modules -->
+    <script src="/static/js/map-api.js"></script>
+    <script src="/static/js/map-legend.js"></script>
+    <script src="/static/js/map-ui.js"></script>
+    <!-- Data loading and main orchestrator -->
     <script src="/static/js/fetch_data.js"></script>
     <script src="/static/js/data-panel-popups.js"></script>
     <script src="/static/js/map.js"></script>

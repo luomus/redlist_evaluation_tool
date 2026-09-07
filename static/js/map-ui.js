@@ -1,48 +1,16 @@
 /* global L */
 
+// ─────────────────────────────────────────────────────────────────────────
+// Map UI interactions: polygon selector, popups, multi-feature handling, basemap switching
+// Depends on: map-geometry.js, map-dialogs.js, map-utils.js
+// ─────────────────────────────────────────────────────────────────────────
 
-// Module-level geometry utilities shared across functions
-
-// Ray-casting point-in-polygon test (latlng objects {lat, lng})
-function pointInPolygon(pt, vs) {
-    const x = pt.lng, y = pt.lat;
-    let inside = false;
-    for (let i = 0, j = vs.length - 1; i < vs.length; j = i++) {
-        const xi = vs[i].lng, yi = vs[i].lat;
-        const xj = vs[j].lng, yj = vs[j].lat;
-        const intersect = ((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi + 0.0) + xi);
-        if (intersect) inside = !inside;
-    }
-    return inside;
-}
-
-// Flatten nested latlngs to a flat array of latlng objects
-function flattenLatLngs(arr) {
-    const out = [];
-    (function rec(a) {
-        if (!a) return;
-        if (Array.isArray(a)) {
-            a.forEach(v => rec(v));
-        } else if (a.lat !== undefined && a.lng !== undefined) {
-            out.push(a);
-        }
-    })(arr);
-    return out;
-}
-
-// Pixel distance from point p to segment [a, b] (Leaflet Point objects)
-function distToSegment(p, a, b) {
-    const dx = b.x - a.x, dy = b.y - a.y;
-    if (dx === 0 && dy === 0) return p.distanceTo(a);
-    const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / (dx * dx + dy * dy)));
-    return p.distanceTo(L.point(a.x + t * dx, a.y + t * dy));
-}
-
-
-// Polygon selector and bulk enable/disable controls
-// Adds a small UI control to start polygon selection, finish/cancel drawing
-// and buttons to enable/disable all features at once. Does not require
-// external drawing libraries.
+/**
+ * Polygon selector and bulk enable/disable controls
+ * Adds a small UI control to start polygon selection, finish/cancel drawing
+ * and buttons to enable/disable all features at once. Does not require
+ * external drawing libraries.
+ */
 function setupPolygonSelector(map, geometryLayer) {
     let selecting = false;
     let points = [];
@@ -198,12 +166,12 @@ function setupPolygonSelector(map, geometryLayer) {
         geometryLayer.eachLayer(function(layer) {
             try {
                 if (layer instanceof L.CircleMarker) {
-                    if (pointInPolygon(layer.getLatLng(), polyPoints)) selected.push(layer);
+                    if (window.pointInPolygon(layer.getLatLng(), polyPoints)) selected.push(layer);
                 } else {
-                    const latlngs = flattenLatLngs(layer.getLatLngs && layer.getLatLngs());
+                    const latlngs = window.flattenLatLngs(layer.getLatLngs && layer.getLatLngs());
                     if (latlngs && latlngs.length) {
                         for (let i = 0; i < latlngs.length; i++) {
-                            if (pointInPolygon(latlngs[i], polyPoints)) { selected.push(layer); break; }
+                            if (window.pointInPolygon(latlngs[i], polyPoints)) { selected.push(layer); break; }
                         }
                     }
                 }
@@ -238,8 +206,10 @@ function setupPolygonSelector(map, geometryLayer) {
     }
 }
 
-// Function to create a popup content from properties
-// opts: optional object; opts.showConvertBtn = true adds a "Convert to point" button (for polygons)
+/**
+ * Function to create a popup content from properties
+ * opts: optional object; opts.showConvertBtn = true adds a "Convert to point" button (for polygons)
+ */
 function createPopupContent(properties, opts) {
     let content = '<div class="popup-content">';
     
@@ -338,14 +308,18 @@ function createPopupContent(properties, opts) {
     return content;
 }
 
-// Returns appropriate popup opts based on the layer's geometry type
+/**
+ * Returns appropriate popup opts based on the layer's geometry type
+ */
 function getPopupOpts(layer) {
     if (layer instanceof L.CircleMarker) return { showMoveBtn: true };
     if (layer instanceof L.Polygon) return { showConvertBtn: true };
     return {};
 }
 
-// Create popup content for multiple overlapping features
+/**
+ * Create popup content for multiple overlapping features
+ */
 function createMultiFeaturePopup(features) {
     let content = '<div class="multi-feature-popup">';
     content += `<div class="popup-header"><strong>${features.length} havaintoa tässä sijainnissa</strong></div>`;
@@ -383,7 +357,9 @@ function createMultiFeaturePopup(features) {
     return content;
 }
 
-// Setup handler for detecting and displaying multiple overlapping features
+/**
+ * Setup handler for detecting and displaying multiple overlapping features
+ */
 function setupMultiFeatureHandler(map, geometryLayer) {
     // Returns true if the click point hits the given layer
     function layerContainsClick(layer, clickLatLng, pixelRadius) {
@@ -396,14 +372,14 @@ function setupMultiFeatureHandler(map, geometryLayer) {
             // Check L.Polygon before L.Polyline because Polygon extends Polyline
             if (layer instanceof L.Polygon) {
                 const rings = layer.getLatLngs();
-                const outerRing = flattenLatLngs(rings.length ? rings[0] : rings);
-                return outerRing.length > 0 && pointInPolygon(clickLatLng, outerRing);
+                const outerRing = window.flattenLatLngs(rings.length ? rings[0] : rings);
+                return outerRing.length > 0 && window.pointInPolygon(clickLatLng, outerRing);
             }
             if (layer instanceof L.Polyline) {
                 const clickPoint = map.latLngToContainerPoint(clickLatLng);
-                const pts = flattenLatLngs(layer.getLatLngs()).map(ll => map.latLngToContainerPoint(ll));
+                const pts = window.flattenLatLngs(layer.getLatLngs()).map(ll => map.latLngToContainerPoint(ll));
                 for (let i = 0; i < pts.length - 1; i++) {
-                    if (distToSegment(clickPoint, pts[i], pts[i + 1]) < pixelRadius) return true;
+                    if (window.distToSegment(clickPoint, pts[i], pts[i + 1]) < pixelRadius) return true;
                 }
             }
         } catch (e) { /* ignore */ }
@@ -441,7 +417,9 @@ function setupMultiFeatureHandler(map, geometryLayer) {
     });
 }
 
-// Bulk exclude/include all features currently shown in the multi-feature popup
+/**
+ * Bulk exclude/include all features currently shown in the multi-feature popup
+ */
 window.applyMultiFeatureExclude = async function(exclude) {
     const features = window._currentMultiFeatures;
     if (!features || !features.length) return;
@@ -463,6 +441,9 @@ window.applyMultiFeatureExclude = async function(exclude) {
     }
 };
 
+/**
+ * Restore original geometry for an observation
+ */
 window.restoreOriginalGeometry = async function(obsId) {
     if (!await window.mapDialogs.confirm('Haluatko palauttaa havainnon alkuperäisen geometrian?')) return;
     try {
@@ -477,7 +458,10 @@ window.restoreOriginalGeometry = async function(obsId) {
         window.mapDialogs.notify('Alkuperäisen geometrian palautus epäonnistui: ' + (e && e.message));
     }
 };
-// Convert polygon observations currently shown in the multi-feature popup to points.
+
+/**
+ * Convert polygon observations currently shown in the multi-feature popup to points.
+ */
 window.convertMultiFeaturePolygonsToPoints = async function() {
     const features = window._currentMultiFeatures || [];
     const ids = [...new Set(features
@@ -515,7 +499,10 @@ window.convertMultiFeaturePolygonsToPoints = async function() {
         window.mapDialogs.notify('Muunnos epäonnistui: ' + (e && e.message));
     }
 };
-// Toggle feature details in multi-feature popup
+
+/**
+ * Toggle feature details in multi-feature popup
+ */
 window.toggleFeatureDetails = function(index, element) {
     const detailsDiv = document.getElementById(`feature-details-${index}`);
     const expandIcon = element.querySelector('.expand-icon');
@@ -529,72 +516,10 @@ window.toggleFeatureDetails = function(index, element) {
     }
 };
 
-// Basemap definitions with popular open-source options
-// Simple MML WMTS template for `taustakartta` (WGS84_Pseudo-Mercator).
-// Correct WMTS REST ordering: layer / style / tileMatrixSet / z / row / col
-// If you have an MML API key set `window.MML_API_KEY` (it will be appended as `?user-id=`).
-const _mmlTaustakarttaTemplate = 'https://avoin-karttakuva.maanmittauslaitos.fi/avoin/wmts/1.0.0/taustakartta/default/WGS84_Pseudo-Mercator/{z}/{y}/{x}.png';
-const _mmlMaastokarttaTemplate = 'https://avoin-karttakuva.maanmittauslaitos.fi/avoin/wmts/1.0.0/maastokartta/default/WGS84_Pseudo-Mercator/{z}/{y}/{x}.png';
-
-window.basemaps = {
-    osm: {
-        name: 'OpenStreetMap',
-        tileLayers: [
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-                maxZoom: 19
-            })
-        ]
-    },
-    cartodark: {
-        name: 'CartoDB Positron',
-        tileLayers: [
-            L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png' + (window.CARTO_BASEMAP_API_KEY ? '?key=' + encodeURIComponent(window.CARTO_BASEMAP_API_KEY) : ''), {
-                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
-                subdomains: 'abcd',
-                maxZoom: 20
-            })
-        ]
-    },
-    taustakartta: {
-        name: 'Taustakartta (MML)',
-        tileLayers: [
-            // Prefer server-side proxy to avoid CORS / opaque responses; if client provides a key, use direct WMTS URL.
-            (function(){
-                const _mmlProxyTemplate = '/mml/taustakartta/{z}/{x}/{y}.png';
-                const _taustakarttaTileUrl = window.MML_API_KEY
-                    ? (_mmlTaustakarttaTemplate + '?user-id=' + encodeURIComponent(window.MML_API_KEY))
-                    : _mmlProxyTemplate;
-                return L.tileLayer(_taustakarttaTileUrl, {
-                    attribution: '&copy; <a href="https://www.maanmittauslaitos.fi/">Maanmittauslaitos</a>',
-                    maxZoom: 20,
-                    crossOrigin: true
-                });
-            })()
-        ]
-    },
-    maastokartta: {
-        name: 'Maastokartta (MML)',
-        tileLayers: [
-            (function(){
-                const _mmlProxyTemplate = '/mml/maastokartta/{z}/{x}/{y}.png';
-                const _maastoTileUrl = window.MML_API_KEY
-                    ? (_mmlMaastokarttaTemplate + '?user-id=' + encodeURIComponent(window.MML_API_KEY))
-                    : _mmlProxyTemplate;
-                return L.tileLayer(_maastoTileUrl, {
-                    attribution: '&copy; <a href="https://www.maanmittauslaitos.fi/">Maanmittauslaitos</a>',
-                    maxZoom: 20,
-                    crossOrigin: true
-                });
-            })()
-        ]
-    }
-};
-
-// Track current basemap
-window.currentBasemap = 'osm';
-
-// Function to switch basemap
+/**
+ * Function to switch basemap
+ * References basemap definitions from map-config.js via window.basemaps
+ */
 window.switchBasemap = function(basemapKey) {
     if (!window.basemaps[basemapKey] || !window.sharedMap) return;
     
@@ -615,250 +540,4 @@ window.switchBasemap = function(basemapKey) {
     document.querySelectorAll('[data-basemap-id]').forEach(el => {
         el.classList.toggle('active', el.getAttribute('data-basemap-id') === basemapKey);
     });
-};
-
-// Create a Leaflet control that lists datasets with checkboxes to toggle them
-window.createLegendControl = function() {
-    const control = L.control({ position: 'topright' });
-    control.onAdd = function() {
-        const div = L.DomUtil.create('div', 'leaflet-bar legend-control');
-        div.innerHTML = `
-            <div class="legend-header"><strong>Karttavalinnat</strong></div>
-            <div class="basemap-section">
-                <div class="basemap-label">Taustakartta:</div>
-                <div id="basemap-selector" class="basemap-selector"></div>
-            </div>
-            <div class="legend-divider"></div>
-            <div class="legend-item">
-                <label><input type="checkbox" id="bioregions-toggle"> Eliömaakunnat</label>
-            </div>
-            <div class="legend-item">
-                <label><input type="checkbox" id="threatened-zones-toggle"> Uhanalaisuusarviointialueet</label>
-            </div>
-            <div class="legend-divider"></div>
-            <div class="legend-header"><strong>Aineistot:</strong></div>
-            <div id="dataset-legend-list" class="legend-list">Ladataan…</div>
-            <div class="legend-divider"></div>
-            <div class="legend-header"><strong>Koordinaattien tarkkuus</strong></div>
-            <div class="legend-accuracy">
-                <div><span class="legend-swatch accuracy-1-10"></span>1–10 m</div>
-                <div><span class="legend-swatch accuracy-11-100"></span>11–100 m</div>
-                <div><span class="legend-swatch accuracy-101-1000"></span>101–1000 m</div>
-                <div><span class="legend-swatch accuracy-1001-10000"></span>1001–10000 m</div>
-                <div><span class="legend-swatch accuracy-10001-100000"></span>10001–100000 m</div>
-                <div><span class="legend-swatch no-accuracy"></span>Ei arvoa *</div>
-            </div>
-            <div class="legend-note">
-                (*) jos havaintoa ei ole tarkkuusarvoa, se näkyy kartalla oletusvärillä (punainen/harmaa).<br>
-                punainen = analyysiin sisällytetty, harmaa = poistettu.
-            </div>
-        `;
-        L.DomEvent.disableClickPropagation(div);
-        return div;
-    };
-    control.addTo(window.sharedMap);
-
-    // Populate basemap selector
-    const basemapSelector = document.getElementById('basemap-selector');
-    for (const [key, basemap] of Object.entries(window.basemaps)) {
-        const btn = document.createElement('button');
-        btn.className = 'basemap-btn' + (key === 'osm' ? ' active' : '');
-        btn.setAttribute('data-basemap-id', key);
-        btn.textContent = basemap.name;
-        btn.addEventListener('click', () => window.switchBasemap(key));
-        basemapSelector.appendChild(btn);
-    }
-
-    // Setup biogeographical regions toggle
-    const bioregionsToggle = document.getElementById('bioregions-toggle');
-    if (bioregionsToggle) {
-        bioregionsToggle.addEventListener('change', function() {
-            if (this.checked) {
-                if (window.bioRegionsLayer && window.sharedMap) {
-                    window.bioRegionsLayer.addTo(window.sharedMap);
-                    window.bioRegionsVisible = true;
-                }
-            } else {
-                if (window.bioRegionsLayer && window.sharedMap) {
-                    window.sharedMap.removeLayer(window.bioRegionsLayer);
-                    window.bioRegionsVisible = false;
-                }
-            }
-        });
-    }
-
-    // Setup threatened species evaluation zones toggle
-    const threatenedZonesToggle = document.getElementById('threatened-zones-toggle');
-    if (threatenedZonesToggle) {
-        threatenedZonesToggle.addEventListener('change', function() {
-            if (this.checked) {
-                if (window.threatenedZonesLayer && window.sharedMap) {
-                    window.threatenedZonesLayer.addTo(window.sharedMap);
-                    window.threatenedZonesVisible = true;
-                }
-            } else {
-                if (window.threatenedZonesLayer && window.sharedMap) {
-                    window.sharedMap.removeLayer(window.threatenedZonesLayer);
-                    window.threatenedZonesVisible = false;
-                }
-            }
-        });
-    }
-
-    // Helper function to add a dataset item to the legend
-    function addDatasetItemToLegend(list, dsId, dsName, dsCount) {
-        const safe = sanitizeDomId(dsId);
-        window.datasetLayers = window.datasetLayers || {};
-        if (!window.datasetLayers[dsId]) {
-            window.datasetLayers[dsId] = { group: L.layerGroup().addTo(window.sharedMap), name: dsName, count: dsCount || 0 };
-        } else {
-            window.datasetLayers[dsId].name = dsName;
-        }
-        
-        const item = document.createElement('div');
-        item.className = 'legend-item';
-        
-        const label = document.createElement('label');
-        const checkbox = document.createElement('input');
-        checkbox.type = 'checkbox';
-        checkbox.id = `legend-cb-${safe}`;
-        checkbox.checked = true;
-        checkbox.setAttribute('data-dsid', dsId);
-        label.appendChild(checkbox);
-        label.appendChild(document.createTextNode(`${dsName} `));
-
-        const count = document.createElement('span');
-        count.className = 'legend-count';
-        count.id = `legend-count-${safe}`;
-        count.textContent = window.datasetLayers[dsId].count || 0;
-        label.appendChild(count);
-
-        const tableBtn = document.createElement('button');
-        tableBtn.className = 'legend-table-btn';
-        tableBtn.type = 'button';
-        tableBtn.textContent = '▦';
-        tableBtn.title = 'Näytä taulukkona';
-        tableBtn.setAttribute('aria-label', `Näytä aineisto ${dsName} taulukkona`);
-        tableBtn.onclick = function(e) {
-            e.stopPropagation();
-            if (window.openDatasetTable) {
-                window.openDatasetTable(dsId, dsName);
-            }
-        };
-        
-        const deleteBtn = document.createElement('button');
-        deleteBtn.className = 'legend-delete-btn';
-        deleteBtn.textContent = '✕';
-        deleteBtn.onclick = async function(e) {
-            e.stopPropagation();
-            if (window.deleteMapDataset) {
-                await window.deleteMapDataset(dsId);
-            }
-        };
-        
-        item.appendChild(label);
-        item.appendChild(tableBtn);
-        item.appendChild(deleteBtn);
-        list.appendChild(item);
-        
-        document.getElementById('legend-cb-' + safe).addEventListener('change', async function () {
-            const dsid = this.getAttribute('data-dsid');
-            const entry = window.datasetLayers[dsid];
-            if (!entry) return;
-            const checked = this.checked;
-            const exclude = !checked;
-
-            // Compute how many features would actually be affected by this operation
-            let affectedCount = 0;
-            try {
-                if (entry.group && typeof entry.group.eachLayer === 'function') {
-                    entry.group.eachLayer(function(layer) {
-                        const props = (layer.feature && layer.feature.properties) || layer.feature || {};
-                        const id = props && (props._db_id || props.db_id);
-                        if (!id) return;
-                        const isExcluded = props.excluded === true || props.excluded === '1' || props.excluded === 1;
-                        if ((exclude && !isExcluded) || (!exclude && isExcluded)) affectedCount++;
-                    });
-                }
-            } catch (e) { console.warn('Error counting affected features for dataset', dsid, e); }
-
-            // Fallback to total count if none found in the group
-            if (affectedCount === 0) {
-                affectedCount = entry.count || 0;
-            }
-
-            if (affectedCount === 0) {
-                window.mapDialogs.notify(`Tässä aineistossa ei ole havaintoja, joita voisi ${exclude ? 'poistaa käytöstä' : 'ottaa käyttöön'}.`);
-                this.checked = !checked;
-                return;
-            }
-
-            this.disabled = true;
-            try {
-                await window.toggleDatasetExclude(dsid, exclude);
-            } catch (err) {
-                console.error('Error toggling dataset exclude:', err);
-                window.mapDialogs.notify('Virhe muutettaessa aineistoa: ' + (err && err.message || err));
-                this.checked = !checked;
-            } finally {
-                this.disabled = false;
-            }
-        });
-    }
-
-    // Populate the legend from server dataset list
-    const mxId = window.MX_ID || null;
-    const datasetsUrl = mxId ? `/api/taxons/${encodeURIComponent(mxId)}/datasets` : null;
-    
-    // Function to load and populate datasets in legend
-    window.refreshDatasetLegend = async function() {
-        if (!datasetsUrl) return;
-        try {
-            const r = await fetch(datasetsUrl);
-            const data = await r.json();
-            const list = document.getElementById('dataset-legend-list');
-            if (!list) return;
-            list.innerHTML = '';
-            const datasets = (data && data.datasets) || [];
-            
-            if (datasets.length === 0) {
-                list.innerHTML = '<div style="color:#999; font-size:12px; padding: 8px;">Ei aineistoja</div>';
-                return;
-            }
-            
-            datasets.forEach(ds => {
-                const dsId = ds.dataset_id || ds.id || ds.name;
-                const dsName = ds.dataset_name || ds.name || dsId;
-                addDatasetItemToLegend(list, dsId, dsName, ds.count || 0);
-            });
-
-            // Also list any existing datasetLayers not returned by server
-            for (const kd in window.datasetLayers) {
-                if (!datasets.find(d => String(d.dataset_id || d.id || d.name) === String(kd))) {
-                    const dsName = window.datasetLayers[kd].name || kd;
-                    addDatasetItemToLegend(list, kd, dsName, window.datasetLayers[kd].count || 0);
-                }
-            }
-            
-            if (typeof window.syncLegendWithFeatures === 'function') {
-                setTimeout(() => {
-                    try { window.syncLegendWithFeatures(); } catch (e) { console.warn('Legend sync failed:', e); }
-                }, 100);
-            }
-        } catch (err) {
-            const list = document.getElementById('dataset-legend-list');
-            if (list) list.textContent = 'Aineistojen lataus epäonnistui';
-            console.warn('Failed to load datasets for legend', err);
-        }
-    };
-
-    // Initial load of datasets
-    if (!datasetsUrl) {
-        const list = document.getElementById('dataset-legend-list');
-        if (list) list.textContent = 'Taksonin tunniste puuttuu';
-    } else {
-        window.refreshDatasetLegend();
-    }
-
-    return control;
 };
