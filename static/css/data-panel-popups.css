@@ -375,3 +375,39 @@
 .btn-lajifi-save:disabled:hover {
     background: #ccc;
 }
+
+/* Dataset Table Action Buttons */
+
+.dataset-table-action-cell {
+    padding: 4px 6px;
+    min-width: 70px;
+}
+
+.btn-dataset-exclude,
+.btn-dataset-include {
+    padding: 5px 8px;
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: 500;
+    color: white;
+    transition: background 0.2s ease;
+    white-space: nowrap;
+}
+
+.btn-dataset-exclude {
+    background: #dc3545;
+}
+
+.btn-dataset-exclude:hover {
+    background: #c82333;
+}
+
+.btn-dataset-include {
+    background: #28a745;
+}
+
+.btn-dataset-include:hover {
+    background: #218838;
+}

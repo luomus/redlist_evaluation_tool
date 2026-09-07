@@ -78,6 +78,42 @@ function formatDatasetTableValue(value) {
     return text.length > 500 ? `${text.slice(0, 500)}...` : text;
 }
 
+function toggleDatasetObservationExclude(dbId, btn, tableBody) {
+    if (!dbId) return;
+    
+    try {
+        const currentExcluded = btn.getAttribute('data-excluded') === '1';
+        const newExcluded = !currentExcluded;
+        
+        // Call the existing exclude toggle function
+        window.setExclude(dbId, newExcluded).then(data => {
+            if (!data || !data.success) {
+                const errorMsg = data && data.error ? data.error : 'tuntematon virhe';
+                alert('Päivitys epäonnistui: ' + errorMsg);
+                return;
+            }
+
+            // Update button state
+            btn.setAttribute('data-excluded', data.excluded ? '1' : '0');
+            btn.textContent = data.excluded ? 'Sisällytä analyysiin' : 'Poista analyysistä';
+            btn.className = data.excluded ? 'btn-dataset-include' : 'btn-dataset-exclude';
+            
+            // Update the corresponding "Pois käytöstä" cell
+            const row = btn.closest('tr');
+            if (row) {
+                const cells = row.querySelectorAll('td');
+                // The "Pois käytöstä" column is at index 2 (after ID and Geometria)
+                if (cells.length > 2) {
+                    cells[2].textContent = data.excluded ? 'Kyllä' : 'Ei';
+                }
+            }
+        });
+    } catch (e) {
+        console.error('Error toggling observation exclude:', e);
+        alert('Virhe poiston vaihtamisessa: ' + e.message);
+    }
+}
+
 function renderDatasetTable(body, datasetName, features) {
     if (features.length === 0) {
         setDatasetTableState(body, 'Aineistossa ei ole havaintoja.', 'dataset-table-empty');
@@ -99,7 +135,7 @@ function renderDatasetTable(body, datasetName, features) {
     table.className = 'dataset-table';
     const head = document.createElement('thead');
     const headerRow = document.createElement('tr');
-    ['ID', 'Geometria', 'Pois käytöstä', ...propertyColumns].forEach(column => {
+    ['Toiminto', 'ID', 'Geometria', 'Pois käytöstä', ...propertyColumns].forEach(column => {
         const th = document.createElement('th');
         th.textContent = column;
         headerRow.appendChild(th);
@@ -111,10 +147,26 @@ function renderDatasetTable(body, datasetName, features) {
     features.forEach(feature => {
         const properties = feature.properties || {};
         const row = document.createElement('tr');
+        const dbId = properties._db_id;
+        const isExcluded = properties.excluded;
+        
+        // Create action button cell
+        const actionCell = document.createElement('td');
+        actionCell.className = 'dataset-table-action-cell';
+        const actionBtn = document.createElement('button');
+        actionBtn.className = isExcluded ? 'btn-dataset-include' : 'btn-dataset-exclude';
+        actionBtn.textContent = isExcluded ? 'Sisällytä' : 'Poista';
+        actionBtn.setAttribute('data-excluded', isExcluded ? '1' : '0');
+        actionBtn.setAttribute('data-db-id', dbId);
+        actionBtn.onclick = () => toggleDatasetObservationExclude(dbId, actionBtn, tableBody);
+        actionCell.appendChild(actionBtn);
+        row.appendChild(actionCell);
+        
+        // Add other cells
         const values = [
-            properties._db_id,
+            dbId,
             feature.geometry ? feature.geometry.type : '',
-            properties.excluded ? 'Kyllä' : 'Ei',
+            isExcluded ? 'Kyllä' : 'Ei',
             ...propertyColumns.map(column => properties[column])
         ];
         values.forEach(value => {
