@@ -21,6 +21,13 @@ chmod +x docker-entrypoint.sh
 docker-compose up --build
 ```
 
+or on Linux:
+
+```bash
+sudo systemctl start docker
+docker-compose up --build
+```
+
 On first start the entrypoint automatically:
 1. Creates all tables
 2. Seeds species from `static/resources/species_and_groups.tsv` (includes IUCN 2019 categories)

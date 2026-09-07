@@ -34,7 +34,7 @@ def taxon_map(mx_id):
         taxon = db.query(Taxon).filter_by(mx_id=mx_id).first()
     if not taxon:
         abort(404)
-    return render_template('map.html', taxon=taxon, carto_basemap_api_key=CARTO_BASEMAP_API_KEY)
+    return render_template('map.html', taxon=taxon, carto_basemap_api_key=CARTO_BASEMAP_API_KEY, use_authentication=USE_AUTHENTICATION)
 
 _frontpage_cache = None
 
