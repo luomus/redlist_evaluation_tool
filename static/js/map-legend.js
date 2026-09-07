@@ -166,11 +166,11 @@ window.createLegendControl = function() {
             <div class="legend-divider"></div>
             <div class="legend-header"><strong>Koordinaattien tarkkuus</strong></div>
             <div class="legend-accuracy">
-                <div><span class="legend-swatch accuracy-1-10"></span>1–10 m</div>
-                <div><span class="legend-swatch accuracy-11-100"></span>11–100 m</div>
-                <div><span class="legend-swatch accuracy-101-1000"></span>101–1000 m</div>
-                <div><span class="legend-swatch accuracy-1001-10000"></span>1001–10000 m</div>
-                <div><span class="legend-swatch accuracy-10001-100000"></span>10001–100000 m</div>
+                <div><span class="legend-swatch accuracy-1-10"></span>1-10 m</div>
+                <div><span class="legend-swatch accuracy-11-100"></span>11-100 m</div>
+                <div><span class="legend-swatch accuracy-101-1000"></span>101-1000 m</div>
+                <div><span class="legend-swatch accuracy-1001-10000"></span>1001-10000 m</div>
+                <div><span class="legend-swatch accuracy-10001-100000"></span>10001-100000 m</div>
                 <div><span class="legend-swatch no-accuracy"></span>Ei arvoa *</div>
             </div>
             <div class="legend-note">

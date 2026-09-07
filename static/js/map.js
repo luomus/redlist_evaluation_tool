@@ -412,6 +412,21 @@ function loadObservationsOnMap() {
 async function reloadMapObservations() {
     updateStatus('Päivitetään karttanäkymä...');
     
+    // Reset dataset layers and counts before loading new data
+    if (window.datasetLayers) {
+        for (const dsId in window.datasetLayers) {
+            window.datasetLayers[dsId].count = 0;
+            // Clear all layers from this dataset's group
+            if (window.datasetLayers[dsId].group) {
+                window.datasetLayers[dsId].group.clearLayers();
+            }
+            // Update count display if it exists
+            const safe = 'ds-' + String(dsId || '').replace(/[^a-z0-9_-]/ig, '_');
+            const countEl = document.getElementById('legend-count-' + safe);
+            if (countEl) countEl.textContent = '0';
+        }
+    }
+    
     // Clear existing geometry layer
     geometryLayer.clearLayers();
     
@@ -670,6 +685,12 @@ async function deleteMapDataset(datasetIdStr) {
         const result = await resp.json();
         if (result.success) {
             showMapError('✓ Aineisto poistettu');
+            
+            // Remove dataset from window.datasetLayers to prevent it from reappearing in the legend
+            if (window.datasetLayers && window.datasetLayers[datasetIdStr]) {
+                delete window.datasetLayers[datasetIdStr];
+            }
+            
             // Reload observations on the map without refreshing the page
             await reloadMapObservations();
             // Refresh legend after deletion
