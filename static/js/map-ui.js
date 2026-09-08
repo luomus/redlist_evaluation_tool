@@ -193,7 +193,7 @@ function setupPolygonSelector(map, geometryLayer) {
         });
         if (!dbIds.length) { window.mapDialogs.notify('Valinnassa ei ole tietokantaan tallennettuja havaintoja.'); return; }
 
-        if (!await window.mapDialogs.confirm(`Haluatko ${exclude ? 'poistaa käytöstä' : 'ottaa käyttöön'} ${dbIds.length} havaintoa?`)) return;
+        if (!await window.mapDialogs.confirm(`Haluatko ${exclude ? 'piilottaa' : 'sisällyttää'} ${dbIds.length} havaintoa?`)) return;
         try {
             const res = await window.setExcludeBatch(dbIds, exclude);
             map.closePopup();
@@ -289,7 +289,7 @@ function createPopupContent(properties, opts) {
     }
     const isExcluded = resolvedProps && (resolvedProps.excluded === true || resolvedProps.excluded === '1' || resolvedProps.excluded === 1);
     if (dbId) {
-        const btnLabel = isExcluded ? 'Sisällytä analyysiin' : 'Poista analyysista';
+        const btnLabel = isExcluded ? 'Sisällytä' : 'Piilota';
         const dataExcluded = isExcluded ? '1' : '0';
         content += `<div class="popup-actions"><button class="exclude-btn" data-db-id="${dbId}" data-excluded="${dataExcluded}" onclick="window.toggleExclude(${dbId}, this)">${btnLabel}</button>`;
         if (opts && opts.showConvertBtn) {
@@ -323,7 +323,7 @@ function getPopupOpts(layer) {
 function createMultiFeaturePopup(features) {
     let content = '<div class="multi-feature-popup">';
     content += `<div class="popup-header"><strong>${features.length} havaintoa tässä sijainnissa</strong></div>`;
-    content += `<div class="multi-feature-actions"><button onclick="window.applyMultiFeatureExclude(true)">Poista kaikki analyysista</button> <button onclick="window.applyMultiFeatureExclude(false)">Sisällytä kaikki analyysiin</button> <button onclick="window.convertMultiFeaturePolygonsToPoints()">Muunna polygonit pisteiksi</button></div>`;
+    content += `<div class="multi-feature-actions"><button onclick="window.applyMultiFeatureExclude(true)">Piilota kaikki analyysista</button> <button onclick="window.applyMultiFeatureExclude(false)">Sisällytä kaikki analyysiin</button> <button onclick="window.convertMultiFeaturePolygonsToPoints()">Muunna polygonit pisteiksi</button></div>`;
 
     features.forEach((layer, index) => {
         const props = layer.feature.properties || {};
@@ -430,7 +430,7 @@ window.applyMultiFeatureExclude = async function(exclude) {
         if (id) dbIds.push(id);
     });
     if (!dbIds.length) { window.mapDialogs.notify('Valituissa havainnoissa ei ole tietokantaan tallennettuja havaintoja.'); return; }
-    if (!await window.mapDialogs.confirm(`Haluatko ${exclude ? 'poistaa analyysista' : 'sisällyttää analyysiin'} ${dbIds.length} havaintoa?`)) return;
+    if (!await window.mapDialogs.confirm(`Haluatko ${exclude ? 'piilottaa' : 'sisällyttää'} ${dbIds.length} havaintoa?`)) return;
     try {
         const res = await window.setExcludeBatch(dbIds, exclude);
         if (window.sharedMap) window.sharedMap.closePopup();

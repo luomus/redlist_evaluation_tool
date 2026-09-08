@@ -101,18 +101,8 @@ function toggleDatasetObservationExclude(dbId, btn, tableBody) {
 
             // Update button state
             btn.setAttribute('data-excluded', data.excluded ? '1' : '0');
-            btn.textContent = data.excluded ? 'Sisällytä analyysiin' : 'Poista analyysistä';
+            btn.textContent = data.excluded ? 'Sisällytä' : 'Piilota';
             btn.className = data.excluded ? 'btn-dataset-include' : 'btn-dataset-exclude';
-            
-            // Update the corresponding "Pois käytöstä" cell
-            const row = btn.closest('tr');
-            if (row) {
-                const cells = row.querySelectorAll('td');
-                // The "Pois käytöstä" column is at index 2 (after ID and Geometria)
-                if (cells.length > 2) {
-                    cells[2].textContent = data.excluded ? 'Kyllä' : 'Ei';
-                }
-            }
         });
     } catch (e) {
         console.error('Error toggling observation exclude:', e);
@@ -129,10 +119,6 @@ function sortDatasetTableColumn(columnIndex, columnName, features, propertyColum
         datasetTableSortState.sortDir = 'asc';
     }
 
-    // Map column index to data accessor
-    const columnMap = ['Toiminto', 'ID', 'Geometria', 'Pois käytöstä', ...propertyColumns];
-    const columnHeader = columnMap[columnIndex];
-
     // Sort features
     const sorted = [...features].sort((a, b) => {
         let aVal, bVal;
@@ -144,11 +130,8 @@ function sortDatasetTableColumn(columnIndex, columnName, features, propertyColum
         } else if (columnIndex === 2) {
             aVal = a.geometry ? a.geometry.type : '';
             bVal = b.geometry ? b.geometry.type : '';
-        } else if (columnIndex === 3) {
-            aVal = a.properties.excluded ? 1 : 0;
-            bVal = b.properties.excluded ? 1 : 0;
         } else {
-            const propCol = propertyColumns[columnIndex - 4];
+            const propCol = propertyColumns[columnIndex - 3];
             aVal = a.properties[propCol];
             bVal = b.properties[propCol];
         }
@@ -202,7 +185,7 @@ function renderDatasetTable(body, datasetName, features) {
     const head = document.createElement('thead');
     const headerRow = document.createElement('tr');
     
-    const columnHeaders = ['Toiminto', 'ID', 'Geometria', 'Pois käytöstä', ...propertyColumns];
+    const columnHeaders = ['Toiminto', 'ID', 'Geometria', ...propertyColumns];
     columnHeaders.forEach((column, colIndex) => {
         const th = document.createElement('th');
         th.className = 'dataset-table-header';
@@ -245,7 +228,7 @@ function renderDatasetTable(body, datasetName, features) {
         actionCell.className = 'dataset-table-action-cell';
         const actionBtn = document.createElement('button');
         actionBtn.className = isExcluded ? 'btn-dataset-include' : 'btn-dataset-exclude';
-        actionBtn.textContent = isExcluded ? 'Sisällytä' : 'Poista';
+        actionBtn.textContent = isExcluded ? 'Sisällytä' : 'Piilota';
         actionBtn.setAttribute('data-excluded', isExcluded ? '1' : '0');
         actionBtn.setAttribute('data-db-id', dbId);
         actionBtn.onclick = () => toggleDatasetObservationExclude(dbId, actionBtn, tableBody);
@@ -256,7 +239,6 @@ function renderDatasetTable(body, datasetName, features) {
         const values = [
             dbId,
             feature.geometry ? feature.geometry.type : '',
-            isExcluded ? 'Kyllä' : 'Ei',
             ...propertyColumns.map(column => properties[column])
         ];
         values.forEach(value => {
@@ -294,7 +276,7 @@ function renderDatasetTableWithSorted(body, datasetName, sortedFeatures, propert
     const head = document.createElement('thead');
     const headerRow = document.createElement('tr');
     
-    const columnHeaders = ['Toiminto', 'ID', 'Geometria', 'Pois käytöstä', ...propertyColumns];
+    const columnHeaders = ['Toiminto', 'ID', 'Geometria', ...propertyColumns];
     columnHeaders.forEach((column, colIndex) => {
         const th = document.createElement('th');
         th.className = 'dataset-table-header';
@@ -337,7 +319,7 @@ function renderDatasetTableWithSorted(body, datasetName, sortedFeatures, propert
         actionCell.className = 'dataset-table-action-cell';
         const actionBtn = document.createElement('button');
         actionBtn.className = isExcluded ? 'btn-dataset-include' : 'btn-dataset-exclude';
-        actionBtn.textContent = isExcluded ? 'Sisällytä' : 'Poista';
+        actionBtn.textContent = isExcluded ? 'Sisällytä' : 'Piilota';
         actionBtn.setAttribute('data-excluded', isExcluded ? '1' : '0');
         actionBtn.setAttribute('data-db-id', dbId);
         actionBtn.onclick = () => toggleDatasetObservationExclude(dbId, actionBtn, tableBody);
@@ -348,7 +330,6 @@ function renderDatasetTableWithSorted(body, datasetName, sortedFeatures, propert
         const values = [
             dbId,
             feature.geometry ? feature.geometry.type : '',
-            isExcluded ? 'Kyllä' : 'Ei',
             ...propertyColumns.map(column => properties[column])
         ];
         values.forEach(value => {

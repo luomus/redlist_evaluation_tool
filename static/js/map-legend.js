@@ -313,7 +313,7 @@ window.createLegendControl = function() {
             }
 
             if (affectedCount === 0) {
-                window.mapDialogs.notify(`Tässä aineistossa ei ole havaintoja, joita voisi ${exclude ? 'poistaa käytöstä' : 'ottaa käyttöön'}.`);
+                window.mapDialogs.notify(`Tässä aineistossa ei ole havaintoja, joita voisi ${exclude ? 'piilottaa' : 'sisällyttää mukaan'}.`);
                 this.checked = !checked;
                 return;
             }
