@@ -209,9 +209,65 @@ window.setExcludeBatch = async function(obsIds, excluded, batchSize = 100) {
     if (processed > 0 && typeof window.markCalculationOutdated === 'function') {
         try { window.markCalculationOutdated('all'); } catch (e) { console.warn('Could not mark calculations as outdated:', e); }
     }
+    if (processed > 0 && typeof window.loadTaxonHistory === 'function') {
+        window.loadTaxonHistory(true);
+    }
 
     return { processed, failed };
 };
+
+window.loadTaxonHistory = async function(reset) {
+    const list = document.getElementById('historyList');
+    const moreButton = document.getElementById('historyMoreButton');
+    if (!list || !window.MX_ID) return;
+
+    const page = reset ? 1 : (window._historyPage || 1) + 1;
+    if (reset) {
+        list.textContent = 'Historiaa ladataan...';
+        if (moreButton) moreButton.hidden = true;
+    }
+
+    try {
+        const params = new URLSearchParams({ page: String(page), per_page: '20' });
+        const response = await fetch('/api/taxons/' + encodeURIComponent(window.MX_ID) + '/history?' + params);
+        const data = await response.json().catch(function() { return {}; });
+        if (!response.ok || !data.success) throw new Error(data.error || response.statusText);
+
+        window._historyPage = page;
+        if (reset) list.replaceChildren();
+        if (!data.events.length && reset) {
+            list.textContent = 'Tämän lajin dataa ei ole vielä muokattu.';
+        } else {
+            data.events.forEach(function(event) { list.appendChild(createHistoryEventElement(event)); });
+        }
+        if (moreButton) moreButton.hidden = page >= data.pagination.pages;
+    } catch (error) {
+        if (reset) list.textContent = 'Historian lataaminen epäonnistui.';
+        console.error('Failed to load taxon history:', error);
+    }
+};
+
+function createHistoryEventElement(event) {
+    const labels = {
+        dataset_imported: 'Aineisto ladattu',
+        csv_imported: 'CSV ladattu',
+        dataset_deleted: 'Aineisto poistettu'
+    };
+    const entry = document.createElement('article');
+    entry.className = 'history-entry';
+    const action = document.createElement('strong');
+    action.textContent = labels[event.event_type] || event.event_type;
+    const metadata = document.createElement('span');
+    const date = new Date(event.occurred_at);
+    const details = [
+        event.actor_name || 'Tuntematon käyttäjä',
+        isNaN(date.getTime()) ? event.occurred_at : date.toLocaleString('fi-FI'),
+    ];
+    if (event.dataset_name || event.dataset_id) details.push(event.dataset_name || event.dataset_id);
+    metadata.textContent = details.join(' | ');
+    entry.append(action, metadata);
+    return entry;
+}
 
 /**
  * Generic paginated observations fetcher. Calls `perFeature(feature)` for
@@ -385,7 +441,7 @@ window.toggleExclude = async function(obsId, btn) {
 
         // Update button state
         btn.setAttribute('data-excluded', data.excluded ? '1' : '0');
-        btn.textContent = data.excluded ? 'Sisällytä analyysiin' : 'Poista analyysista';
+        btn.textContent = data.excluded ? 'Sisällytä' : 'Piilota';
 
         // If a multi-feature popup is open, update its entry class and stored properties
         try {

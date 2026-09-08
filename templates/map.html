@@ -89,6 +89,14 @@
                 <div id="mapProgressLog" style="display:none;"></div>
                 <div id="mapSaveSection" style="display:none;"></div>
             </div>
+            <section class="history-panel" aria-labelledby="history-heading">
+                <div class="history-heading">
+                    <h3 id="history-heading">Muokkaushistoria</h3>
+                    <button type="button" class="history-refresh" onclick="window.loadTaxonHistory(true)" title="Päivitä historia">&#8635;</button>
+                </div>
+                <div id="historyList" class="history-list" aria-live="polite">Historiaa ladataan...</div>
+                <button id="historyMoreButton" type="button" class="history-more" onclick="window.loadTaxonHistory(false)" hidden>Näytä lisää</button>
+            </section>
         </div>
         {% if use_authentication %}
         <a href="{{ url_for('auth.logout') }}" style="position:absolute; top:10px; right:10px; padding:6px 14px; background:#e74c3c; color:white; border-radius:4px; text-decoration:none; font-size:13px;">Kirjaudu ulos</a>
@@ -123,5 +131,6 @@
     <script src="/static/js/fetch_data.js"></script>
     <script src="/static/js/data-panel-popups.js"></script>
     <script src="/static/js/map.js"></script>
+    <script>window.loadTaxonHistory(true);</script>
 </body>
 </html>

@@ -42,6 +42,37 @@ header { padding: 12px 16px; border-bottom: 1px solid #eee; display: flex; gap: 
     flex: 1;
     min-width: 250px;
 }
+.history-panel {
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    box-sizing: border-box;
+    flex: 1 1 290px;
+    min-width: 290px;
+    padding: 12px;
+}
+.history-heading {
+    align-items: center;
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+.history-heading h3 { font-size: 14px; margin: 0; }
+.history-refresh {
+    background: #fff;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 16px;
+    height: 28px;
+    line-height: 1;
+    width: 30px;
+}
+.history-list { font-size: 12px; max-height: 156px; overflow-y: auto; }
+.history-entry { border-top: 1px solid #dee2e6; display: block; padding: 7px 0; }
+.history-entry strong { color: #333; display: block; font-size: 12px; font-weight: 600; }
+.history-entry span { color: #666; display: block; line-height: 1.35; margin-top: 2px; }
+.history-more { background: #fff; border: 1px solid #ced4da; border-radius: 4px; cursor: pointer; font-size: 12px; margin-top: 8px; padding: 5px 8px; }
 .info-panel h3 {
     margin: 0 0 8px 0;
     font-size: 14px;

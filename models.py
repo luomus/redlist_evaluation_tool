@@ -19,6 +19,7 @@ class Taxon(Base):
     elio_ryhma = Column(String(255))
 
     observations = relationship('Observation', back_populates='taxon', cascade='all, delete-orphan')
+    audit_events = relationship('AuditEvent', back_populates='taxon')
     convex_hulls = relationship('ConvexHull', back_populates='taxon', cascade='all, delete-orphan')
     grid_metadata = relationship('GridMetadata', back_populates='taxon', cascade='all, delete-orphan', uselist=False)
 
@@ -40,6 +41,23 @@ class Observation(Base):
     original_geometry = Column(Geometry(geometry_type='GEOMETRY', srid=4326))
 
     taxon = relationship('Taxon', back_populates='observations')
+
+
+class AuditEvent(Base):
+    """Append-only history entry for imports and user-driven data changes."""
+    __tablename__ = 'audit_events'
+
+    id = Column(Integer, primary_key=True)
+    taxon_id = Column(Integer, ForeignKey('taxons.id', ondelete='CASCADE'), nullable=False, index=True)
+    event_type = Column(String(50), nullable=False, index=True)
+    occurred_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    actor_id = Column(String(255), nullable=False)
+    actor_name = Column(String(255))
+    dataset_id = Column(String(100), index=True)
+    dataset_name = Column(String(255))
+    details = Column(JSONB, nullable=False, default=dict)
+
+    taxon = relationship('Taxon', back_populates='audit_events')
 
 
 class ConvexHull(Base):

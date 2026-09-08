@@ -10,7 +10,8 @@ from shapely.geometry import shape
 from shapely import wkt as shapely_wkt
 from models import Observation
 from data_loaders.database import Session
-from utils.helpers import generate_id, guess_delimeter, get_taxon_by_name
+from utils.audit import record_audit_event
+from utils.helpers import generate_id, guess_delimeter
 from auth.decorators import login_required
 from models import Taxon
 
@@ -165,8 +166,15 @@ def save_observations():
                         })
                     if rows:
                         db.execute(insert(Observation), rows)
-                        db.commit()
                         total_inserted += len(rows)
+                record_audit_event(
+                    db,
+                    taxon_id=taxon.id,
+                    event_type='dataset_imported',
+                    dataset_id=dataset_id,
+                    dataset_name=dataset_name,
+                )
+                db.commit()
                 return jsonify({"success": True, "count": total_inserted})
             except Exception as e:
                 db.rollback()
@@ -296,8 +304,20 @@ def upload_csv(mx_id):
                 for i in range(0, len(observations), chunk_size):
                     chunk = observations[i:i + chunk_size]
                     db.execute(insert(Observation), chunk)
-                    db.commit()
                     total_inserted += len(chunk)
+                record_audit_event(
+                    db,
+                    taxon_id=taxon.id,
+                    event_type='csv_imported',
+                    dataset_id=str(dataset_id),
+                    dataset_name=dataset_name,
+                    details={
+                        'filename': f.filename,
+                        'accepted_rows': total_inserted,
+                        'skipped_rows': len(parse_errors),
+                    },
+                )
+                db.commit()
                 return jsonify({"success": True, "count": total_inserted, "dataset_id": str(dataset_id)})
             except Exception as e:
                 db.rollback()
@@ -409,10 +429,23 @@ def delete_dataset(mx_id, dataset_id):
             if not taxon:
                 return jsonify({"success": False, "error": "Taxon not found"}), 404
 
+            dataset = db.execute(text("""
+                SELECT dataset_name FROM observations
+                WHERE taxon_id = :taxon_id AND dataset_id = :dataset_id
+                LIMIT 1
+            """), {'taxon_id': taxon.id, 'dataset_id': dataset_id}).first()
             result = db.execute(
                 text("DELETE FROM observations WHERE taxon_id = :taxon_id AND dataset_id = :dataset_id"),
                 {'taxon_id': taxon.id, 'dataset_id': dataset_id}
             )
+            if result.rowcount:
+                record_audit_event(
+                    db,
+                    taxon_id=taxon.id,
+                    event_type='dataset_deleted',
+                    dataset_id=dataset_id,
+                    dataset_name=dataset.dataset_name if dataset else None,
+                )
             db.commit()
             return jsonify({"success": True, "deleted": result.rowcount})
     except Exception as e:
@@ -442,9 +475,9 @@ def set_observations_excluded():
                         SET properties = jsonb_set(properties, '{excluded}', to_jsonb(CAST(:excluded AS boolean)), true),
                             excluded = CAST(:excluded AS boolean)
                         WHERE id = ANY(:ids)
-                        RETURNING id
+                        RETURNING id, taxon_id
                     )
-                    SELECT id FROM updated
+                    SELECT id, taxon_id FROM updated
                 """), {'excluded': bool(excluded), 'ids': ids})
                 updated = [row[0] for row in result.fetchall()]
                 db.commit()
@@ -480,7 +513,7 @@ def convert_observations_to_points():
                         geometry = ST_PointOnSurface(geometry)
                     WHERE id = ANY(:ids)
                       AND GeometryType(geometry) IN ('POLYGON', 'MULTIPOLYGON')
-                    RETURNING id
+                    RETURNING id, taxon_id
                 )
                 SELECT id FROM updated
             """), {'ids': ids})
@@ -567,4 +600,54 @@ def restore_observation_original_geometry(obs_id):
             return jsonify({"success": True, "obs_id": obs_id, "restored": restored})
     except Exception as e:
         print(f"Failed to restore observation geometry: {str(e)}", exc_info=True)
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@bp.route('/taxons/<string:mx_id>/history', methods=['GET'])
+@login_required
+def get_taxon_history(mx_id):
+    """Return a paginated, UI-safe history for a species."""
+    try:
+        page = max(request.args.get('page', 1, type=int), 1)
+        per_page = min(max(request.args.get('per_page', 50, type=int), 1), 100)
+        event_type = request.args.get('event_type')
+        dataset_id = request.args.get('dataset_id')
+
+        from models import AuditEvent
+
+        with Session() as db:
+            taxon = db.query(Taxon).filter_by(mx_id=mx_id).first()
+            if not taxon:
+                return jsonify({"success": False, "error": "Taxon not found"}), 404
+
+            query = db.query(AuditEvent).filter_by(taxon_id=taxon.id)
+            if event_type:
+                query = query.filter_by(event_type=event_type)
+            if dataset_id:
+                query = query.filter_by(dataset_id=dataset_id)
+            total = query.count()
+            events = query.order_by(AuditEvent.occurred_at.desc(), AuditEvent.id.desc()).offset(
+                (page - 1) * per_page
+            ).limit(per_page).all()
+
+            return jsonify({
+                "success": True,
+                "events": [{
+                    "id": event.id,
+                    "event_type": event.event_type,
+                    "occurred_at": event.occurred_at.isoformat(),
+                    "actor_name": event.actor_name,
+                    "dataset_id": event.dataset_id,
+                    "dataset_name": event.dataset_name,
+                    "details": event.details,
+                } for event in events],
+                "pagination": {
+                    "page": page,
+                    "per_page": per_page,
+                    "total": total,
+                    "pages": (total + per_page - 1) // per_page,
+                },
+            })
+    except Exception as e:
+        print(f"Failed to get taxon history: {str(e)}", exc_info=True)
         return jsonify({"success": False, "error": str(e)}), 500
