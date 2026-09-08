@@ -57,9 +57,9 @@ def login_callback():
     session.permanent = True  # Make session persistent
     
     # Store user information
-    session['user_id'] = authentication_info.get('qname')
-    session['user_name'] = authentication_info.get('name')
-    session['user_email'] = authentication_info.get('email')
+    session['user_id'] = authentication_info.get('id')
+    session['user_name'] = authentication_info.get('fullName')
+    session['user_email'] = authentication_info.get('emailAddress')
     session['user_roles'] = user_roles
     session.modified = True  # Explicitly mark session as modified to ensure cookie is set
     
