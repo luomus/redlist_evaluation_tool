@@ -506,6 +506,53 @@ async function fetchDataForMap() {
         return; 
     }
 
+    // Validate target parameter - only the active species should be included
+    try {
+        const urlObj = new URL(url);
+        const targetParam = urlObj.searchParams.get('target');
+        
+        if (targetParam) {
+            // Split target by comma to check for multiple species
+            const targets = targetParam.split(',').map(t => t.trim()).filter(t => t);
+            
+            if (targets.length > 1) {
+                // Multiple species included
+                const progressDiv = document.getElementById('lajifiProgress');
+                const progressLog = document.getElementById('lajifiProgressLog');
+                if (progressDiv) {
+                    progressDiv.style.display = 'block';
+                    progressDiv.classList.add('lajifi-progress-error');
+                }
+                if (progressLog) {
+                    progressLog.innerHTML = '';
+                    addProgressLog(`Virhe: Voit ladata vain tarkasteltavan lajin havaintoja (${datasetId}). Muiden lajien sisällyttäminen ei ole sallittua.`, 'error', progressLog);
+                }
+                return;
+            } else if (targets.length === 1 && targets[0] !== datasetId) {
+                // Different species included
+                const progressDiv = document.getElementById('lajifiProgress');
+                const progressLog = document.getElementById('lajifiProgressLog');
+                if (progressDiv) {
+                    progressDiv.style.display = 'block';
+                    progressDiv.classList.add('lajifi-progress-error');
+                }
+                if (progressLog) {
+                    progressLog.innerHTML = '';
+                    addProgressLog(`Virhe: Voit ladata vain tarkasteltavan lajin havaintoja (${datasetId}). Valitsit: ${targets[0]}`, 'error', progressLog);
+                }
+                return;
+            }
+            // If target is exactly the current datasetId, proceed (no change needed)
+        } else {
+            // No target parameter - add the current dataset ID
+            const separator = url.includes('?') ? '&' : '?';
+            url += separator + 'target=' + encodeURIComponent(datasetId);
+        }
+    } catch (err) {
+        // If URL parsing fails, try to continue anyway
+        console.warn('Error parsing URL for target validation:', err);
+    }
+
     // Append coordinateAccuracyMax parameter if set
     const accuracyMaxInput = document.getElementById('lajifiAccuracyMaxInput');
     if (accuracyMaxInput && accuracyMaxInput.value) {
