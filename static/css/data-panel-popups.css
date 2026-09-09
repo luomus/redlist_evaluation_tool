@@ -130,6 +130,48 @@
     gap: 16px;
 }
 
+/* CSV requirements info section */
+.csv-requirements-info {
+    padding: 12px;
+    background: #e8f4f8;
+    border-left: 4px solid #0288d1;
+    border-radius: 4px;
+    font-size: 13px;
+}
+
+.csv-requirements-info h3 {
+    margin: 0 0 12px 0;
+    font-size: 14px;
+    color: #01579b;
+}
+
+.csv-requirements-info p {
+    margin: 0 0 8px 0;
+}
+
+.csv-requirements-info ul {
+    margin: 0 0 8px 0;
+    padding-left: 20px;
+}
+
+.csv-requirements-info li {
+    margin-bottom: 6px;
+}
+
+.csv-requirements-info code {
+    background: #ffffff;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-family: 'Courier New', monospace;
+    color: #d32f2f;
+}
+
+.csv-requirements-info pre {
+    margin: 8px 0 0 0;
+    font-size: 11px;
+    line-height: 1.4;
+}
+
 /* Drop zone for CSV files */
 .csv-drop-zone {
     text-align: center;

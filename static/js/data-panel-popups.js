@@ -437,6 +437,25 @@ window.openDatasetTable = async function(datasetId, datasetName) {
 function openCsvUploadPopup() {
     const content = `
         <div class="csv-container">
+            <div class="csv-requirements-info">
+                <h3>CSV-tiedoston vaatimukset</h3>
+                <p><strong>Koordinaatit:</strong> Tiedostossa tulee olla joko:</p>
+                <ul>
+                    <li><strong>WKT-geometria</strong> sarakkeessa nimeltään: <code>wkt</code>, <code>geometry</code>, <code>geom</code>, <code>wgs84 wkt</code>, <code>wgs84wkt</code> tai <code>geometry_wkt</code></li>
+                    <li><strong>TAI Leveysaste ja Pituusaste</strong> sarakkeissa, jos havainnot vain pisteitä. Tuetut sarakkeiden nimet:
+                        <ul>
+                            <li>Leveysaste: <code>lat</code>, <code>latitude</code>, <code>y</code></li>
+                            <li>Pituusaste: <code>lon</code>, <code>lng</code>, <code>longitude</code>, <code>x</code></li>
+                        </ul>
+                    </li>
+                </ul>
+                <p><strong>Muoto:</strong> CSV tai TSV (erotin tunnistetaan automaattisesti)</p>
+                <p><strong>Koodaus:</strong> UTF-8</p>
+                <p><strong>Esimerkki:</strong></p>
+                <pre style="background-color: #f5f5f5; padding: 8px; border-radius: 4px; font-size: 12px; overflow-x: auto;">lat,lon,nimi,paivays
+60.1699,24.9384,Havainto 1,2024-01-15
+60.1700,24.9385,Havainto 2,2024-01-16</pre>
+            </div>
             <div class="csv-drop-zone" id="dropZone" ondrop="handleCsvDrop(event)" ondragover="event.preventDefault();event.target.classList.add('csv-drop-zone--hover')" ondragleave="event.target.classList.remove('csv-drop-zone--hover')">
                 <div class="csv-drop-zone-icon">📤</div>
                 <p class="csv-drop-zone-text-main">Vedä ja pudota CSV-tiedosto tähän</p>
@@ -524,7 +543,7 @@ function openLajifiPopup(mxCode) {
                 <div class="lajifi-label-group" style="margin-top: 16px;">
                     <label class="lajifi-label">
                         Yksilömäärä
-                        <span class="lajifi-label-hint"> - Jos et halua mukaan nollahavaintoja, aseta määräksi vähintään 1. (Valinnainen)</span>
+                        <span class="lajifi-label-hint"> - Oletus on väh. 1 (ei nollahavaintoja mukaan). (Valinnainen)</span>
                     </label>
                     <input type="number" id="lajifiIndividualCountMinInput" placeholder="esim. 0" class="lajifi-input" min="0" step="1">
                 </div>
