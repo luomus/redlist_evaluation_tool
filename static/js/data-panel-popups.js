@@ -24,6 +24,21 @@ function toggleLajifiFilters() {
 }
 
 /**
+ * Clears all Laji.fi filter inputs
+ */
+function clearLajifiFilters() {
+    document.getElementById('lajifiAccuracyMaxInput').value = '';
+    document.getElementById('lajifiTimeStartInput').value = '';
+    document.getElementById('lajifiTimeEndInput').value = '';
+    document.getElementById('lajifiIndividualCountMinInput').value = '';
+    
+    // Clear all quality checkboxes
+    document.querySelectorAll('.lajifi-quality-checkbox').forEach(checkbox => {
+        checkbox.checked = false;
+    });
+}
+
+/**
  * Creates a modal popup window with a title, content, and close button
  * @param {string} title - The title of the popup
  * @param {string} content - The HTML content of the popup body
@@ -551,7 +566,10 @@ function openLajifiPopup(mxCode) {
                         </div>
                     </div>
                 </div>
-                <button onclick="applyVirvaFilters()" class="btn-lajifi-fetch" style="width: 100%; background-color: #2c5aa0; margin-top: 16px;">Käytä VIRVA-rajauksia</button>
+                <div style="display: flex; gap: 10px; margin-top: 16px;">
+                    <button onclick="applyVirvaFilters()" class="btn-lajifi-fetch" style="flex: 1; background-color: #2c5aa0;">Käytä VIRVA-rajauksia</button>
+                    <button onclick="clearLajifiFilters()" class="btn-lajifi-fetch" style="flex: 1; background-color: #666;">Tyhjennä suodattimet</button>
+                </div>
             </div>
             <button onclick="fetchDataForMap()" class="btn-lajifi-fetch">Hae aineistoa</button>
             <div id="lajifiProgress">
