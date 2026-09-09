@@ -563,6 +563,23 @@ async function fetchDataForMap() {
         }
     }
 
+    // Append time parameter if set (using HTML5 date input which returns YYYY-MM-DD format)
+    const timeStartInput = document.getElementById('lajifiTimeStartInput');
+    const timeEndInput = document.getElementById('lajifiTimeEndInput');
+    const startDate = timeStartInput ? timeStartInput.value : '';
+    const endDate = timeEndInput ? timeEndInput.value : '';
+    
+    if (startDate || endDate) {
+        const separator = url.includes('?') ? '&' : '?';
+        if (startDate && endDate) {
+            url += separator + 'time=' + encodeURIComponent(startDate + '/' + endDate);
+        } else if (startDate) {
+            url += separator + 'time=' + encodeURIComponent(startDate + '/');
+        } else {
+            url += separator + 'time=' + encodeURIComponent('/' + endDate);
+        }
+    }
+
     const progressDiv = document.getElementById('lajifiProgress');
     const progressLog = document.getElementById('lajifiProgressLog');
     if (progressDiv) {

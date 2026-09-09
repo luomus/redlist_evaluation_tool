@@ -472,6 +472,15 @@ function openLajifiPopup(mxCode) {
                 </label>
                 <input type="number" id="lajifiAccuracyMaxInput" placeholder="esim. 10000" class="lajifi-input" min="0" step="100">
             </div>
+            <div class="lajifi-label-group">
+                <label class="lajifi-label">
+                    Havaintoaika
+                </label>
+                <div style="display: flex; gap: 10px;">
+                    <input type="date" id="lajifiTimeStartInput" class="lajifi-input" style="flex: 1;">
+                    <input type="date" id="lajifiTimeEndInput" class="lajifi-input" style="flex: 1;">
+                </div>
+            </div>
             <button onclick="fetchDataForMap()" class="btn-lajifi-fetch">Hae aineistoa</button>
             <div id="lajifiProgress">
                 <p class="lajifi-progress-label">Edistyminen:</p>
