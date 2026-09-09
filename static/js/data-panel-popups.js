@@ -4,6 +4,26 @@
 let popupRequestId = 0;
 
 /**
+ * Toggles the Laji.fi filters accordion visibility
+ */
+function toggleLajifiFilters() {
+    const accordion = document.getElementById('lajifiFiltersAccordion');
+    const toggleBtn = document.querySelector('.lajifi-accordion-toggle');
+    
+    if (accordion) {
+        const isOpen = accordion.style.display !== 'none';
+        accordion.style.display = isOpen ? 'none' : 'block';
+        
+        if (toggleBtn) {
+            const span = toggleBtn.querySelector('span');
+            if (span) {
+                span.textContent = isOpen ? '⊕ Lisäsuodattimet' : '⊖ Lisäsuodattimet';
+            }
+        }
+    }
+}
+
+/**
  * Creates a modal popup window with a title, content, and close button
  * @param {string} title - The title of the popup
  * @param {string} content - The HTML content of the popup body
@@ -465,21 +485,73 @@ function openLajifiPopup(mxCode) {
                 </label>
                 <input type="text" id="lajifiUrlInput" placeholder="https://laji.fi/observation/list?..." class="lajifi-input" value="${defaultUrl}">
             </div>
-            <div class="lajifi-label-group">
-                <label class="lajifi-label">
-                    Koordinaattien maksimitarkkuus
-                    <span class="lajifi-label-hint"> - Jätä tyhjäksi, jos et halua suodattaa</span>
-                </label>
-                <input type="number" id="lajifiAccuracyMaxInput" placeholder="esim. 10000" class="lajifi-input" min="0" step="100">
-            </div>
-            <div class="lajifi-label-group">
-                <label class="lajifi-label">
-                    Havaintoaika
-                </label>
-                <div style="display: flex; gap: 10px;">
-                    <input type="date" id="lajifiTimeStartInput" class="lajifi-input" style="flex: 1;">
-                    <input type="date" id="lajifiTimeEndInput" class="lajifi-input" style="flex: 1;">
+            <button onclick="toggleLajifiFilters()" class="lajifi-accordion-toggle">
+                <span>⊕ Lisäsuodattimet</span>
+            </button>
+            <div id="lajifiFiltersAccordion" class="lajifi-accordion-content" style="display: none;">
+                <div class="lajifi-label-group">
+                    <label class="lajifi-label">
+                        Koordinaattien maksimitarkkuus
+                        <span class="lajifi-label-hint"> - (Valinnainen)</span>
+                    </label>
+                    <input type="number" id="lajifiAccuracyMaxInput" placeholder="esim. 10000" class="lajifi-input" min="0" step="100">
                 </div>
+                <div class="lajifi-label-group" style="margin-top: 16px;">
+                    <label class="lajifi-label">
+                        Havaintoaika
+                        <span class="lajifi-label-hint"> - (Valinnainen)</span>
+                    </label>
+                    <div style="display: flex; gap: 10px;">
+                        <input type="date" id="lajifiTimeStartInput" class="lajifi-input" style="flex: 1;">
+                        <input type="date" id="lajifiTimeEndInput" class="lajifi-input" style="flex: 1;">
+                    </div>
+                </div>
+                <div class="lajifi-label-group" style="margin-top: 16px;">
+                    <label class="lajifi-label">
+                        Yksilömäärä
+                        <span class="lajifi-label-hint"> - Jos et halua mukaan nollahavaintoja, aseta määräksi vähintään 1. (Valinnainen)</span>
+                    </label>
+                    <input type="number" id="lajifiIndividualCountMinInput" placeholder="esim. 0" class="lajifi-input" min="0" step="1">
+                </div>
+                <div class="lajifi-label-group" style="margin-top: 16px;">
+                    <label class="lajifi-label">
+                        Laadun tarkistus (valitse laadut)
+                        <span class="lajifi-label-hint"> - (Valinnainen)</span>
+                    </label>
+                    <div style="margin-left: 10px; margin-top: 10px;">
+                        <div style="margin-bottom: 16px; padding: 12px; background-color: #f0f5fa; border-radius: 4px;">
+                            <strong style="font-size: 0.9em; display: block; margin-bottom: 8px;">Ammattilaisaineistot:</strong>
+                            <div style="display: flex; flex-wrap: wrap; gap: 12px; margin-top: 8px;">
+                                <label><input type="checkbox" class="lajifi-quality-checkbox" data-level="PROFESSIONAL" value="EXPERT_VERIFIED"> Asiantuntijan varmistama</label>
+                                <label><input type="checkbox" class="lajifi-quality-checkbox" data-level="PROFESSIONAL" value="COMMUNITY_VERIFIED"> Yhteisön varmistama</label>
+                                <label><input type="checkbox" class="lajifi-quality-checkbox" data-level="PROFESSIONAL" value="NEUTRAL"> Ei arvioitu</label>
+                                <label><input type="checkbox" class="lajifi-quality-checkbox" data-level="PROFESSIONAL" value="UNCERTAIN"> Epävarma</label>
+                                <label><input type="checkbox" class="lajifi-quality-checkbox" data-level="PROFESSIONAL" value="ERRONEOUS"> Virheellinen</label>
+                            </div>
+                        </div>
+                        <div style="margin-bottom: 16px; padding: 12px; background-color: #f5f0fa; border-radius: 4px;">
+                            <strong style="font-size: 0.9em; display: block; margin-bottom: 8px;">Asiantuntevat harrastajat:</strong>
+                            <div style="display: flex; flex-wrap: wrap; gap: 12px; margin-top: 8px;">
+                                <label><input type="checkbox" class="lajifi-quality-checkbox" data-level="HOBBYIST" value="EXPERT_VERIFIED"> Asiantuntijan varmistama</label>
+                                <label><input type="checkbox" class="lajifi-quality-checkbox" data-level="HOBBYIST" value="COMMUNITY_VERIFIED"> Yhteisön varmistama</label>
+                                <label><input type="checkbox" class="lajifi-quality-checkbox" data-level="HOBBYIST" value="NEUTRAL"> Ei arvioitu</label>
+                                <label><input type="checkbox" class="lajifi-quality-checkbox" data-level="HOBBYIST" value="UNCERTAIN"> Epävarma</label>
+                                <label><input type="checkbox" class="lajifi-quality-checkbox" data-level="HOBBYIST" value="ERRONEOUS"> Virheellinen</label>
+                            </div>
+                        </div>
+                        <div style="margin-bottom: 0; padding: 12px; background-color: #faf5f0; border-radius: 4px;">
+                            <strong style="font-size: 0.9em; display: block; margin-bottom: 8px;">Kansalaishavainnot:</strong>
+                            <div style="display: flex; flex-wrap: wrap; gap: 12px; margin-top: 8px;">
+                                <label><input type="checkbox" class="lajifi-quality-checkbox" data-level="AMATEUR" value="EXPERT_VERIFIED"> Asiantuntijan varmistama</label>
+                                <label><input type="checkbox" class="lajifi-quality-checkbox" data-level="AMATEUR" value="COMMUNITY_VERIFIED"> Yhteisön varmistama</label>
+                                <label><input type="checkbox" class="lajifi-quality-checkbox" data-level="AMATEUR" value="NEUTRAL"> Ei arvioitu</label>
+                                <label><input type="checkbox" class="lajifi-quality-checkbox" data-level="AMATEUR" value="UNCERTAIN"> Epävarma</label>
+                                <label><input type="checkbox" class="lajifi-quality-checkbox" data-level="AMATEUR" value="ERRONEOUS"> Virheellinen</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <button onclick="applyVirvaFilters()" class="btn-lajifi-fetch" style="width: 100%; background-color: #2c5aa0; margin-top: 16px;">Käytä VIRVA-rajauksia</button>
             </div>
             <button onclick="fetchDataForMap()" class="btn-lajifi-fetch">Hae aineistoa</button>
             <div id="lajifiProgress">

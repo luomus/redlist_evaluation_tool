@@ -260,7 +260,7 @@
 .lajifi-container {
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: 0px;
 }
 
 .lajifi-label-group {
@@ -312,6 +312,7 @@
 
 .btn-lajifi-fetch {
     background: #007bff;
+    margin-top: 16px;
 }
 
 .btn-lajifi-fetch:hover {
@@ -324,6 +325,43 @@
 
 .btn-lajifi-save:hover {
     background: #138496;
+}
+
+/* Laji.fi accordion */
+.lajifi-accordion-toggle {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid #ddd;
+    border-radius: 4px 4px 0 0;
+    background-color: #f8f9fa;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    color: #333;
+    text-align: left;
+    transition: background-color 0.2s ease;
+    margin: 10px 0 0 0;
+}
+
+.lajifi-accordion-toggle:hover {
+    background-color: #e9ecef;
+}
+
+.lajifi-accordion-toggle span {
+    display: inline-block;
+}
+
+.lajifi-accordion-content {
+    padding: 10px 0;
+    border: 1px solid #ddd;
+    border-top: none;
+    border-radius: 0 0 4px 4px;
+    margin-bottom: 10px;
+    padding-left: 15px;
+    padding-right: 15px;
+    padding-top: 15px;
+    padding-bottom: 15px;
+    background-color: #f8f9fa;
 }
 
 /* Laji.fi progress section */

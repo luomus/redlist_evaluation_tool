@@ -487,6 +487,89 @@ function showMapError(message) {
     }
 }
 
+// Apply VIRVA filters - sets predefined filter values and adds VIRVA-specific parameters
+function applyVirvaFilters() {
+    // Set UI filter values (these will be added to URL by fetchDataForMap)
+    const timeStartInput = document.getElementById('lajifiTimeStartInput');
+    const timeEndInput = document.getElementById('lajifiTimeEndInput');
+    const accuracyMaxInput = document.getElementById('lajifiAccuracyMaxInput');
+    const individualCountMinInput = document.getElementById('lajifiIndividualCountMinInput');
+    
+    if (timeStartInput) timeStartInput.value = '1990-01-01';
+    if (timeEndInput) timeEndInput.value = '';
+    if (accuracyMaxInput) accuracyMaxInput.value = '1000';
+    if (individualCountMinInput) individualCountMinInput.value = '0';
+    
+    // Set VIRVA quality filter checkboxes
+    // VIRVA defaults: PROFESSIONAL: EXPERT_VERIFIED,COMMUNITY_VERIFIED,NEUTRAL,UNCERTAIN
+    //                 HOBBYIST: EXPERT_VERIFIED,COMMUNITY_VERIFIED,NEUTRAL
+    //                 AMATEUR: EXPERT_VERIFIED,COMMUNITY_VERIFIED
+    const virvaQualitySelection = {
+        'PROFESSIONAL': ['EXPERT_VERIFIED', 'COMMUNITY_VERIFIED', 'NEUTRAL', 'UNCERTAIN'],
+        'HOBBYIST': ['EXPERT_VERIFIED', 'COMMUNITY_VERIFIED', 'NEUTRAL'],
+        'AMATEUR': ['EXPERT_VERIFIED', 'COMMUNITY_VERIFIED']
+    };
+    
+    // First uncheck all quality checkboxes
+    document.querySelectorAll('.lajifi-quality-checkbox').forEach(checkbox => {
+        checkbox.checked = false;
+    });
+    
+    // Then check the VIRVA selection
+    Object.entries(virvaQualitySelection).forEach(([level, values]) => {
+        values.forEach(value => {
+            const checkbox = document.querySelector(
+                `.lajifi-quality-checkbox[data-level="${level}"][value="${value}"]`
+            );
+            if (checkbox) checkbox.checked = true;
+        });
+    });
+    
+    // Get current URL and parse it
+    let url = (document.getElementById('lajifiUrlInput') || {}).value || '';
+    
+    if (!url.trim()) {
+        const progressDiv = document.getElementById('lajifiProgress');
+        const progressLog = document.getElementById('lajifiProgressLog');
+        if (progressDiv) {
+            progressDiv.style.display = 'block';
+            progressDiv.classList.add('lajifi-progress-error');
+        }
+        if (progressLog) {
+            progressLog.innerHTML = '';
+            addProgressLog('Virhe: Syötä URL-osoite', 'error', progressLog);
+        }
+        return;
+    }
+    
+    // Remove existing VIRVA parameters that will be overridden
+    try {
+        const urlObj = new URL(url);
+        urlObj.searchParams.delete('time');
+        urlObj.searchParams.delete('individualCountMin');
+        urlObj.searchParams.delete('coordinateAccuracyMax');
+        urlObj.searchParams.delete('collectionAndRecordQuality');
+        url = urlObj.toString();
+    } catch (err) {
+        console.warn('Error parsing URL for VIRVA filter cleanup:', err);
+    }
+    
+    // Update URL input to show what will be used
+    const urlInput = document.getElementById('lajifiUrlInput');
+    if (urlInput) urlInput.value = url;
+    
+    // Show success message that filters have been applied
+    const progressDiv = document.getElementById('lajifiProgress');
+    const progressLog = document.getElementById('lajifiProgressLog');
+    if (progressDiv) {
+        progressDiv.style.display = 'block';
+        progressDiv.classList.remove('lajifi-progress-error');
+    }
+    if (progressLog) {
+        progressLog.innerHTML = '';
+        addProgressLog('✓ VIRVA-rajaukset asetettu. Klikkaa "Hae aineistoa" -nappia haun aloittamiseksi.', 'success', progressLog);
+    }
+}
 
 
 // Fetch data from Laji.fi URL
@@ -570,6 +653,22 @@ async function fetchDataForMap() {
     const endDate = timeEndInput ? timeEndInput.value : '';
     
     if (startDate || endDate) {
+        // Check if URL already has a time parameter
+        const urlObj = new URL(url);
+        const existingTimeParam = urlObj.searchParams.get('time');
+        
+        if (existingTimeParam) {
+            // Show warning that filter will override URL dates
+            const progressLog = document.getElementById('lajifiProgressLog');
+            if (progressLog) {
+                addProgressLog('Varoitus: Kaksi asetettua päivämääräfiltteriä. Myös liitetyssä URL-osoitteessa on päivämäärärajaus, joita ei huomioida.', 'warning', progressLog);
+            }
+            // Remove existing time parameter
+            urlObj.searchParams.delete('time');
+            url = urlObj.toString();
+        }
+        
+        // Append new time parameter from filter
         const separator = url.includes('?') ? '&' : '?';
         if (startDate && endDate) {
             url += separator + 'time=' + encodeURIComponent(startDate + '/' + endDate);
@@ -577,6 +676,45 @@ async function fetchDataForMap() {
             url += separator + 'time=' + encodeURIComponent(startDate + '/');
         } else {
             url += separator + 'time=' + encodeURIComponent('/' + endDate);
+        }
+    }
+
+    // Append individualCountMin parameter if set
+    const individualCountMinInput = document.getElementById('lajifiIndividualCountMinInput');
+    if (individualCountMinInput && individualCountMinInput.value) {
+        const individualCountMin = parseInt(individualCountMinInput.value, 10);
+        if (!isNaN(individualCountMin) && individualCountMin >= 0) {
+            const separator = url.includes('?') ? '&' : '?';
+            url += separator + 'individualCountMin=' + individualCountMin;
+        }
+    }
+
+    // Append collectionAndRecordQuality parameter if any checkboxes are checked
+    const qualityCheckboxes = document.querySelectorAll('.lajifi-quality-checkbox:checked');
+    if (qualityCheckboxes.length > 0) {
+        const qualityLevels = {};
+        
+        // Group selected values by level
+        qualityCheckboxes.forEach(checkbox => {
+            const level = checkbox.getAttribute('data-level');
+            const value = checkbox.value;
+            if (!qualityLevels[level]) {
+                qualityLevels[level] = [];
+            }
+            qualityLevels[level].push(value);
+        });
+        
+        // Build the collectionAndRecordQuality parameter
+        const qualityParts = [];
+        ['PROFESSIONAL', 'HOBBYIST', 'AMATEUR'].forEach(level => {
+            if (qualityLevels[level] && qualityLevels[level].length > 0) {
+                qualityParts.push(level + ':' + qualityLevels[level].join(','));
+            }
+        });
+        
+        if (qualityParts.length > 0) {
+            const separator = url.includes('?') ? '&' : '?';
+            url += separator + 'collectionAndRecordQuality=' + encodeURIComponent(qualityParts.join(';'));
         }
     }
 
