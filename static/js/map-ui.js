@@ -6,7 +6,7 @@
 // ─────────────────────────────────────────────────────────────────────────
 
 /**
- * Polygon selector and bulk enable/disable controls
+ * Polygon selector and bulk observation controls
  * Adds a small UI control to start polygon selection, finish/cancel drawing
  * and buttons to enable/disable all features at once. Does not require
  * external drawing libraries.
@@ -78,7 +78,7 @@ function setupPolygonSelector(map, geometryLayer) {
 
         // Show popup with actions
         const center = selectionPolygon.getBounds().getCenter();
-        const popupHtml = `<div class="polygon-actions"><button id="disableSelected">Poista valitut käytöstä</button> <button id="enableSelected">Ota valitut käyttöön</button> <button id="clearSelection">Tyhjennä valinta</button></div>`;
+        const popupHtml = `<div class="polygon-actions"><button id="disableSelected">Poista valitut käytöstä</button> <button id="enableSelected">Ota valitut käyttöön</button> <button id="convertSelectedPolygons">Muunna alueet pisteiksi</button> <button id="clearSelection">Tyhjennä valinta</button></div>`;
         selectionPopup = L.popup({ maxWidth: 260 }).setLatLng(center).setContent(popupHtml).openOn(map);
 
         // If the user closes the popup (clicks X or outside), remove the polygon
@@ -98,9 +98,11 @@ function setupPolygonSelector(map, geometryLayer) {
         setTimeout(() => {
             const disableBtn = document.getElementById('disableSelected');
             const enableBtn = document.getElementById('enableSelected');
+            const convertBtn = document.getElementById('convertSelectedPolygons');
             const clearBtn = document.getElementById('clearSelection');
             if (disableBtn) disableBtn.addEventListener('click', () => applyExcludeToSelection(true));
             if (enableBtn) enableBtn.addEventListener('click', () => applyExcludeToSelection(false));
+            if (convertBtn) convertBtn.addEventListener('click', convertSelectedPolygonsToPoints);
             if (clearBtn) clearBtn.addEventListener('click', () => { map.closePopup(); if (selectionPolygon) { map.removeLayer(selectionPolygon); selectionPolygon = null; } });
         }, 50);
     }
@@ -202,6 +204,53 @@ function setupPolygonSelector(map, geometryLayer) {
         } catch (e) {
             console.error('Batch exclude encountered an error', e);
             window.mapDialogs.notify('Valinnan käsittely epäonnistui: ' + (e && e.message));
+        }
+    }
+
+    async function convertSelectedPolygonsToPoints() {
+        const polygonIds = new Set();
+        getLayersInSelection().forEach(function(layer) {
+            const props = (layer.feature && layer.feature.properties) || layer.feature || {};
+            const id = props._db_id || props.db_id;
+            const geometry = layer.feature && layer.feature.geometry;
+            if (id && geometry && (geometry.type === 'Polygon' || geometry.type === 'MultiPolygon')) {
+                polygonIds.add(id);
+            }
+        });
+
+        if (!polygonIds.size) {
+            window.mapDialogs.notify('Valinnan sisällä ei löytynyt aluemaisia havaintoja.');
+            return;
+        }
+        const ids = Array.from(polygonIds);
+        if (!await window.mapDialogs.confirm(`Haluatko muuntaa ${ids.length} suorakaidetta keskipisteiksi?`)) return;
+
+        try {
+            const response = await fetch('/api/observations/convert-polygons-to-points', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ids: ids })
+            });
+            const result = await response.json().catch(function() { return {}; });
+            if (!response.ok || !result.success) {
+                throw new Error(result.error || response.statusText);
+            }
+
+            map.closePopup();
+            if (selectionPolygon) {
+                map.removeLayer(selectionPolygon);
+                selectionPolygon = null;
+            }
+            if (typeof window.reloadMapObservations === 'function') {
+                await window.reloadMapObservations();
+            }
+            if (typeof window.markCalculationOutdated === 'function') {
+                window.markCalculationOutdated('all');
+            }
+            window.mapDialogs.notify(`Muunnettu ${result.processed} suorakaidetta niiden keskipisteiksi.`);
+        } catch (e) {
+            console.error('Bulk polygon conversion failed', e);
+            window.mapDialogs.notify('Polygonien muunto epäonnistui: ' + e.message);
         }
     }
 }
