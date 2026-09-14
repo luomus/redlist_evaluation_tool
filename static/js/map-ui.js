@@ -25,6 +25,7 @@ function setupPolygonSelector(map, geometryLayer) {
         const div = L.DomUtil.create('div', 'leaflet-bar polygon-selector-control');
         div.innerHTML = `
             <button id="polySelectBtn" title="Aloita aluevalinta">🔺 Valitse useita aluerajauksella</button>
+            <button id="hideZeroObservationsBtn" title="Piilota havainnot, joiden lukumäärä on alle 1">piilota nollahavainnot</button>
         `;
         L.DomEvent.disableClickPropagation(div);
         return div;
@@ -159,6 +160,34 @@ function setupPolygonSelector(map, geometryLayer) {
         map.on('click', onMapClick);
         map.on('dblclick', onMapDblClick);
         try { map.dragging.disable(); if (map.doubleClickZoom) map.doubleClickZoom.disable(); } catch (e) { /* ignore */ }
+    });
+
+    document.getElementById('hideZeroObservationsBtn').addEventListener('click', async () => {
+        const zeroObservationIds = new Set();
+        geometryLayer.eachLayer(function(layer) {
+            const properties = (layer.feature && layer.feature.properties) || layer.feature || {};
+            const rawIndividualCount = properties['unit.interpretations.individualCount'];
+            const individualCount = Number(rawIndividualCount);
+            const id = properties._db_id || properties.db_id;
+            const hasIndividualCount = rawIndividualCount !== null && rawIndividualCount !== undefined && String(rawIndividualCount).trim() !== '';
+            if (id && hasIndividualCount && Number.isFinite(individualCount) && individualCount < 1) {
+                zeroObservationIds.add(id);
+            }
+        });
+
+        if (!zeroObservationIds.size) {
+            window.mapDialogs.notify('Piilotettavia nollahavaintoja ei löytynyt.');
+            return;
+        }
+        if (!await window.mapDialogs.confirm(`Haluatko piilottaa ${zeroObservationIds.size} nollahavaintoa?`)) return;
+
+        try {
+            const result = await window.setExcludeBatch(Array.from(zeroObservationIds), true);
+            window.mapDialogs.notify(`Piilotettu ${result.processed} nollahavaintoa (${result.failed} epäonnistui).`);
+        } catch (e) {
+            console.error('Hiding zero observations failed', e);
+            window.mapDialogs.notify('Nollahavaintojen piilottaminen epäonnistui: ' + (e && e.message));
+        }
     });
 
     function getLayersInSelection() {
