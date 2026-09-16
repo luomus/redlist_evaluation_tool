@@ -28,6 +28,7 @@ services:
       - DATABASE_URL=postgresql://redlisttool:redlisttool@db:5432/redlisttool
       - SECRET_KEY=${SECRET_KEY:-change-me-in-production}
       - USE_AUTHENTICATION=${USE_AUTHENTICATION:-false}
+      - SHARED_SECRET=${SHARED_SECRET:-}
       - MML_API_KEY=${MML_API_KEY:-}
       - CARTO_BASEMAP_API_KEY=${CARTO_BASEMAP_API_KEY:-}
       - LAJI_API_BASE_URL=${LAJI_API_BASE_URL:-}

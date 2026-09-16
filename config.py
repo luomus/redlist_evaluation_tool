@@ -17,6 +17,7 @@ MAX_CONTENT_LENGTH = 100 * 1024 * 1024  # 100 MB
 
 # ===== AUTHENTICATION =====
 USE_AUTHENTICATION = os.getenv('USE_AUTHENTICATION', 'true').lower() == 'true'
+SHARED_SECRET = os.getenv("SHARED_SECRET")
 
 # LajiAuth – only validated when USE_AUTHENTICATION=true
 TARGET = os.getenv("TARGET")
@@ -29,6 +30,8 @@ if USE_AUTHENTICATION:
         raise RuntimeError("TARGET must be set when USE_AUTHENTICATION=true")
     if not LAJIAUTH_URL:
         raise RuntimeError("LAJIAUTH_URL must be set when USE_AUTHENTICATION=true")
+    if not SHARED_SECRET:
+        raise RuntimeError("SHARED_SECRET must be set when USE_AUTHENTICATION=true")
 
 # ===== LAJI API =====
 LAJI_API_ACCESS_TOKEN = os.getenv("LAJI_API_ACCESS_TOKEN", "")

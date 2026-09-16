@@ -10,6 +10,7 @@ Create a `.env` file in the project root (or set environment variables). Require
 - `TARGET` (required for login flow): target (system identifier) parameter sent to laji-auth login
 - `LAJIAUTH_URL` (optional): base URL for laji-auth (default: https://fmnh-ws-test-24.it.helsinki.fi/laji-auth/)
 - `SECRET_KEY` (required): Flask secret key used to sign sessions
+- `SHARED_SECRET` (required when `USE_AUTHENTICATION=true`): Base64-encoded AES-GCM key shared with the IUCN editor for decrypting map access tokens
 - `SECRET_TIMEOUT_PERIOD` (optional): request timeout seconds when contacting laji-auth (default: 10)
 
 The application will load variables from `.env` automatically. Do not commit secrets.
