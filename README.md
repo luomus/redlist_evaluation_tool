@@ -35,7 +35,7 @@ On first start the entrypoint automatically:
 
 All steps are idempotent — safe to run multiple times.
 
-Access the app at http://localhost:5000/simple
+Access the app at `http://localhost:5000/` for local development. In production, open a species map through the IUCN editor.
 
 To stop:
 ```bash
