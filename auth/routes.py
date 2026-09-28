@@ -1,28 +1,37 @@
 """Authentication routes for LajiAuth integration."""
-from flask import Blueprint, session, redirect, request, url_for, jsonify
-from config import LAJIAUTH_URL, TARGET, ALLOWED_ROLES, SECRET_TIMEOUT_PERIOD, LAJI_API_BASE_URL, LAJI_API_ACCESS_TOKEN
-from urllib.parse import urlencode
+from flask import Blueprint, session, redirect, request, url_for, jsonify, current_app
+from config import LAJIAUTH_URL, TARGET, ALLOWED_ROLES, LAJI_API_BASE_URL, LAJI_API_ACCESS_TOKEN
+from urllib.parse import urlencode, urlparse
 import requests
 import json
 
 auth_bp = Blueprint('auth', __name__)
+
+
+def _safe_next(url):
+    """Return url if it is a same-site relative path, otherwise '/' (prevents open redirects)."""
+    if not url or not url.startswith('/') or url.startswith('//') or '\\' in url:
+        return '/'
+    parsed = urlparse(url)
+    if parsed.scheme or parsed.netloc:
+        return '/'
+    return url
+
 
 @auth_bp.route('/login', methods=['GET'])
 def login():
     """
     Redirect to LajiAuth login endpoint.
     
-    After successful authentication, LajiAuth redirects back to /auth/callback
-    with a token in the query string.
+    After successful authentication, LajiAuth redirects back to the return URL
+    registered for TARGET (should be /login/callback) with `token` and the unchanged `next`.
     """
 
-    next_url = request.args.get('next') or '/'
-    session['post_login_redirect'] = next_url
-    provider_next = f"{request.host_url.rstrip('/')}{next_url}"
+    next_url = _safe_next(request.args.get('next'))
 
     params = {
         'target': TARGET,
-        'next': provider_next,
+        'next': next_url,
         'redirectMethod': 'GET',
     }
 
@@ -33,9 +42,8 @@ def login():
 @auth_bp.route("/login/callback", methods=["GET", "POST"])
 def login_callback():
     """Handle callback from laji-auth system"""
-    print("Received login callback from LajiAuth")
     token = request.args.get('token') or request.form.get('token')
-    next_url = request.args.get('next') or request.form.get('next')
+    next_url = _safe_next(request.args.get('next') or request.form.get('next'))
     if not token:
         return jsonify({"success": False, "error": "No token provided"}), 400
     
@@ -53,14 +61,12 @@ def login_callback():
         return jsonify({"success": False, "error": f"Access denied. Your roles {user_roles} are not authorized to use this application. Contact helpdesk@laji.fi"}), 403
     
     # Store token in session
-    session['token'] = token
+    session['lajiauth_token'] = token
     session.permanent = True  # Make session persistent
     
     # Store user information
-    session['user_id'] = authentication_info.get('id')
-    session['user_name'] = authentication_info.get('fullName')
-    session['user_email'] = authentication_info.get('emailAddress')
-    session['user_roles'] = user_roles
+    session['lajiauth_user_id'] = authentication_info.get('id')
+    session['lajiauth_username'] = authentication_info.get('fullName')
     session.modified = True  # Explicitly mark session as modified to ensure cookie is set
     
     return redirect(next_url)
@@ -76,15 +82,13 @@ def _get_authentication_info(token):
         headers = {'accept':'application/json', 'Api-Version': '1', 'Person-Token': token, 'Authorization': f'Bearer {LAJI_API_ACCESS_TOKEN}', 'Accept-Language': 'fi'}
         response = requests.get(url, headers=headers)
         if response.status_code != 200:
-            print(f"Failed to get authentication info: {response.status_code} {response.text}")
+            print(f"Failed to get authentication info from {url}: {response.status_code} {response.text}")
             return None
         else:
             content = json.loads(response.content.decode('utf-8'))
             return content
     except Exception as e:
-        # Use app.logger if available; fallback to print for now
-        import logging
-        logging.error(f"Failed to get authentication info: {str(e)}", exc_info=True)
+        print(f"Failed to get authentication info: {str(e)}")
         return None
 
 
@@ -92,7 +96,7 @@ def _get_authentication_info(token):
 def logout():
     """Clear session and redirect to login"""
     # Delete token from laji-auth if it exists
-    token = session.get('token')
+    token = session.get('lajiauth_token')
     if token:
         _delete_authentication_token(token)
     

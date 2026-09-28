@@ -17,8 +17,8 @@ def record_audit_event(
     details=None,
 ):
     """Record an event in the audit trail."""
-    actor_id = session.get('user_id') or 'local-user'
-    actor_name = session.get('user_name') or actor_id
+    actor_id = session.get('lajiauth_user_id') or 'local-user'
+    actor_name = session.get('lajiauth_username') or actor_id
 
     event = AuditEvent(
         taxon_id=taxon_id,

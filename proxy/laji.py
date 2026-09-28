@@ -35,7 +35,7 @@ def laji_proxy():
         if not laji_api_access_token:
             return jsonify({"success": False, "error": "LAJI_API_ACCESS_TOKEN not configured on server"}), 500
         
-        person_token = session.get('token')
+        person_token = session.get('lajiauth_token')
         if not person_token:
             return jsonify({"success": False, "error": "Person token missing – please log in again"}), 401
         

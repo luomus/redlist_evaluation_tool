@@ -6,8 +6,9 @@ from proxy.mml import bp as proxy_mml_bp
 from proxy.laji import bp as proxy_laji_bp
 from api.observations import bp as api_observations_bp
 from api.spatial import bp as api_spatial_bp
-from utils.helpers import get_taxon_by_name
 from models import Taxon
+from flask import request, session, redirect, url_for
+from auth.token import extract_token, check_user
 
 app = Flask(__name__)
 app.debug = DEBUG
@@ -30,6 +31,9 @@ with app.app_context():
 @app.route('/map/<string:mx_id>')
 @login_required
 def taxon_map(mx_id):
+
+    # check_user(request.args.get('iucn_user_id'), session.get('lajiauth_user_id')) TODO: uncomment when using production database
+
     with Session() as db:
         taxon = db.query(Taxon).filter_by(mx_id=mx_id).first()
     if not taxon:
@@ -40,13 +44,20 @@ _frontpage_cache = None
 
 @app.route('/')
 def frontpage():
-    global _frontpage_cache
-    if _frontpage_cache is None:
-        from itertools import groupby
-        with Session() as db:
-            taxons = db.query(Taxon).order_by(Taxon.name).all()
-        _frontpage_cache = [(letter, list(group)) for letter, group in groupby(taxons, key=lambda t: t.name[0].upper())]
-    return render_template('index.html', grouped=_frontpage_cache)
+    token = request.args.get('token')
+
+    if not token:
+        raise ValueError("No token provided")
+    
+    claims = extract_token(token)
+
+    session['iucn_user_id'] = claims['user']
+    session.modified = True
+
+    mx_id = claims['taxon']
+
+    return redirect(url_for('taxon_map', mx_id=mx_id))
+
 
 if __name__ == "__main__":
     from livereload import Server
