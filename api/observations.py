@@ -12,6 +12,7 @@ from models import Observation
 from data_loaders.database import Session
 from utils.audit import record_audit_event
 from utils.helpers import generate_id, guess_delimeter
+from utils.taxon_service import get_or_create_taxon
 from auth.decorators import login_required
 from models import Taxon
 
@@ -36,21 +37,21 @@ def get_config():
 @bp.route('/taxons/<string:mx_id>', methods=['GET'])
 @login_required
 def get_taxon(mx_id):
-    """Return taxon metadata by MX identifier."""
+    """Return taxon metadata by MX identifier, creating/refreshing it from the laji.fi API if needed."""
     with Session() as db:
-        taxon = db.query(Taxon).filter_by(mx_id=mx_id).first()
-    if not taxon:
-        return jsonify({"success": False, "error": "Taxon not found"}), 404
-    return jsonify({
-        "success": True,
-        "taxon": {
-            "id": taxon.id,
-            "mx_id": taxon.mx_id,
-            "name": taxon.name,
-            "category": taxon.category,
-            "elio_ryhma": taxon.elio_ryhma,
-        }
-    })
+        taxon = get_or_create_taxon(db, mx_id)
+        if not taxon:
+            return jsonify({"success": False, "error": "Taxon not found"}), 404
+        return jsonify({
+            "success": True,
+            "taxon": {
+                "id": taxon.id,
+                "mx_id": taxon.mx_id,
+                "name": taxon.name,
+                "category": taxon.category,
+                "elio_ryhma": taxon.elio_ryhma,
+            }
+        })
 
 
 @bp.route('/observations/<string:mx_id>', methods=['GET'])

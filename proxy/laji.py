@@ -9,6 +9,30 @@ from auth.decorators import login_required
 
 bp = Blueprint('proxy_laji', __name__, url_prefix='/api')
 
+TAXON_SELECTED_FIELDS = 'vernacularName,scientificNameDisplayName,observationCountFinland,latestRedListStatusFinland'
+
+
+def fetch_taxon_info(mx_id, timeout=10):
+    """Fetch vernacular/scientific name, observation count and red list status for a taxon from the LAJI API.
+
+    Raises RuntimeError if the API is not configured, or requests.RequestException on failure.
+    """
+    laji_api_base_url = os.getenv('LAJI_API_BASE_URL')
+    laji_api_access_token = os.getenv('LAJI_API_ACCESS_TOKEN')
+    if not laji_api_base_url or not laji_api_access_token:
+        raise RuntimeError("LAJI_API_BASE_URL/LAJI_API_ACCESS_TOKEN not configured on server")
+
+    url = f"{laji_api_base_url}/taxa/{mx_id}"
+    params = {
+        'selectedFields': TAXON_SELECTED_FIELDS,
+        'checklistVersion': 'current',
+    }
+    headers = {'Authorization': f'Bearer {laji_api_access_token}', 'Api-Version': '1', 'Accept-Language': 'fi'}
+
+    resp = requests.get(url, params=params, headers=headers, timeout=timeout)
+    resp.raise_for_status()
+    return resp.json()
+
 
 @bp.route('/laji', methods=['GET'])
 @login_required

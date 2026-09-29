@@ -31,8 +31,9 @@ docker-compose up --build
 
 On first start the entrypoint automatically:
 1. Creates all tables
-2. Seeds species from `static/resources/species_and_groups.tsv` (includes IUCN 2019 categories)
-3. Generates the Finland base grid
+2. Generates the Finland base grid
+
+Individual taxons row is created on first visit to `/map/<mx_id>`, using the display name and IUCN 2019 red list category fetched from the laji.fi `/taxa/<mx_id>` endpoint.
 
 All steps are idempotent — safe to run multiple times.
 

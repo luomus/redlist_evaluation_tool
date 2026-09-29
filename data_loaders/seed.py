@@ -1,11 +1,10 @@
 """Database seeding orchestration."""
 import time
 from . import database
-from .load_tsv import load_taxons_from_tsv
 
 
 def seed_database(engine, session_factory, max_retries=3, retry_interval=2):
-    """Initialize database with tables, taxons from TSV, and base grid.
+    """Initialize database tables and the base grid.
 
     All operations are idempotent: safe to run multiple times.
     """
@@ -13,11 +12,6 @@ def seed_database(engine, session_factory, max_retries=3, retry_interval=2):
         try:
             database.create_tables(engine)
             database.verify_tables_exist(engine)
-
-            try:
-                load_taxons_from_tsv(session_factory)
-            except Exception as e:
-                print(f"Warning: Taxon loading failed: {e}")
 
             try:
                 session = session_factory()

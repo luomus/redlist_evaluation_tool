@@ -9,7 +9,7 @@ Base = declarative_base()
 
 
 class Taxon(Base):
-    """Taxon loaded from species_and_groups.tsv, identified by MX-identifier."""
+    """Taxon identified by MX-identifier, created lazily on first access (see utils.taxon_service)."""
     __tablename__ = 'taxons'
 
     id = Column(Integer, primary_key=True)
