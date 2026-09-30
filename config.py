@@ -38,6 +38,9 @@ if USE_AUTHENTICATION:
 LAJI_API_ACCESS_TOKEN = os.getenv("LAJI_API_ACCESS_TOKEN", "")
 LAJI_API_BASE_URL = os.getenv("LAJI_API_BASE_URL", "")
 
+# ===== IUCN EDITOR =====
+IUCN_EDITOR_URL = os.getenv("IUCN_EDITOR_URL", "https://taxoneditor.laji.fi/iucn")
+
 # ===== MML TILES =====
 MML_API_KEY = os.getenv('MML_API_KEY', '')
 CARTO_BASEMAP_API_KEY = os.getenv('CARTO_BASEMAP_API_KEY', '')

@@ -2,7 +2,7 @@ import logging
 
 from flask import Flask, render_template, abort
 from data_loaders.database import init_db, Session
-from config import CARTO_BASEMAP_API_KEY, DEBUG, LOGGING_LEVEL, USE_AUTHENTICATION, get_flask_config
+from config import CARTO_BASEMAP_API_KEY, DEBUG, LOGGING_LEVEL, USE_AUTHENTICATION, IUCN_EDITOR_URL, get_flask_config
 from auth.decorators import login_required
 from proxy.mml import bp as proxy_mml_bp
 from proxy.laji import bp as proxy_laji_bp
@@ -31,22 +31,31 @@ with app.app_context():
     init_db()
 
 
+def redirect_with_message(message):
+    """Show an error message for a few seconds before redirecting to the IUCN editor."""
+    return render_template('redirect_message.html', message=message, redirect_url=IUCN_EDITOR_URL)
+
+
 @app.route('/map/<string:mx_id>')
 @login_required
 def taxon_map(mx_id):
     app.logger.debug(f'taxon_map called with mx_id={mx_id}')
 
-    check_user(request.args.get('iucn_user_id'), session.get('lajiauth_user_id'))
+    try:
+        check_user(request.args.get('iucn_user_id'), session.get('lajiauth_user_id'))
+    except PermissionError as e:
+        app.logger.warning(f'taxon_map: {e}')
+        return redirect_with_message('Sinulla ei ole oikeuksia tähän lajiin.')
 
     if session.get('allowed_mx_id') != mx_id:
         app.logger.warning(f'taxon_map: mx_id={mx_id} not authorized by token (allowed={session.get("allowed_mx_id")})')
-        abort(403)
+        return redirect_with_message('Sinulla ei ole oikeuksia tähän lajiin.')
 
     with Session() as db:
         taxon = get_or_create_taxon(db, mx_id)
     if not taxon:
         app.logger.debug(f'Taxon with mx_id={mx_id} not found')
-        abort(404)
+        return redirect_with_message('Lajia ei löytynyt.')
     return render_template('map.html', taxon=taxon, carto_basemap_api_key=CARTO_BASEMAP_API_KEY, use_authentication=USE_AUTHENTICATION)
 
 _frontpage_cache = None
@@ -56,9 +65,15 @@ def frontpage():
     token = request.args.get('token')
 
     if not token:
-        raise ValueError("No token provided")
-    
-    claims = extract_token(token)
+        app.logger.warning('frontpage: no token provided, redirecting to IUCN editor')
+        return redirect_with_message('Tokenia ei löytynyt. Sinun tulee kirjautua työkaluun IUCN-editorin kautta.')
+
+    try:
+        claims = extract_token(token)
+    except ValueError as e:
+        app.logger.warning(f'frontpage: invalid token ({e}), redirecting to IUCN editor')
+        return redirect_with_message('Virheellinen tai vanhentunut token.')
+
     app.logger.debug(f'frontpage: token claims resolved to user={claims["user"]}, taxon={claims["taxon"]}')
 
     session['iucn_user_id'] = claims['user']

@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta http-equiv="refresh" content="5;url={{ redirect_url }}">
+    <title>Virhe</title>
+    <style>
+        body { font-family: sans-serif; max-width: 600px; margin: 4rem auto; padding: 0 1rem; text-align: center; }
+        p { font-size: 1.1rem; }
+    </style>
+</head>
+<body>
+    <p>{{ message }}</p>
+    <p>Sinut ohjataan automaattisesti IUCN-editoriin 5 sekunnin kuluttua.</p>
+    <script>
+        setTimeout(function () {
+            window.location.href = "{{ redirect_url }}";
+        }, 5000);
+    </script>
+</body>
+</html>
