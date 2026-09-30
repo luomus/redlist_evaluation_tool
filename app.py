@@ -32,7 +32,7 @@ with app.app_context():
 @login_required
 def taxon_map(mx_id):
 
-    # check_user(request.args.get('iucn_user_id'), session.get('lajiauth_user_id')) TODO: uncomment when using production database
+    check_user(request.args.get('iucn_user_id'), session.get('lajiauth_user_id'))
 
     with Session() as db:
         taxon = get_or_create_taxon(db, mx_id)
