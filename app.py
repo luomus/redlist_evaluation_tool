@@ -1,6 +1,8 @@
+import logging
+
 from flask import Flask, render_template, abort
 from data_loaders.database import init_db, Session
-from config import CARTO_BASEMAP_API_KEY, DEBUG, USE_AUTHENTICATION, get_flask_config
+from config import CARTO_BASEMAP_API_KEY, DEBUG, LOGGING_LEVEL, USE_AUTHENTICATION, get_flask_config
 from auth.decorators import login_required
 from proxy.mml import bp as proxy_mml_bp
 from proxy.laji import bp as proxy_laji_bp
@@ -13,6 +15,7 @@ from auth.token import extract_token, check_user
 app = Flask(__name__)
 app.debug = DEBUG
 app.config.update(get_flask_config())
+app.logger.setLevel(getattr(logging, LOGGING_LEVEL, logging.INFO))
 app.logger.info(f'Application started with USE_AUTHENTICATION={USE_AUTHENTICATION}')
 
 if USE_AUTHENTICATION:
@@ -31,13 +34,14 @@ with app.app_context():
 @app.route('/map/<string:mx_id>')
 @login_required
 def taxon_map(mx_id):
+    app.logger.debug(f'taxon_map called with mx_id={mx_id}')
 
     check_user(request.args.get('iucn_user_id'), session.get('lajiauth_user_id'))
 
     with Session() as db:
         taxon = get_or_create_taxon(db, mx_id)
     if not taxon:
-        print(f"Taxon with mx_id={mx_id} not found")
+        app.logger.debug(f'Taxon with mx_id={mx_id} not found')
         abort(404)
     return render_template('map.html', taxon=taxon, carto_basemap_api_key=CARTO_BASEMAP_API_KEY, use_authentication=USE_AUTHENTICATION)
 
@@ -51,6 +55,7 @@ def frontpage():
         raise ValueError("No token provided")
     
     claims = extract_token(token)
+    app.logger.debug(f'frontpage: token claims resolved to user={claims["user"]}, taxon={claims["taxon"]}')
 
     session['iucn_user_id'] = claims['user']
     session.modified = True

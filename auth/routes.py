@@ -4,6 +4,10 @@ from config import LAJIAUTH_URL, TARGET, ALLOWED_ROLES, LAJI_API_BASE_URL, LAJI_
 from urllib.parse import urlencode, urlparse
 import requests
 import json
+import logging
+from config import LOGGING_LEVEL
+
+logging.basicConfig(level=getattr(logging, LOGGING_LEVEL, logging.INFO))
 
 auth_bp = Blueprint('auth', __name__)
 

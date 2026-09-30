@@ -9,6 +9,7 @@ load_dotenv(dotenv_path=env_path)
 
 # ===== FLASK =====
 DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
+LOGGING_LEVEL = os.getenv('LOGGING_LEVEL', 'INFO').upper()
 SECRET_KEY = os.getenv("SECRET_KEY")
 if not SECRET_KEY:
     raise RuntimeError("SECRET_KEY environment variable must be set")

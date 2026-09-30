@@ -1,0 +1,13 @@
+DONE: Lisää metsäaluevyöhykkeet/uhanalaisuusarviointivyöhyke karttaeditoriin
+DONE: lisää taulukkonäkymä (per dataset) editoriin
+DONE: muokkauksien jälkeen muistutus laskea esiintymisalue & levinneisyysalue uudestaan
+DONE: filttereihin aika, tarkkuus ja laatu
+DONE: datasettien nimiksi laji.fi lataus - päivämäärä (tallenna rajaukset myös)
+DONE: Aineiston tunnuksen sijaan aineiston nimi
+hDONE: io vähän CSV-latausta. Lisää esim. pakolliset sarakkeet tieto tai jokin esimerkki
+DONE: lisää filtteri, että ainoastaan lajia x voi ladata (muut hylätään).
+DONE: korjaa bugi, joka "tuplaa" havaintojen määrän, jos lataa useamman aineiston
+DONE: poista cartoDB:n taustakartta tai lisää API-avain
+DONE: lisää historiatietoja havaintojen poistamisista / lisäämisistä.
+tarvitaanko tätä: "Kuinka monen 10x10 km ruudun alueella havaintoja on?"
+DONE: Poista/valitse automaattisesti nollahavainnot

@@ -3,7 +3,7 @@ import json
 import time
 from dotenv import load_dotenv
 import os
-
+import logging
 load_dotenv()
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
@@ -59,6 +59,7 @@ def extract_token(token) -> dict:
 def check_user(token_user, lajiauth_user):
 
     if token_user != lajiauth_user:
+        logging.warning(f"Token user {token_user} does not match laji auth user {lajiauth_user}")
         raise PermissionError(
             "Token belongs to a different user"
         )
