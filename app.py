@@ -38,6 +38,10 @@ def taxon_map(mx_id):
 
     check_user(request.args.get('iucn_user_id'), session.get('lajiauth_user_id'))
 
+    if session.get('allowed_mx_id') != mx_id:
+        app.logger.warning(f'taxon_map: mx_id={mx_id} not authorized by token (allowed={session.get("allowed_mx_id")})')
+        abort(403)
+
     with Session() as db:
         taxon = get_or_create_taxon(db, mx_id)
     if not taxon:
@@ -58,6 +62,7 @@ def frontpage():
     app.logger.debug(f'frontpage: token claims resolved to user={claims["user"]}, taxon={claims["taxon"]}')
 
     session['iucn_user_id'] = claims['user']
+    session['allowed_mx_id'] = claims['taxon']
     session.modified = True
 
     mx_id = claims['taxon']

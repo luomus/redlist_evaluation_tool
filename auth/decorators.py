@@ -8,8 +8,7 @@ def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if USE_AUTHENTICATION and 'lajiauth_token' not in session:
-            iucn_user_id = session.get('iucn_user_id')
-            next_path = request.full_path.rstrip('?') + '?iucn_user_id=' + iucn_user_id
+            next_path = request.full_path.rstrip('?')
             return redirect(url_for('auth.login', next=next_path))
         return f(*args, **kwargs)
     return decorated_function
