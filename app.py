@@ -27,10 +27,6 @@ app.register_blueprint(proxy_laji_bp)
 app.register_blueprint(api_observations_bp)
 app.register_blueprint(api_spatial_bp)
 
-with app.app_context():
-    init_db()
-
-
 def redirect_with_message(message):
     """Show an error message for a few seconds before redirecting to the IUCN editor."""
     return render_template('redirect_message.html', message=message, redirect_url=IUCN_EDITOR_URL)
@@ -57,8 +53,6 @@ def taxon_map(mx_id):
         app.logger.debug(f'Taxon with mx_id={mx_id} not found')
         return redirect_with_message('Lajia ei löytynyt.')
     return render_template('map.html', taxon=taxon, carto_basemap_api_key=CARTO_BASEMAP_API_KEY, use_authentication=USE_AUTHENTICATION)
-
-_frontpage_cache = None
 
 @app.route('/')
 def frontpage():

@@ -18,4 +18,4 @@ RUN chmod +x docker-entrypoint.sh
 
 EXPOSE 5000
 ENTRYPOINT ["./docker-entrypoint.sh"]
-CMD ["python", "app.py"]
+CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--timeout", "120", "app:app"]
