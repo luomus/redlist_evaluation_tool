@@ -84,6 +84,8 @@ def frontpage():
 
 if __name__ == "__main__":
     from livereload import Server
+    if not DEBUG:
+        logging.getLogger('tornado.access').setLevel(logging.WARNING)
     server = Server(app.wsgi_app)
     server.watch("templates/*.html")
     server.watch("static/*.js")
