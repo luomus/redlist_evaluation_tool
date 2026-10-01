@@ -42,13 +42,13 @@ def taxon_map(mx_id):
     app.logger.debug(f'taxon_map called with mx_id={mx_id}')
 
     try:
-        check_user(request.args.get('iucn_user_id'), session.get('lajiauth_user_id'))
+        check_user(session.get('iucn_user_id'), session.get('lajiauth_user_id'))
     except PermissionError as e:
         app.logger.warning(f'taxon_map: {e}')
         return redirect_with_message('Sinulla ei ole oikeuksia tähän lajiin.')
 
-    if session.get('allowed_mx_id') != mx_id:
-        app.logger.warning(f'taxon_map: mx_id={mx_id} not authorized by token (allowed={session.get("allowed_mx_id")})')
+    if not session.get('allowed_mx_ids', {}).get(mx_id):
+        app.logger.warning(f'taxon_map: mx_id={mx_id} not authorized by token (allowed={list(session.get("allowed_mx_ids", {}).keys())})')
         return redirect_with_message('Sinulla ei ole oikeuksia tähän lajiin.')
 
     with Session() as db:
@@ -77,7 +77,10 @@ def frontpage():
     app.logger.debug(f'frontpage: token claims resolved to user={claims["user"]}, taxon={claims["taxon"]}')
 
     session['iucn_user_id'] = claims['user']
-    session['allowed_mx_id'] = claims['taxon']
+
+    allowed_mx_ids = session.get('allowed_mx_ids', {})
+    allowed_mx_ids[claims['taxon']] = True
+    session['allowed_mx_ids'] = allowed_mx_ids
     session.modified = True
 
     mx_id = claims['taxon']

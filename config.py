@@ -57,6 +57,6 @@ def get_flask_config():
         'SESSION_COOKIE_SECURE': False,  # Set to True in production with HTTPS
         'SESSION_COOKIE_HTTPONLY': True,
         'SESSION_COOKIE_SAMESITE': 'Lax',
-        'PERMANENT_SESSION_LIFETIME': 86400,  # 24 hours
+        'PERMANENT_SESSION_LIFETIME': 1209600,  # 2 weeks
     }
 
