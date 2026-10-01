@@ -15,7 +15,9 @@ def login_required(f):
             needs_revalidation = time.time() - last_validated > PERSON_TOKEN_REVALIDATION_INTERVAL
             # Re-validate the personToken against the Person API, but only once per cache interval.
             if not token or (needs_revalidation and not get_authentication_info(token)):
-                session.clear()
+                # Keep IUCN token grants (allowed_mx_ids) so they survive the login round-trip.
+                for key in ('lajiauth_token', 'lajiauth_user_id', 'lajiauth_username', 'lajiauth_validated_at'):
+                    session.pop(key, None)
                 next_path = request.full_path.rstrip('?')
                 return redirect(url_for('auth.login', next=next_path))
             if needs_revalidation:

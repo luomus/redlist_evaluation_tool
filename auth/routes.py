@@ -1,6 +1,6 @@
 """Authentication routes for LajiAuth integration."""
 from flask import Blueprint, session, redirect, request, url_for, jsonify, current_app
-from config import LAJIAUTH_URL, TARGET, ALLOWED_ROLES, LAJI_API_BASE_URL, LAJI_API_ACCESS_TOKEN
+from config import IUCN_EDITOR_URL, LAJIAUTH_URL, TARGET, ALLOWED_ROLES, LAJI_API_BASE_URL, LAJI_API_ACCESS_TOKEN
 from urllib.parse import urlencode, urlparse
 import requests
 import json
@@ -107,7 +107,7 @@ def logout():
         _delete_authentication_token(token)
     
     session.clear()
-    return redirect(url_for('auth.login'))
+    return redirect(IUCN_EDITOR_URL)
 
 
 def _delete_authentication_token(token):
