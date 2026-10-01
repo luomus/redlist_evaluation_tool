@@ -5,6 +5,7 @@ from urllib.parse import urlencode, urlparse
 import requests
 import json
 import logging
+import time
 from config import LOGGING_LEVEL
 
 logging.basicConfig(level=getattr(logging, LOGGING_LEVEL, logging.INFO))
@@ -52,7 +53,7 @@ def login_callback():
         return jsonify({"success": False, "error": "No token provided"}), 400
     
     # Fetch and store user information
-    authentication_info = _get_authentication_info(token)
+    authentication_info = get_authentication_info(token)
 
     if not authentication_info:
         return jsonify({"success": False, "error": "Failed to retrieve user information"}), 401
@@ -71,15 +72,16 @@ def login_callback():
     # Store user information
     session['lajiauth_user_id'] = authentication_info.get('id')
     session['lajiauth_username'] = authentication_info.get('fullName')
+    session['lajiauth_validated_at'] = time.time()  # token was just validated above
     session.modified = True  # Explicitly mark session as modified to ensure cookie is set
     
     return redirect(next_url)
 
-def _get_authentication_info(token):
+def get_authentication_info(token):
     """
     Get authentication info for the token.
     :param token: The token returned by LajiAuth.
-    :return: Authentication info content.
+    :return: Authentication info content, or None if the token is invalid/expired.
     """
     try:
         url = LAJI_API_BASE_URL + "/person"

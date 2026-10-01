@@ -25,6 +25,8 @@ TARGET = os.getenv("TARGET")
 LAJIAUTH_URL = os.getenv("LAJIAUTH_URL")
 SECRET_TIMEOUT_PERIOD = int(os.getenv("SECRET_TIMEOUT_PERIOD", "10"))
 ALLOWED_ROLES = ['MA.admin', 'MA.taxonEditorUser']
+# How long a personToken validation result is trusted before re-checking the Person API
+PERSON_TOKEN_REVALIDATION_INTERVAL = int(os.getenv("PERSON_TOKEN_REVALIDATION_INTERVAL", "600"))
 
 if USE_AUTHENTICATION:
     if not TARGET:
