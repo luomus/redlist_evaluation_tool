@@ -27,7 +27,7 @@ function updateProgressSummary(pagesFetched, totalRecords, totalTime, logElement
 }
 
 // Fetch all pages of data
-async function fetchAllPages(baseUrl, config, logElement) {
+async function fetchAllPages(searchParams, logElement) {
     const allResults = [];
     let currentPage = 1;
     let totalRecords = 0;
@@ -50,8 +50,7 @@ async function fetchAllPages(baseUrl, config, logElement) {
                 `format=geojson`;
 
             // Add original parameters from the input URL (skip page, pageSize and access_token)
-            const urlObj = new URL(baseUrl);
-            urlObj.searchParams.forEach((value, key) => {
+            searchParams.forEach((value, key) => {
                 if (key !== "page" && key !== "pageSize" && key !== "access_token") {
                     apiQuery += `&${encodeURIComponent(key)}=${encodeURIComponent(value)}`;
                 }
@@ -172,23 +171,8 @@ window.parseUrl = async function(url, logElement) {
             throw new Error('URL-osoitteesta ei löytynyt parametreja');
         }
 
-        // Fetch config from Flask app
-        const configResponse = await fetch('/api/config');
-        const config = await configResponse.json();
-        
-        // Build the base URL with parameters
-        const baseUrl = config.base_url;
-        const apiParams = new URLSearchParams();
-        
-        // Add all parameters from the input URL as they are
-        params.forEach((value, key) => {
-            apiParams.set(key, value);
-        });
-        
-        const baseApiUrl = `${baseUrl}?${apiParams.toString()}`;
-        
-        // Fetch all pages
-        const combinedData = await fetchAllPages(baseApiUrl, config, logElement);
+        // Fetch all pages (the server proxy adds the API base URL and credentials)
+        const combinedData = await fetchAllPages(params, logElement);
         
         // Store data globally for saving
         window.currentFetchedData = combinedData;

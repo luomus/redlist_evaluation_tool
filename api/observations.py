@@ -2,7 +2,6 @@
 import csv
 import io
 import json
-import os
 from datetime import datetime
 from flask import Blueprint, jsonify, request, make_response
 from sqlalchemy import text, insert
@@ -22,16 +21,6 @@ WKT_COLUMNS = ['wgs84 wkt', 'wkt', 'geometry', 'wgs84wkt', 'geometry_wkt', 'geom
 LAT_COLUMNS = ['lat', 'latitude', 'y']
 LON_COLUMNS = ['lon', 'lng', 'longitude', 'x']
 SKIP_CSV_KEYS = LAT_COLUMNS + LON_COLUMNS + WKT_COLUMNS
-
-
-@bp.route('/config', methods=['GET'])
-@login_required
-def get_config():
-    """Return client-side configuration."""
-    return jsonify({
-        "base_url": os.getenv('LAJI_API_BASE_URL', ''),
-        "access_token": os.getenv('LAJI_API_ACCESS_TOKEN', ''),
-    })
 
 
 @bp.route('/taxons/<string:mx_id>', methods=['GET'])
