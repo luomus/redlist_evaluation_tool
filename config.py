@@ -36,6 +36,9 @@ if USE_AUTHENTICATION:
     if not SHARED_SECRET:
         raise RuntimeError("SHARED_SECRET must be set when USE_AUTHENTICATION=true")
 
+# ===== DATABASE =====
+DATABASE_URL = os.getenv('DATABASE_URL')
+
 # ===== LAJI API =====
 LAJI_API_ACCESS_TOKEN = os.getenv("LAJI_API_ACCESS_TOKEN", "")
 LAJI_API_BASE_URL = os.getenv("LAJI_API_BASE_URL", "")

@@ -2,11 +2,11 @@
 
 Shared auth logic for MML tiles to eliminate duplication between endpoints.
 """
-import os
 import base64
 import requests
 from flask import Blueprint, request, jsonify, current_app
 from auth.decorators import login_required
+from config import MML_API_KEY
 
 bp = Blueprint('proxy_mml', __name__, url_prefix='/mml')
 
@@ -23,12 +23,11 @@ def _build_mml_headers_and_params(user_id_from_request=None):
     params = {}
     
     # Prefer server-side API key
-    api_key = os.getenv('MML_API_KEY')
-    if api_key:
+    if MML_API_KEY:
         try:
-            token = base64.b64encode(f"{api_key}:".encode('utf-8')).decode('ascii')
+            token = base64.b64encode(f"{MML_API_KEY}:".encode('utf-8')).decode('ascii')
             headers['Authorization'] = f'Basic {token}'
-            params['user-id'] = api_key
+            params['user-id'] = MML_API_KEY
         except Exception as e:
             print(f'Failed to build MML auth header: {e}')
         return headers, params

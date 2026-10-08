@@ -1,15 +1,11 @@
 import base64
 import json
 import time
-from dotenv import load_dotenv
-import os
 import logging
-load_dotenv()
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
-
-SHARED_SECRET = os.getenv("SHARED_SECRET")
+from config import SHARED_SECRET
 
 def extract_token(token) -> dict:
 

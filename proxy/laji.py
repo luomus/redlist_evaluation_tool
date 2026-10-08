@@ -2,10 +2,10 @@
 
 Forwards requests to the configured LAJI API with authentication headers.
 """
-import os
 import requests
 from flask import Blueprint, request, session, jsonify
 from auth.decorators import login_required
+from config import LAJI_API_BASE_URL, LAJI_API_ACCESS_TOKEN
 
 bp = Blueprint('proxy_laji', __name__, url_prefix='/api')
 
@@ -17,17 +17,15 @@ def fetch_taxon_info(mx_id, timeout=10):
 
     Raises RuntimeError if the API is not configured, or requests.RequestException on failure.
     """
-    laji_api_base_url = os.getenv('LAJI_API_BASE_URL')
-    laji_api_access_token = os.getenv('LAJI_API_ACCESS_TOKEN')
-    if not laji_api_base_url or not laji_api_access_token:
+    if not LAJI_API_BASE_URL or not LAJI_API_ACCESS_TOKEN:
         raise RuntimeError("LAJI_API_BASE_URL/LAJI_API_ACCESS_TOKEN not configured on server")
 
-    url = f"{laji_api_base_url}/taxa/{mx_id}"
+    url = f"{LAJI_API_BASE_URL}/taxa/{mx_id}"
     params = {
         'selectedFields': TAXON_SELECTED_FIELDS,
         'checklistVersion': 'current',
     }
-    headers = {'Authorization': f'Bearer {laji_api_access_token}', 'Api-Version': '1', 'Accept-Language': 'fi'}
+    headers = {'Authorization': f'Bearer {LAJI_API_ACCESS_TOKEN}', 'Api-Version': '1', 'Accept-Language': 'fi'}
 
     resp = requests.get(url, params=params, headers=headers, timeout=timeout)
     resp.raise_for_status()
@@ -47,16 +45,14 @@ def laji_proxy():
     try:
         # Rebuild target URL from base and original query string
         query = request.query_string.decode('utf-8')
-        laji_api_base_url = os.getenv('LAJI_API_BASE_URL')
         
-        if not laji_api_base_url:
+        if not LAJI_API_BASE_URL:
             return jsonify({"success": False, "error": "LAJI_API_BASE_URL not configured on server"}), 500
         
-        target_url = f"{laji_api_base_url}/warehouse/private-query/unit/list?{query}"
+        target_url = f"{LAJI_API_BASE_URL}/warehouse/private-query/unit/list?{query}"
         
         # Validate tokens
-        laji_api_access_token = os.getenv('LAJI_API_ACCESS_TOKEN')
-        if not laji_api_access_token:
+        if not LAJI_API_ACCESS_TOKEN:
             return jsonify({"success": False, "error": "LAJI_API_ACCESS_TOKEN not configured on server"}), 500
         
         person_token = session.get('lajiauth_token')
@@ -65,7 +61,7 @@ def laji_proxy():
         
         # Forward headers — api.laji.fi uses headers for authorization
         forward_headers = {
-            'Authorization': f'Bearer {laji_api_access_token}',
+            'Authorization': f'Bearer {LAJI_API_ACCESS_TOKEN}',
             'Person-Token': person_token,
             'Api-Version': request.headers.get('Api-Version', '1'),
             'Accept-Language': request.headers.get('Accept-Language', 'fi')
