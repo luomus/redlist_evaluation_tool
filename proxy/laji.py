@@ -2,9 +2,12 @@
 
 Forwards requests to the configured LAJI API with authentication headers.
 """
+from urllib.parse import urlencode
+
 import requests
 from flask import Blueprint, request, session, jsonify
 from auth.decorators import login_required
+from auth.token import check_user
 from config import LAJI_API_BASE_URL, LAJI_API_ACCESS_TOKEN
 
 bp = Blueprint('proxy_laji', __name__, url_prefix='/api')
@@ -38,13 +41,24 @@ def laji_proxy():
     """
     Proxy GET requests to the configured LAJI API base URL to avoid CORS.
     
-    The original query string is forwarded as-is. The server adds:
+    The query string is forwarded, except that any client-supplied `target` is
+    discarded and replaced with the required `mx_id` parameter. The server adds:
     - Authorization header with configured access token
     - Person-Token header with session token
     """
     try:
-        # Rebuild target URL from base and original query string
-        query = request.query_string.decode('utf-8')
+        mx_id = request.args.get('mx_id', '')
+        if not session.get('allowed_mx_ids', {}).get(mx_id):
+            return jsonify({"success": False, "error": "Not authorized for this taxon"}), 403
+        
+        try:
+            check_user(session.get('iucn_user_id'), session.get('lajiauth_user_id'))
+        except PermissionError:
+            return jsonify({"success": False, "error": "Forbidden"}), 403
+
+        params = [(k, v) for k, v in request.args.items(multi=True) if k not in ('target', 'mx_id')]
+        params.append(('target', mx_id))
+        query = urlencode(params)
         
         if not LAJI_API_BASE_URL:
             return jsonify({"success": False, "error": "LAJI_API_BASE_URL not configured on server"}), 500

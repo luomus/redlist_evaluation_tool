@@ -43,15 +43,16 @@ async function fetchAllPages(searchParams, logElement) {
             // Build the base query string (access token moved to Authorization header)
             let apiQuery = `pageSize=${pageSize}&` +
                 `page=${currentPage}&` +
+                `mx_id=${encodeURIComponent(window.MX_ID)}&` +
                 `countryId=ML.206&` +
                 `selected=unit.interpretations.recordQuality,document.linkings.collectionQuality,unit.linkings.taxon.taxonomicOrder,unit.abundanceString,gathering.displayDateTime,gathering.interpretations.countryDisplayname,gathering.interpretations.biogeographicalProvinceDisplayname,gathering.locality,document.collectionId,document.documentId,gathering.team,unit.linkings.taxon.vernacularName,unit.linkings.taxon.scientificName,unit.linkings.taxon.cursiveName,unit.linkings.taxon.latestRedListStatusFinland,unit.linkings.taxon.primaryHabitat,gathering.conversions.dayOfYearBegin,gathering.conversions.dayOfYearEnd,unit.det,unit.abundanceUnit,unit.interpretations.individualCount,unit.lifeStage,unit.sex,unit.atlasCode,unit.atlasClass,gathering.interpretations.coordinateAccuracy,gathering.conversions.wgs84WKT,unit.recordBasis,unit.notes,unit.unitId,unit.linkings.taxon.occurrenceCountFinland,unit.unitId,document.documentId&` +
                 `crs=WGS84&` +
                 `featureType=ORIGINAL_FEATURE&` +
                 `format=geojson`;
 
-            // Add original parameters from the input URL (skip page, pageSize and access_token)
+            // Add original parameters from the input URL (skip page, pageSize, target and access_token)
             searchParams.forEach((value, key) => {
-                if (key !== "page" && key !== "pageSize" && key !== "access_token") {
+                if (key !== "page" && key !== "pageSize" && key !== "access_token" && key !== "target" && key !== "mx_id") {
                     apiQuery += `&${encodeURIComponent(key)}=${encodeURIComponent(value)}`;
                 }
             });
