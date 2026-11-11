@@ -39,6 +39,27 @@ All steps are idempotent — safe to run multiple times.
 
 Access the app at `http://localhost:5000/` for local development. In production, open a species map through the IUCN editor.
 
+## Public area API
+
+`GET /api/values/<mx_id>/<metric>` returns saved area values in km2.
+This read-only endpoint is public, even when `USE_AUTHENTICATION=true`.
+It does not create taxa, fetch observations, or recalculate values.
+
+- `/api/values/MX.12345/aoo` returns a JSON number, for example `128`.
+  AOO is the saved number of occupied 2 km grid cells multiplied by 4 km2.
+- `/api/values/MX.12345/eoo` returns both saved EOO areas, for example
+  `{"max": 250.5, "min": 180.25}`.
+
+The metric must be lowercase `aoo` or `eoo`; other metrics return HTTP 400.
+An unknown taxon or missing calculation returns HTTP 404. EOO requires both
+`max` and `min` values. A saved zero is returned as zero, not treated as missing.
+Database failures return HTTP 500. Errors contain a JSON object with
+`success: false` and an `error` message.
+
+Values reflect the last saved calculation and may be outdated if observations
+have changed since then. Successful responses contain only the number or the
+two EOO values, with no geometry or other metadata.
+
 To stop:
 ```bash
 docker-compose down

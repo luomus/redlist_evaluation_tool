@@ -80,7 +80,7 @@ Kun aineisto on tarkistettu, laske tunnusluvut yläreunan painikkeilla.
 ![AOO ja EOO tunnusluvut](image2.png)
 
 - **Laske esiintymisalue** muodostaa AOO:n 2 x 2 km ruuduista. AOO on käytännössä ruutujen lukumäärä kerrottuna neljällä neliökilometrillä. Kartalla näkyvät laskentaan sisältyvät ruudut.
-- **Laske levinneisyysalueet** muodostaa EOO:n havaintogeometrioiden ympärille. Laskentaan tarvitaan vähintään kolme analyysiin sisällytettyä havaintoa.
+- **Laske levinneisyysalueet** muodostaa EOO:n havaintogeometrioiden ympärille. Laskentaan tarvitaan vähintään kaksi analyysiin sisällytettyä, kartalle sijoittuvaa havaintoa. Jos kahden havainnon muodostama alue on viiva tai piste, sen ympärille muodostetaan kahden kilometrin vyöhyke.
 - **Laaja EOO** käyttää havaintogeometrioiden kaikkia pisteitä ja kuvaa suurinta mahdollista levinneisyysaluetta.
 - **Suppea EOO** käyttää aluemaisesta havainnosta sitä nurkkausta, joka on lähimpänä havaintojen yhteistä keskusta. Se vähentää laajojen havaintoalueiden vaikutusta tulokseen.
 

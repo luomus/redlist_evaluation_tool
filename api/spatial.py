@@ -3,12 +3,50 @@ import json
 from datetime import datetime
 from flask import Blueprint, current_app, jsonify, request
 from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 from models import ConvexHull, GridMetadata
 from data_loaders.database import Session
 from auth.decorators import login_required
 from models import Taxon
 
 bp = Blueprint('api_spatial', __name__, url_prefix='/api')
+
+
+@bp.route('/values/<string:mx_id>/<string:metric>', methods=['GET'])
+def get_area_values(mx_id, metric):
+    """Return saved area values in km2 without requiring login."""
+    if metric not in ('aoo', 'eoo'):
+        return jsonify({"success": False, "error": "Invalid metric; use aoo or eoo"}), 400
+
+    try:
+        with Session() as db:
+            if metric == 'aoo':
+                cell_count = (
+                    db.query(GridMetadata.cell_count)
+                    .join(Taxon, GridMetadata.taxon_id == Taxon.id)
+                    .filter(Taxon.mx_id == mx_id)
+                    .scalar()
+                )
+                if cell_count is None:
+                    return jsonify({"success": False, "error": "Taxon or AOO calculation not found"}), 404
+                return jsonify(cell_count * 4)
+
+            hulls = (
+                db.query(ConvexHull.mode, ConvexHull.area_km2)
+                .join(Taxon, ConvexHull.taxon_id == Taxon.id)
+                .filter(Taxon.mx_id == mx_id, ConvexHull.mode.in_(('max', 'min')))
+                .all()
+            )
+            values = {}
+            for mode, area_km2 in hulls:
+                if area_km2 is not None:
+                    values[mode] = area_km2
+            if 'max' not in values or 'min' not in values:
+                return jsonify({"success": False, "error": "Taxon or complete EOO calculation not found"}), 404
+            return jsonify(values)
+    except SQLAlchemyError:
+        current_app.logger.exception("Failed to get saved area values for %s (%s)", mx_id, metric)
+        return jsonify({"success": False, "error": "Could not retrieve area values"}), 500
 
 
 @bp.route('/observations/<string:mx_id>/convex_hull', methods=['GET'])
