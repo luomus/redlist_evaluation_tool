@@ -278,8 +278,8 @@ async function calculateGrid(fitMap = true) {
 // Calculate both hull modes on the server in a single request, then display
 async function calculateConvexHull(fitMap = true) {
     // Check if we have enough features for convex hull
-    if (stats.total < 3) {
-        const msg = `Liian vähän havaintoja: monitahoiseen tarvitaan vähintään 3, sinulla on ${stats.total}`;
+    if (stats.total < 2) {
+        const msg = `Liian vähän havaintoja: laskentaan tarvitaan vähintään 2, sinulla on ${stats.total}`;
         updateStatus(`Virhe: ${msg}`);
         document.getElementById('areaMax').textContent = 'Ei saatavilla';
         document.getElementById('areaMin').textContent = 'Ei saatavilla';
@@ -305,7 +305,7 @@ async function calculateConvexHull(fitMap = true) {
         });
         if (!res.ok) {
             if (res.status === 400) {
-                throw new Error('Riittämätön määrä havaintoja laskentaan');
+                throw new Error('Laskentaan tarvitaan vähintään 2 analyysiin sisällytettyä havaintoa');
             }
             throw new Error(`HTTP ${res.status}`);
         }

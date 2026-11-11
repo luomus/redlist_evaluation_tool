@@ -75,8 +75,13 @@ def calculate_convex_hull(mx_id):
                     AND geometry IS NOT NULL
                     AND (excluded IS NULL OR excluded = FALSE)
                 ),
-                max_collection AS (SELECT ST_Collect(geom) AS gc FROM non_excluded),
-                max_hull AS (SELECT ST_ConvexHull(gc) AS hull FROM max_collection WHERE gc IS NOT NULL),
+                max_collection AS (
+                    SELECT ST_Collect(geom) AS gc, COUNT(*) AS geom_count FROM non_excluded
+                ),
+                max_hull AS (
+                    SELECT ST_ConvexHull(gc) AS hull, geom_count
+                    FROM max_collection WHERE geom_count >= 2
+                ),
                 distribution_centre AS (
                     SELECT ST_Centroid(ST_Collect(ST_Centroid(geom))) AS centre FROM non_excluded
                 ),
@@ -84,20 +89,30 @@ def calculate_convex_hull(mx_id):
                     SELECT ST_Collect(ST_ClosestPoint(n.geom, d.centre)) AS gc
                     FROM non_excluded n, distribution_centre d
                 ),
-                min_hull AS (SELECT ST_ConvexHull(gc) AS hull FROM min_collection WHERE gc IS NOT NULL)
+                min_hull AS (SELECT ST_ConvexHull(gc) AS hull FROM min_collection WHERE gc IS NOT NULL),
+                hulls AS (
+                    SELECT
+                        CASE WHEN mx.geom_count = 2 AND ST_Dimension(mx.hull) < 2
+                            THEN ST_Transform(ST_Buffer(ST_Transform(mx.hull, 3067), 1000), 4326)
+                            ELSE mx.hull END AS max_geom,
+                        CASE WHEN mx.geom_count = 2 AND ST_Dimension(mn.hull) < 2
+                            THEN ST_Transform(ST_Buffer(ST_Transform(mn.hull, 3067), 1000), 4326)
+                            ELSE mn.hull END AS min_geom
+                    FROM max_hull mx, min_hull mn
+                )
                 SELECT
-                    mx.hull AS max_geom,
-                    ST_Area(ST_Transform(mx.hull, 3067)) / 1000000.0 AS max_area_km2,
-                    mn.hull AS min_geom,
-                    ST_Area(ST_Transform(mn.hull, 3067)) / 1000000.0 AS min_area_km2
-                FROM max_hull mx, min_hull mn
+                    max_geom,
+                    ST_Area(ST_Transform(max_geom, 3067)) / 1000000.0 AS max_area_km2,
+                    min_geom,
+                    ST_Area(ST_Transform(min_geom, 3067)) / 1000000.0 AS min_area_km2
+                FROM hulls
             """)
 
             result = db.execute(combined_query, {'taxon_id': taxon.id}).fetchone()
             if not result or not result[0]:
                 return jsonify({
                     "success": False,
-                    "error": "Could not calculate convex hull. Insufficient non-excluded geometries."
+                    "error": "Could not calculate convex hull. At least two non-excluded geometries are required."
                 }), 400
 
             max_geom, max_area = result[0], float(result[1] or 0)
