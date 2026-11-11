@@ -37,15 +37,16 @@ def redirect_with_message(message):
 def taxon_map(mx_id):
     app.logger.debug(f'taxon_map called with mx_id={mx_id}')
 
-    try:
-        check_user(session.get('iucn_user_id'), session.get('lajiauth_user_id'))
-    except PermissionError as e:
-        app.logger.warning(f'taxon_map: {e}')
-        return redirect_with_message('Sinulla ei ole oikeuksia tähän lajiin.')
+    if USE_AUTHENTICATION:
+        try:
+            check_user(session.get('iucn_user_id'), session.get('lajiauth_user_id'))
+        except PermissionError as e:
+            app.logger.warning(f'taxon_map: {e}')
+            return redirect_with_message('Sinulla ei ole oikeuksia tähän lajiin.')
 
-    if not session.get('allowed_mx_ids', {}).get(mx_id):
-        app.logger.warning(f'taxon_map: mx_id={mx_id} not authorized by token (allowed={list(session.get("allowed_mx_ids", {}).keys())})')
-        return redirect_with_message('Sinulla ei ole oikeuksia tähän lajiin.')
+        if not session.get('allowed_mx_ids', {}).get(mx_id):
+            app.logger.warning(f'taxon_map: mx_id={mx_id} not authorized by token (allowed={list(session.get("allowed_mx_ids", {}).keys())})')
+            return redirect_with_message('Sinulla ei ole oikeuksia tähän lajiin.')
 
     with Session() as db:
         taxon = get_or_create_taxon(db, mx_id)
