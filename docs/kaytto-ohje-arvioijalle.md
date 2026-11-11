@@ -31,8 +31,8 @@ Valitse **Lataa CSV koneelta** ja vedä tiedosto ikkunaan tai valitse se koneelt
 
 Jokaisella laskentaan tulevalla rivillä täytyy olla sijaintitieto jommallakummalla seuraavista tavoista:
 
-- WKT-geometria sarakkeessa `wkt`, `geometry`, `geom`, `wgs84 wkt`, `wgs84wkt` tai `geometry_wkt`. WKT voi olla piste, viiva tai alue.
-- Pistehavaintojen leveys- ja pituusasteet omissa sarakkeissaan. Leveysasteen sarakkeen nimi voi olla `lat`, `latitude` tai `y`; pituusasteen `lon`, `lng`, `longitude` tai `x`.
+- WKT-geometria sarakkeessa `wkt`, `geometry`, `geom`, `geom_wkt`, `wgs84 wkt`, `wgs84wkt`, `geometry_wkt` tai `footprintWKT`. WKT voi olla piste, viiva tai alue.
+- Pistehavaintojen leveys- ja pituusasteet omissa sarakkeissaan. Leveysasteen sarakkeen nimi voi olla `lat`, `latitude`, `y` tai `decimalLatitude`; pituusasteen `lon`, `lng`, `longitude`, `x` tai `decimalLongitude`. Sarakkeiden nimissä kirjainkoolla ei ole merkitystä.
 
 Käytä vain yhtä tapaa koordinaateille, per tiedosto!
 
