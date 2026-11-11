@@ -1,7 +1,7 @@
 ﻿"""Spatial analysis API endpoints (convex hull, grid)."""
 import json
 from datetime import datetime
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, current_app, jsonify, request
 from sqlalchemy import text
 from models import ConvexHull, GridMetadata
 from data_loaders.database import Session
@@ -212,7 +212,7 @@ def calculate_grid(mx_id):
                     AND o.geometry IS NOT NULL
                     AND (o.excluded IS NULL OR o.excluded = FALSE)
                     AND bg.geom_4326 && o.geometry
-                    AND ST_Intersects(bg.geom_4326, o.geometry)
+                    AND ST_Intersects(bg.geom_4326, ST_UnaryUnion(ST_MakeValid(o.geometry)))
                 ),
                 collected AS (
                     SELECT ST_Collect(geom_4326) AS geom_collection FROM intersecting_cells
@@ -252,5 +252,5 @@ def calculate_grid(mx_id):
             })
         except Exception as e:
             db.rollback()
-            print(f"Failed to calculate grid: {str(e)}", exc_info=True)
+            current_app.logger.exception("Failed to calculate grid")
             return jsonify({"success": False, "error": str(e)}), 500
