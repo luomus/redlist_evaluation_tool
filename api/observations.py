@@ -17,9 +17,9 @@ from models import Taxon
 
 bp = Blueprint('api_observations', __name__, url_prefix='/api')
 
-WKT_COLUMNS = ['wgs84 wkt', 'wkt', 'geometry', 'wgs84wkt', 'geometry_wkt', 'geom', 'geom_wkt']
-LAT_COLUMNS = ['lat', 'latitude', 'y']
-LON_COLUMNS = ['lon', 'lng', 'longitude', 'x']
+WKT_COLUMNS = ['wgs84 wkt', 'wkt', 'geometry', 'wgs84wkt', 'geometry_wkt', 'geom', 'geom_wkt', 'footprintwkt']
+LAT_COLUMNS = ['lat', 'latitude', 'y', 'decimallatitude']
+LON_COLUMNS = ['lon', 'lng', 'longitude', 'x', 'decimallongitude']
 SKIP_CSV_KEYS = LAT_COLUMNS + LON_COLUMNS + WKT_COLUMNS
 
 

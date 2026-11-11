@@ -441,11 +441,11 @@ function openCsvUploadPopup() {
                 <h3>CSV-tiedoston vaatimukset</h3>
                 <p><strong>Koordinaatit:</strong> Tiedostossa tulee olla joko:</p>
                 <ul>
-                    <li><strong>WKT-geometria</strong> sarakkeessa nimeltään: <code>wkt</code>, <code>geometry</code>, <code>geom</code>, <code>wgs84 wkt</code>, <code>wgs84wkt</code> tai <code>geometry_wkt</code></li>
+                    <li><strong>WKT-geometria</strong> sarakkeessa nimeltään: <code>wkt</code>, <code>geometry</code>, <code>geom</code>, <code>geom_wkt</code>, <code>wgs84 wkt</code>, <code>wgs84wkt</code>, <code>geometry_wkt</code> tai <code>footprintWKT</code></li>
                     <li><strong>TAI Leveysaste ja Pituusaste</strong> sarakkeissa, jos havainnot vain pisteitä. Tuetut sarakkeiden nimet:
                         <ul>
-                            <li>Leveysaste: <code>lat</code>, <code>latitude</code>, <code>y</code></li>
-                            <li>Pituusaste: <code>lon</code>, <code>lng</code>, <code>longitude</code>, <code>x</code></li>
+                            <li>Leveysaste: <code>lat</code>, <code>latitude</code>, <code>y</code>, <code>decimalLatitude</code></li>
+                            <li>Pituusaste: <code>lon</code>, <code>lng</code>, <code>longitude</code>, <code>x</code>, <code>decimalLongitude</code></li>
                         </ul>
                     </li>
                 </ul>
