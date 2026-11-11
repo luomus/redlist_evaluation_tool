@@ -51,7 +51,7 @@ function setupPolygonSelector(map, geometryLayer) {
         }
         selecting = false;
         const selBtn = document.getElementById('polySelectBtn');
-        if (selBtn) selBtn.textContent = '🔺 Polygon';
+        if (selBtn) selBtn.textContent = '🔺 Valitse useita aluerajauksella';
         map.off('click', onMapClick);
         map.off('dblclick', onMapDblClick);
         try { map.dragging.enable(); if (map.doubleClickZoom) map.doubleClickZoom.enable(); } catch (e) { /* ignore */ }
@@ -72,7 +72,7 @@ function setupPolygonSelector(map, geometryLayer) {
         }
         selecting = false;
         const selBtn = document.getElementById('polySelectBtn');
-        if (selBtn) selBtn.textContent = '🔺 Polygon';
+        if (selBtn) selBtn.textContent = '🔺 Valitse useita aluerajauksella';
         map.off('click', onMapClick);
         map.off('dblclick', onMapDblClick);
         try { map.dragging.enable(); if (map.doubleClickZoom) map.doubleClickZoom.enable(); } catch (e) { /* ignore */ }
