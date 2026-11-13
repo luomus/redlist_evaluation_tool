@@ -775,7 +775,7 @@ async function saveDataForMap() {
         await window.refreshDatasetLegend();
     }}
 
-// Upload CSV file
+// Upload CSV, TSV or Excel file
 async function uploadCsvForMap() {
     const fileInput = document.getElementById('csvFileInput');
     if (!fileInput || !fileInput.files.length) {
@@ -787,7 +787,7 @@ async function uploadCsvForMap() {
         }
         if (progressLog) {
             progressLog.innerHTML = '';
-            addProgressLog('Virhe: Valitse CSV-tiedosto', 'error', progressLog);
+            addProgressLog('Virhe: Valitse CSV- tai Excel-tiedosto', 'error', progressLog);
         }
         return;
     }
@@ -803,7 +803,9 @@ async function uploadCsvForMap() {
     if (progressLog) progressLog.innerHTML = '<div>Ladataan...</div>';
 
     try {
-        const resp = await fetch(`/api/taxons/${datasetId}/upload_csv`, {
+        const extension = fileInput.files[0].name.split('.').pop().toLowerCase();
+        const endpoint = ['xlsx', 'xls'].includes(extension) ? 'upload_excel' : 'upload_csv';
+        const resp = await fetch(`/api/taxons/${datasetId}/${endpoint}`, {
             method: 'POST',
             body: form
         });

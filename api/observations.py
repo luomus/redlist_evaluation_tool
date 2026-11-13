@@ -3,7 +3,13 @@ import csv
 import io
 import json
 from datetime import datetime
-from flask import Blueprint, jsonify, request, make_response
+from pathlib import Path
+from zipfile import BadZipFile
+from xml.etree.ElementTree import ParseError
+from flask import Blueprint, jsonify, request, make_response, current_app
+from openpyxl import load_workbook
+from openpyxl.utils.exceptions import InvalidFileException
+import xlrd
 from sqlalchemy import text, insert
 from shapely.geometry import shape
 from shapely import wkt as shapely_wkt
@@ -174,9 +180,10 @@ def save_observations():
 
 
 @bp.route('/taxons/<string:mx_id>/upload_csv', methods=['POST'])
+@bp.route('/taxons/<string:mx_id>/upload_excel', methods=['POST'])
 @login_required
 def upload_csv(mx_id):
-    """Upload a CSV file and insert observations for the taxon."""
+    """Upload CSV, TSV or Excel observations for the taxon."""
     try:
         if 'file' not in request.files:
             return jsonify({"success": False, "error": "No file provided"}), 400
@@ -187,13 +194,49 @@ def upload_csv(mx_id):
         dataset_name = request.form.get('dataset_name') or request.form.get('dataset') or f.filename
         dataset_id = request.form.get('dataset_id') or str(generate_id())
 
-        content = f.stream.read().decode('utf-8', errors='replace')
+        extension = Path(f.filename).suffix.lower()
+        is_excel = extension in ('.xlsx', '.xls')
+        if request.path.endswith('/upload_excel') and not is_excel:
+            return jsonify({"success": False, "error": "Expected an .xlsx or .xls file"}), 400
+
+        if is_excel:
+            output = io.StringIO()
+            writer = csv.writer(output)
+            try:
+                if extension == '.xlsx':
+                    workbook = load_workbook(f.stream, read_only=True, data_only=True)
+                    try:
+                        if not workbook.worksheets:
+                            raise ValueError("Workbook has no worksheets")
+                        for values in workbook.worksheets[0].iter_rows(values_only=True):
+                            writer.writerow(values)
+                    finally:
+                        workbook.close()
+                else:
+                    with xlrd.open_workbook(file_contents=f.read(), on_demand=True) as workbook:
+                        if not workbook.nsheets:
+                            raise ValueError("Workbook has no worksheets")
+                        worksheet = workbook.sheet_by_index(0)
+                        for row_index in range(worksheet.nrows):
+                            values = []
+                            for cell in worksheet.row(row_index):
+                                value = cell.value
+                                if cell.ctype == xlrd.XL_CELL_DATE:
+                                    value = xlrd.xldate_as_datetime(value, workbook.datemode)
+                                values.append(value)
+                            writer.writerow(values)
+            except (BadZipFile, InvalidFileException, ParseError, xlrd.XLRDError, ValueError, KeyError, OSError) as e:
+                current_app.logger.warning("Invalid Excel upload: %s", e)
+                return jsonify({"success": False, "error": f"Invalid Excel file: {e}"}), 400
+            content = output.getvalue()
+        else:
+            content = f.stream.read().decode('utf-8', errors='replace')
         
         # Remove BOM if present
         if content.startswith('\ufeff'):
             content = content[1:]
         
-        delimiter = guess_delimeter(content)
+        delimiter = ',' if is_excel else guess_delimeter(content)
         
         print(f"Detected CSV delimiter: {repr(delimiter)}")
         reader = csv.DictReader(io.StringIO(content), delimiter=delimiter)
@@ -259,7 +302,7 @@ def upload_csv(mx_id):
             features.append({"type": "Feature", "properties": props, "geometry": feature_geometry})
 
         if not features:
-            error_msg = "No valid rows with coordinates found in CSV"
+            error_msg = f"No valid rows with coordinates found in {'Excel file' if is_excel else 'CSV'}"
             if reader.fieldnames:
                 error_msg += f". Columns found: {', '.join(reader.fieldnames)}"
             if parse_errors:
@@ -298,7 +341,7 @@ def upload_csv(mx_id):
                 record_audit_event(
                     db,
                     taxon_id=taxon.id,
-                    event_type='csv_imported',
+                    event_type='excel_imported' if is_excel else 'csv_imported',
                     dataset_id=str(dataset_id),
                     dataset_name=dataset_name,
                     details={
@@ -313,7 +356,7 @@ def upload_csv(mx_id):
                 db.rollback()
                 raise e
     except Exception as e:
-        print(f"Failed to upload CSV: {str(e)}", exc_info=True)
+        current_app.logger.exception("Failed to upload observations")
         return jsonify({"success": False, "error": str(e)}), 500
 
 

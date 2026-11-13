@@ -251,6 +251,7 @@ function createHistoryEventElement(event) {
     const labels = {
         dataset_imported: 'Aineisto ladattu',
         csv_imported: 'CSV ladattu',
+        excel_imported: 'Excel ladattu',
         dataset_deleted: 'Aineisto poistettu'
     };
     const entry = document.createElement('article');

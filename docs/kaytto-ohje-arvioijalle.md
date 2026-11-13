@@ -25,9 +25,11 @@ Voit ladata aineistoa Laji.fi:stä tai omalta koneeltasi. Voit myös ladata usei
 
 Hakuun voi sisältyä enintään 10 000 havaintoa. Jos raja ylittyy, rajaa hakua laji.fi:ssä esimerkiksi ajan, alueen, aineiston tai laadun perusteella.
 
-### Lataa CSV koneelta
+### Lataa CSV tai Excel koneelta
 
-Valitse **Lataa CSV koneelta** ja vedä tiedosto ikkunaan tai valitse se koneeltasi. Tiedoston tulee olla UTF-8-koodattu CSV- tai TSV-tiedosto. Erotin (eli pilkku tai tab) tunnistetaan automaattisesti.
+Valitse **Lataa CSV tai Excel koneelta** ja vedä tiedosto ikkunaan tai valitse se koneeltasi. Tuetut muodot ovat UTF-8-koodattu CSV tai TSV sekä Excel (.xlsx tai .xls). CSV- ja TSV-tiedostojen erotin tunnistetaan automaattisesti.
+
+Excel-tiedostosta luetaan ensimmäinen laskentataulukko. Ensimmäisellä rivillä tulee olla sarakkeiden nimet, ja havaintojen tulee alkaa toiselta riviltä. Käytä koordinaateissa arvoja, älä kaavoja. Päivämäärät ja muut taustatiedot tallennetaan tekstinä kuten CSV-tuonnissa.
 
 Jokaisella laskentaan tulevalla rivillä täytyy olla sijaintitieto jommallakummalla seuraavista tavoista:
 

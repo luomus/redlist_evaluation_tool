@@ -1,5 +1,5 @@
 // Data Panel Popup Management
-// Handles modal popups for CSV uploads and Laji.fi data fetching
+// Handles modal popups for file uploads and Laji.fi data fetching
 
 let popupRequestId = 0;
 
@@ -432,13 +432,13 @@ window.openDatasetTable = async function(datasetId, datasetName) {
 };
 
 /**
- * Opens the CSV upload popup with drag-and-drop support
+ * Opens the file upload popup with drag-and-drop support
  */
 function openCsvUploadPopup() {
     const content = `
         <div class="csv-container">
             <div class="csv-requirements-info">
-                <h3>CSV-tiedoston vaatimukset</h3>
+                <h3>Tiedoston vaatimukset</h3>
                 <p><strong>Koordinaatit:</strong> Tiedostossa tulee olla joko:</p>
                 <ul>
                     <li><strong>WKT-geometria</strong> sarakkeessa nimeltään: <code>wkt</code>, <code>geometry</code>, <code>geom</code>, <code>geom_wkt</code>, <code>wgs84 wkt</code>, <code>wgs84wkt</code>, <code>geometry_wkt</code> tai <code>footprintWKT</code></li>
@@ -449,8 +449,9 @@ function openCsvUploadPopup() {
                         </ul>
                     </li>
                 </ul>
-                <p><strong>Muoto:</strong> CSV tai TSV (erotin tunnistetaan automaattisesti)</p>
-                <p><strong>Koodaus:</strong> UTF-8</p>
+                <p><strong>Muoto:</strong> CSV, TSV tai Excel (.xlsx, .xls). CSV- ja TSV-tiedostojen erotin tunnistetaan automaattisesti.</p>
+                <p><strong>Koodaus (CSV ja TSV):</strong> UTF-8</p>
+                <p><strong>Excel:</strong> Ensimmäinen laskentataulukko luetaan. Ensimmäisellä rivillä tulee olla sarakkeiden nimet. Käytä koordinaateissa arvoja, älä kaavoja.</p>
                 <p><strong>Esimerkki:</strong></p>
                 <pre style="background-color: #f5f5f5; padding: 8px; border-radius: 4px; font-size: 12px; overflow-x: auto;">lat,lon,nimi,paivays
 60.1699,24.9384,Havainto 1,2024-01-15
@@ -458,9 +459,9 @@ function openCsvUploadPopup() {
             </div>
             <div class="csv-drop-zone" id="dropZone" ondrop="handleCsvDrop(event)" ondragover="event.preventDefault();event.target.classList.add('csv-drop-zone--hover')" ondragleave="event.target.classList.remove('csv-drop-zone--hover')">
                 <div class="csv-drop-zone-icon">📤</div>
-                <p class="csv-drop-zone-text-main">Vedä ja pudota CSV-tiedosto tähän</p>
+                <p class="csv-drop-zone-text-main">Vedä ja pudota CSV- tai Excel-tiedosto tähän</p>
                 <p class="csv-drop-zone-text-sub">tai klikkaa valitaksesi tiedoston</p>
-                <input type="file" id="csvFileInput" accept=".csv" onchange="handleCsvFileSelect(event)">
+                <input type="file" id="csvFileInput" accept=".csv,.tsv,.xlsx,.xls" onchange="handleCsvFileSelect(event)">
             </div>
             <div id="csvPreview">
                 <div class="csv-preview-info">
@@ -468,7 +469,7 @@ function openCsvUploadPopup() {
                     <small id="csvFileSize"></small>
                 </div>
                 <button onclick="document.getElementById('csvFileInput').value=''; document.getElementById('csvPreview').style.display='none';" class="btn-csv-remove">Poista valinta</button>
-                <button onclick="uploadCsvForMap()" class="btn-csv-upload-action">Lataa CSV</button>
+                <button onclick="uploadCsvForMap()" class="btn-csv-upload-action">Lataa tiedosto</button>
             </div>
             <div id="csvProgress">
                 <p class="csv-progress-label">Edistyminen:</p>
@@ -476,12 +477,12 @@ function openCsvUploadPopup() {
             </div>
         </div>
     `;
-    createPopupWindow('Lataa CSV koneelta', content);
+    createPopupWindow('Lataa CSV tai Excel koneelta', content);
     document.getElementById('dropZone').onclick = () => document.getElementById('csvFileInput').click();
 }
 
 /**
- * Handles drag-and-drop for CSV files
+ * Handles drag-and-drop for uploaded files
  */
 function handleCsvDrop(e) {
     e.preventDefault();
@@ -494,7 +495,7 @@ function handleCsvDrop(e) {
 }
 
 /**
- * Handles CSV file selection and displays file preview
+ * Handles file selection and displays file preview
  */
 function handleCsvFileSelect(e) {
     const file = e.target.files[0];
