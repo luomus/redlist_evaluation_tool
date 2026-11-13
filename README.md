@@ -5,7 +5,7 @@
 Create a `.env` file in the project root (or set environment variables). Required variables:
 
 - `LAJI_API_ACCESS_TOKEN` (optional): API access token for fetching data from laji.fi (later will implement the use of access_token from laji-auth)
-- `LAJI_API_BASE_URL` (optional): Base URL for laji.fi API (default: https://api.laji.fi/warehouse/private-query/unit/list)
+- `LAJI_API_BASE_URL` (optional): Base URL for laji.fi API (default: https://api.laji.fi)
 - `MML_API_KEY` (optional): Maanmittauslaitos API key used by the server tile-proxy for `taustakartta` and `maastokartta`. Get one: https://omatili.maanmittauslaitos.fi/user/profile
 - `TARGET` (required for login flow): target (system identifier) parameter sent to laji-auth login
 - `LAJIAUTH_URL` (optional): base URL for laji-auth (default: https://fmnh-ws-test-24.it.helsinki.fi/laji-auth/)

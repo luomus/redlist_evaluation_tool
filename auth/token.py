@@ -5,7 +5,7 @@ import logging
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
-from config import SHARED_SECRET
+from config import SHARED_SECRET, USE_AUTHENTICATION
 
 def extract_token(token) -> dict:
 
@@ -54,7 +54,7 @@ def extract_token(token) -> dict:
 
 def check_user(token_user, lajiauth_user):
 
-    if token_user != lajiauth_user:
+    if USE_AUTHENTICATION and token_user != lajiauth_user:
         logging.warning(f"Token user {token_user} does not match laji auth user {lajiauth_user}")
         raise PermissionError("Token belongs to a different user")
     return

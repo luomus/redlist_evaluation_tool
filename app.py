@@ -74,7 +74,7 @@ def frontpage():
     allowed_mx_ids = session.get('allowed_mx_ids', {})
 
     # Grants belong to the user they were issued to.
-    if session.get('iucn_user_id') != claims['user']:
+    if USE_AUTHENTICATION and session.get('iucn_user_id') != claims['user']:
         app.logger.debug(f'frontpage: iucn_user_id changed from {session.get("iucn_user_id")} to {claims["user"]}, clearing allowed_mx_ids')
         allowed_mx_ids = {}
 

@@ -3,14 +3,16 @@
 Forwards requests to the configured LAJI API with authentication headers.
 """
 from urllib.parse import urlencode
+import logging
 
 import requests
 from flask import Blueprint, request, session, jsonify
 from auth.decorators import login_required
 from auth.token import check_user
-from config import LAJI_API_BASE_URL, LAJI_API_ACCESS_TOKEN
+from config import LAJI_API_BASE_URL, LAJI_API_ACCESS_TOKEN, USE_AUTHENTICATION
 
 bp = Blueprint('proxy_laji', __name__, url_prefix='/api')
+logger = logging.getLogger(__name__)
 
 TAXON_SELECTED_FIELDS = 'vernacularName,scientificNameDisplayName,observationCountFinland,latestRedListStatusFinland'
 
@@ -30,6 +32,7 @@ def fetch_taxon_info(mx_id, timeout=10):
     }
     headers = {'Authorization': f'Bearer {LAJI_API_ACCESS_TOKEN}', 'Api-Version': '1', 'Accept-Language': 'fi'}
 
+    logger.debug(f"Fetching taxon info for mx_id: {mx_id} with URL: {url} and params: {params}")
     resp = requests.get(url, params=params, headers=headers, timeout=timeout)
     resp.raise_for_status()
     return resp.json()
@@ -48,7 +51,7 @@ def laji_proxy():
     """
     try:
         mx_id = request.args.get('mx_id', '')
-        if not session.get('allowed_mx_ids', {}).get(mx_id):
+        if USE_AUTHENTICATION and not session.get('allowed_mx_ids', {}).get(mx_id):
             return jsonify({"success": False, "error": "Not authorized for this taxon"}), 403
         
         try:
@@ -62,15 +65,18 @@ def laji_proxy():
         
         if not LAJI_API_BASE_URL:
             return jsonify({"success": False, "error": "LAJI_API_BASE_URL not configured on server"}), 500
-        
-        target_url = f"{LAJI_API_BASE_URL}/warehouse/private-query/unit/list?{query}"
+
+        if USE_AUTHENTICATION:
+            target_url = f"{LAJI_API_BASE_URL}/warehouse/private-query/unit/list?{query}"
+        else:
+            target_url = f"{LAJI_API_BASE_URL}/warehouse/query/unit/list?{query}"
         
         # Validate tokens
         if not LAJI_API_ACCESS_TOKEN:
             return jsonify({"success": False, "error": "LAJI_API_ACCESS_TOKEN not configured on server"}), 500
         
         person_token = session.get('lajiauth_token')
-        if not person_token:
+        if USE_AUTHENTICATION and not person_token:
             return jsonify({"success": False, "error": "Person token missing – please log in again"}), 401
         
         # Forward headers — api.laji.fi uses headers for authorization
@@ -79,10 +85,7 @@ def laji_proxy():
             'Person-Token': person_token,
             'Api-Version': request.headers.get('Api-Version', '1'),
             'Accept-Language': request.headers.get('Accept-Language', 'fi')
-        }
-        
-        print(f"Proxying request to LAJI API: {target_url}")
-        
+        }        
         resp = requests.get(target_url, headers=forward_headers, timeout=30)
         
         # Return response content and status code with original content-type
@@ -90,5 +93,5 @@ def laji_proxy():
         return (resp.content, resp.status_code, {'Content-Type': content_type})
     
     except Exception as e:
-        print(f"LAJI proxy request failed: {str(e)}", exc_info=True)
+        logger.exception(f"LAJI proxy request failed: {str(e)}")
         return jsonify({"success": False, "error": str(e)}), 500
