@@ -451,7 +451,13 @@ function setupMultiFeatureHandler(map, geometryLayer) {
             if (layer instanceof L.Polygon) {
                 const rings = layer.getLatLngs();
                 const outerRing = window.flattenLatLngs(rings.length ? rings[0] : rings);
-                return outerRing.length > 0 && window.pointInPolygon(clickLatLng, outerRing);
+                if (outerRing.length > 0 && window.pointInPolygon(clickLatLng, outerRing)) return true;
+                const clickPoint = map.latLngToContainerPoint(clickLatLng);
+                const pts = outerRing.map(ll => map.latLngToContainerPoint(ll));
+                for (let i = 0; i < pts.length; i++) {
+                    if (window.distToSegment(clickPoint, pts[i], pts[(i + 1) % pts.length]) <= layer.options.weight / 2) return true;
+                }
+                return false;
             }
             if (layer instanceof L.Polyline) {
                 const clickPoint = map.latLngToContainerPoint(clickLatLng);

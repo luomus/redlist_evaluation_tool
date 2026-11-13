@@ -20,6 +20,25 @@ window.createSharedMap = function(containerId = 'map', center = [60.1699, 24.938
 
     const geometryLayer = L.featureGroup().addTo(map);
 
+    function updateObservationWeight(layer) {
+        if (!(layer instanceof L.Polyline)) return;
+        const bounds = layer.getBounds();
+        if (!bounds.isValid()) return;
+        const northwest = map.project(bounds.getNorthWest());
+        const southeast = map.project(bounds.getSouthEast());
+        const size = Math.max(Math.abs(southeast.x - northwest.x), Math.abs(southeast.y - northwest.y));
+        const normalWeight = layer instanceof L.Polygon ? 2 : 7;
+        const weight = Math.max(normalWeight, 14 - size);
+        if (layer.options.weight !== weight) layer.setStyle({ weight });
+    }
+
+    geometryLayer.on('layeradd', function(e) {
+        updateObservationWeight(e.layer);
+    });
+    map.on('zoomend', function() {
+        geometryLayer.eachLayer(updateObservationWeight);
+    });
+
     // Keep point and line observations above polygons so they remain clickable.
     const polygonPane = map.createPane('observationPolygonPane');
     polygonPane.style.zIndex = 410;
