@@ -160,8 +160,6 @@ async function fetchAndDisplayConvexHull(fitMap = true) {
             window.sharedGeometryLayer.bringToFront();
         }
     } catch (e) { /* ignore */ }
-    // Clear the outdated flag since we just displayed fresh hull data
-    window.clearCalculationOutdated('eoo');
 }
 
 // Fetch and display grid from the backend
@@ -230,8 +228,6 @@ async function fetchAndDisplayGrid(fitMap = true) {
             document.getElementById('cellsCount').textContent = '0';
             document.getElementById('aooArea').textContent = '0 km²';
         }
-        // Clear the outdated flag since we just displayed fresh grid data
-        window.clearCalculationOutdated('aoo');
     } catch (error) {
         console.error('Error fetching grid:', error);
         updateStatus(`Virhe: ${error.message}`);
@@ -260,6 +256,7 @@ async function calculateGrid(fitMap = true) {
         const data = await response.json();
         if (!data.success) throw new Error(data.error || 'Failed to generate grid');
 
+        window.clearCalculationOutdated('aoo');
         updateStatus('Esiintymisalue luotu!');
         await fetchAndDisplayGrid(fitMap);
     } catch (error) {
@@ -317,6 +314,7 @@ async function calculateConvexHull(fitMap = true) {
             }
             throw new Error(data.error || 'Laskenta epäonnistui');
         }
+        window.clearCalculationOutdated('eoo');
         updateStatus('Levinneisyysalueen laskenta onnistui');
         await fetchAndDisplayConvexHull(fitMap);
     } catch (error) {
@@ -343,9 +341,9 @@ window.fetchAndDisplayGrid = fetchAndDisplayGrid;
 const allFeaturesToRender = [];
 
 // Function to load and render observations on the map
-function loadObservationsOnMap() {
+function loadObservationsOnMap(fitMap = true) {
     // Use generic fetcher and then fetch hull from backend
-    fetchAllObservationsGeneric(datasetId,
+    return fetchAllObservationsGeneric(datasetId,
         (feature) => {
             // Just collect features without drawing yet
             allFeaturesToRender.push(feature);
@@ -387,7 +385,7 @@ function loadObservationsOnMap() {
             
             // Fetch both overlays after observations are loaded.
             fetchAndDisplayGrid(false);
-            fetchAndDisplayConvexHull(true);
+            fetchAndDisplayConvexHull(fitMap);
 
             const statusMessage = `${nameForStatus}: ${stats.total} havaintoa ladattu` +
                 (stats.skipped > 0 ? ` | Skipattu: ${stats.skipped}` : '');
@@ -409,7 +407,7 @@ function loadObservationsOnMap() {
 }
 
 // Function to reload observations after new data has been uploaded/imported
-async function reloadMapObservations() {
+async function reloadMapObservations(fitMap = true) {
     updateStatus('Päivitetään karttanäkymä...');
     
     // Reset dataset layers and counts before loading new data
@@ -453,10 +451,79 @@ async function reloadMapObservations() {
     }
     
     // Reload observations
-    loadObservationsOnMap();
+    await loadObservationsOnMap(fitMap);
 }
 
 window.reloadMapObservations = reloadMapObservations;
+
+const addPointBtn = document.getElementById('addPointBtn');
+let pointPlacementPending = false;
+
+function stopAddingObservation() {
+    window._addingObservation = false;
+    addPointBtn.textContent = 'Lisää havaintopiste kartalle';
+    addPointBtn.setAttribute('aria-pressed', 'false');
+    map.getContainer().style.cursor = '';
+}
+
+addPointBtn.addEventListener('click', function() {
+    if (window._addingObservation) {
+        stopAddingObservation();
+        return;
+    }
+    if (window._polygonSelecting || window._conversionActiveObs) {
+        window.mapDialogs.notify('Viimeistele tai peruuta keskeneräinen karttatoiminto ensin.');
+        return;
+    }
+    window._addingObservation = true;
+    addPointBtn.textContent = 'Peruuta havaintopisteen lisääminen';
+    addPointBtn.setAttribute('aria-pressed', 'true');
+    map.closePopup();
+    map.getContainer().style.cursor = 'crosshair';
+});
+
+window.addObservationAt = async function(latlng) {
+    if (!window._addingObservation || pointPlacementPending) return;
+    pointPlacementPending = true;
+    addPointBtn.disabled = true;
+    const point = latlng.wrap();
+    let saved = false;
+    try {
+        const confirmed = await window.mapDialogs.confirm(
+            `Lisätäänkö havaintopiste sijaintiin ${point.lat.toFixed(5)}, ${point.lng.toFixed(5)}?`
+        );
+        if (!confirmed) return;
+
+        const response = await fetch(`/api/taxons/${encodeURIComponent(datasetId)}/observations/point`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ lat: point.lat, lng: point.lng })
+        });
+        const result = await response.json();
+        if (!response.ok || !result.success) {
+            throw new Error(result.error || response.statusText);
+        }
+        saved = true;
+        stopAddingObservation();
+        window.markCalculationOutdated('all');
+        await reloadMapObservations(false);
+        await window.refreshDatasetLegend();
+        await window.loadTaxonHistory(true);
+    } catch (error) {
+        console.error('Adding observation point failed:', error);
+        const message = saved
+            ? 'Havaintopiste tallennettiin, mutta näkymän päivitys epäonnistui. Päivitä sivu.'
+            : 'Havaintopisteen lisääminen epäonnistui: ' + error.message;
+        window.mapDialogs.notify(message);
+    } finally {
+        pointPlacementPending = false;
+        addPointBtn.disabled = false;
+    }
+};
+
+map.on('click', function(e) {
+    if (window._addingObservation) window.addObservationAt(e.latlng);
+});
 
 // Start loading data when page loads
 loadObservationsOnMap();

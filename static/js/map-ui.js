@@ -50,6 +50,7 @@ function setupPolygonSelector(map, geometryLayer) {
             startMarker = null;
         }
         selecting = false;
+        window._polygonSelecting = false;
         const selBtn = document.getElementById('polySelectBtn');
         if (selBtn) selBtn.textContent = '🔺 Valitse useita aluerajauksella';
         map.off('click', onMapClick);
@@ -71,6 +72,7 @@ function setupPolygonSelector(map, geometryLayer) {
             startMarker = null;
         }
         selecting = false;
+        window._polygonSelecting = false;
         const selBtn = document.getElementById('polySelectBtn');
         if (selBtn) selBtn.textContent = '🔺 Valitse useita aluerajauksella';
         map.off('click', onMapClick);
@@ -151,7 +153,12 @@ function setupPolygonSelector(map, geometryLayer) {
             clearSelectionDrawing();
             return;
         }
+        if (window._addingObservation) {
+            window.mapDialogs.notify('Peruuta havaintopisteen lisääminen ensin.');
+            return;
+        }
         selecting = true;
+        window._polygonSelecting = true;
         points = [];
         markersLayer.clearLayers();
         tempLine.setLatLngs([]);
@@ -471,6 +478,11 @@ function setupMultiFeatureHandler(map, geometryLayer) {
     }
 
     geometryLayer.on('click', function(e) {
+        if (window._addingObservation) {
+            window.addObservationAt(e.latlng);
+            L.DomEvent.stopPropagation(e);
+            return;
+        }
         const clickLatLng = e.latlng;
         const pixelRadius = 10; // pixels
 

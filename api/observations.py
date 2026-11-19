@@ -179,6 +179,51 @@ def save_observations():
         return jsonify({"success": False, "error": str(e)}), 500
 
 
+@bp.route('/taxons/<string:mx_id>/observations/point', methods=['POST'])
+@login_required
+def add_point_observation(mx_id):
+    """Add a manually placed point observation."""
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({"success": False, "error": "A JSON object is required"}), 400
+    lat = data.get('lat')
+    lng = data.get('lng')
+    if (isinstance(lat, bool) or isinstance(lng, bool)
+            or not isinstance(lat, (int, float)) or not isinstance(lng, (int, float))
+            or not -90 <= lat <= 90 or not -180 <= lng <= 180):
+        return jsonify({"success": False, "error": "Invalid coordinates"}), 400
+
+    try:
+        with Session() as db:
+            taxon = db.query(Taxon).filter_by(mx_id=mx_id).first()
+            if not taxon:
+                return jsonify({"success": False, "error": "Taxon not found"}), 404
+
+            dataset_id = 'manual-map-observations'
+            dataset_name = 'Kartalle lisätyt havainnot'
+            observation = Observation(
+                taxon_id=taxon.id,
+                dataset_id=dataset_id,
+                dataset_name=dataset_name,
+                dataset_url='',
+                properties={},
+                geometry=f'SRID=4326;POINT({lng} {lat})',
+            )
+            db.add(observation)
+            record_audit_event(
+                db,
+                taxon_id=taxon.id,
+                event_type='point_added',
+                dataset_id=dataset_id,
+                dataset_name=dataset_name,
+            )
+            db.commit()
+        return jsonify({"success": True}), 201
+    except Exception:
+        current_app.logger.exception("Failed to add point observation")
+        return jsonify({"success": False, "error": "Failed to add point observation"}), 500
+
+
 @bp.route('/taxons/<string:mx_id>/upload_csv', methods=['POST'])
 @bp.route('/taxons/<string:mx_id>/upload_excel', methods=['POST'])
 @login_required

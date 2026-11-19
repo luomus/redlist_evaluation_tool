@@ -40,6 +40,15 @@
     background: #0056b3;
 }
 
+.btn-add-point {
+    background: #6f42c1;
+    margin-top: 8px;
+}
+
+.btn-add-point[aria-pressed="true"] {
+    background: #563398;
+}
+
 /* Calculation buttons (AOO, EOO recalculation) */
 .btn-calculation {
     width: 100%;

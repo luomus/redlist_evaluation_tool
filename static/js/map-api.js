@@ -269,6 +269,7 @@ window.loadTaxonHistory = async function(reset) {
 function createHistoryEventElement(event) {
     const labels = {
         dataset_imported: 'Aineisto ladattu',
+        point_added: 'Havaintopiste lisätty',
         csv_imported: 'CSV ladattu',
         excel_imported: 'Excel ladattu',
         dataset_deleted: 'Aineisto poistettu'
@@ -528,6 +529,11 @@ function addToDataset(layer, properties) {
 window.startPolygonToPointConversion = function(obsId) {
     if (!obsId) return;
 
+    if (window._addingObservation) {
+        window.mapDialogs.notify('Peruuta havaintopisteen lisääminen ensin.');
+        return;
+    }
+
     // Prevent two concurrent conversions
     if (window._conversionActiveObs) {
         window.mapDialogs.notify('Muunnos on jo käynnissä. Tallenna tai peruuta se ensin.');
@@ -752,6 +758,11 @@ window._cancelPolygonToPoint = function() {
  */
 window.startPointMoveConversion = function(obsId) {
     if (!obsId) return;
+
+    if (window._addingObservation) {
+        window.mapDialogs.notify('Peruuta havaintopisteen lisääminen ensin.');
+        return;
+    }
 
     if (window._conversionActiveObs) {
         window.mapDialogs.notify('Muunnos on jo käynnissä. Tallenna tai peruuta se ensin.');
