@@ -236,7 +236,7 @@ function renderDatasetTable(body, datasetName, features) {
         
         // Add sort indicator if this column is sorted
         const content = document.createElement('span');
-        content.textContent = column;
+        content.textContent = colIndex < 3 ? column : window.getObservationFieldLabel(column);
         th.appendChild(content);
         
         if (datasetTableSortState.sortBy === colIndex) {
@@ -327,7 +327,7 @@ function renderDatasetTableWithSorted(body, datasetName, sortedFeatures, propert
         
         // Add sort indicator if this column is sorted
         const content = document.createElement('span');
-        content.textContent = column;
+        content.textContent = colIndex < 3 ? column : window.getObservationFieldLabel(column);
         th.appendChild(content);
         
         if (datasetTableSortState.sortBy === colIndex) {

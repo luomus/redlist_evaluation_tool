@@ -324,36 +324,36 @@ function createPopupContent(properties, opts) {
     })();
 
     if (scientificName) {
-        content += `<strong>Laji:</strong> ${scientificName}<br>`;
+        content += `<strong>${window.getObservationFieldLabel('unit.linkings.taxon.scientificName')}:</strong> ${scientificName}<br>`;
     }
     if (locality) {
-        content += `<strong>Paikka:</strong> ${locality}<br>`;
+        content += `<strong>${window.getObservationFieldLabel('gathering.locality')}:</strong> ${locality}<br>`;
     }
     if (date) {
-        content += `<strong>Päivämäärä:</strong> ${date}<br>`;
+        content += `<strong>${window.getObservationFieldLabel('gathering.displayDateTime')}:</strong> ${date}<br>`;
     }
     if (individualCount) {
-        content += `<strong>Lukumäärä:</strong> ${individualCount}<br>`;
+        content += `<strong>${window.getObservationFieldLabel('unit.interpretations.individualCount')}:</strong> ${individualCount}<br>`;
     }
     if (recordQuality) {
-        content += `<strong>Havainnon laatu:</strong> ${recordQuality}<br>`;
+        content += `<strong>${window.getObservationFieldLabel('unit.interpretations.recordQuality')}:</strong> ${recordQuality}<br>`;
     }
     if (recordBasis) {
-        content += `<strong>Havaintotapa:</strong> ${recordBasis}<br>`;
+        content += `<strong>${window.getObservationFieldLabel('unit.recordBasis')}:</strong> ${recordBasis}<br>`;
     }
     if (unitID) {
         // Make Unit ID a link to a unit page (opens in a new tab)
-        content += `<strong>Havainnon tunniste:</strong> <a href="${unitID}" target="_blank" rel="noopener noreferrer">${unitID}</a><br>`;
+        content += `<strong>${window.getObservationFieldLabel('unit.unitId')}:</strong> <a href="${unitID}" target="_blank" rel="noopener noreferrer">${unitID}</a><br>`;
     }
     if (team) {
-        content += `<strong>Havainnoijat:</strong> ${team}<br>`;
+        content += `<strong>${window.getObservationFieldLabel('gathering.team')}:</strong> ${team}<br>`;
     }
     if (coordinateAccuracy) {
-        content += `<strong>Koordinaattien tarkkuus:</strong> ${coordinateAccuracy} m<br>`;
+        content += `<strong>${window.getObservationFieldLabel('gathering.interpretations.coordinateAccuracy')}:</strong> ${coordinateAccuracy} m<br>`;
     }
     if (collectionID) {
         // Make Collection ID a link to a collection page (opens in a new tab)
-        content += `<strong>Aineiston tunnus:</strong> <a href="${collectionID}" target="_blank" rel="noopener noreferrer">${collectionID}</a><br>`;
+        content += `<strong>${window.getObservationFieldLabel('document.collectionId')}:</strong> <a href="${collectionID}" target="_blank" rel="noopener noreferrer">${collectionID}</a><br>`;
     }
     
     // Add Enable / Include button if this feature references a DB record
