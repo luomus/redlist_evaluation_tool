@@ -2,6 +2,7 @@
 import csv
 import io
 import json
+import math
 from datetime import datetime
 from pathlib import Path
 from zipfile import BadZipFile
@@ -27,6 +28,17 @@ WKT_COLUMNS = ['wgs84 wkt', 'wkt', 'geometry', 'wgs84wkt', 'geometry_wkt', 'geom
 LAT_COLUMNS = ['lat', 'latitude', 'y', 'decimallatitude']
 LON_COLUMNS = ['lon', 'lng', 'longitude', 'x', 'decimallongitude']
 SKIP_CSV_KEYS = LAT_COLUMNS + LON_COLUMNS + WKT_COLUMNS
+
+
+def is_zero_observation(properties):
+    count = properties.get('unit.interpretations.individualCount')
+    if isinstance(count, bool) or not isinstance(count, (int, float, str)):
+        return False
+    try:
+        count = float(count)
+    except (ValueError, OverflowError):
+        return False
+    return math.isfinite(count) and count < 1
 
 
 @bp.route('/taxons/<string:mx_id>', methods=['GET'])
@@ -151,13 +163,15 @@ def save_observations():
                         geom = None
                         if feature.get('geometry'):
                             geom = shape(feature['geometry']).wkt
+                        properties = feature.get('properties') or {}
                         rows.append({
                             'taxon_id': taxon.id,
                             'dataset_id': dataset_id,
                             'dataset_name': dataset_name,
                             'dataset_url': dataset_url,
                             'created_at': current_time,
-                            'properties': feature.get('properties', {}),
+                            'properties': properties,
+                            'excluded': is_zero_observation(properties),
                             'geometry': (f'SRID=4326;{geom}' if geom else None)
                         })
                     if rows:
@@ -366,13 +380,15 @@ def upload_csv(mx_id):
                 geom = None
                 if feature.get('geometry'):
                     geom = shape(feature['geometry']).wkt
+                properties = feature.get('properties') or {}
                 observations.append({
                     'taxon_id': taxon.id,
                     'dataset_id': str(dataset_id),
                     'dataset_name': dataset_name,
                     'dataset_url': '',
                     'created_at': current_time,
-                    'properties': feature.get('properties', {}),
+                    'properties': properties,
+                    'excluded': is_zero_observation(properties),
                     'geometry': (f'SRID=4326;{geom}' if geom else None)
                 })
 

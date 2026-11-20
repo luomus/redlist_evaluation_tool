@@ -699,16 +699,6 @@ async function fetchDataForMap() {
         }
     }
 
-    // Append individualCountMin parameter if set
-    const individualCountMinInput = document.getElementById('lajifiIndividualCountMinInput');
-    if (individualCountMinInput && individualCountMinInput.value) {
-        const individualCountMin = parseInt(individualCountMinInput.value, 10);
-        if (!isNaN(individualCountMin) && individualCountMin >= 0) {
-            const separator = url.includes('?') ? '&' : '?';
-            url += separator + 'individualCountMin=' + individualCountMin;
-        }
-    }
-
     // Append collectionAndRecordQuality parameter if any checkboxes are checked
     const qualityCheckboxes = document.querySelectorAll('.lajifi-quality-checkbox:checked');
     if (qualityCheckboxes.length > 0) {
@@ -752,6 +742,18 @@ async function fetchDataForMap() {
     if (saveSectionBtn) saveSectionBtn.disabled = false;
 
     try {
+        // Include zero observations by default; they are excluded when saved.
+        const individualCountMinInput = document.getElementById('lajifiIndividualCountMinInput');
+        const countUrl = new URL(url);
+        if (individualCountMinInput && individualCountMinInput.value) {
+            const individualCountMin = parseInt(individualCountMinInput.value, 10);
+            if (!isNaN(individualCountMin) && individualCountMin >= 0) {
+                countUrl.searchParams.set('individualCountMin', individualCountMin);
+            }
+        } else if (!countUrl.searchParams.has('individualCountMin')) {
+            countUrl.searchParams.set('individualCountMin', '0');
+        }
+        url = countUrl.toString();
         await window.parseUrl(url, progressLog);
         const saveSection = document.getElementById('lajifiSaveSection');
         if (saveSection) saveSection.style.display = 'block';

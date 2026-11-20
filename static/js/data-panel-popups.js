@@ -544,7 +544,7 @@ function openLajifiPopup(mxCode) {
                 <div class="lajifi-label-group" style="margin-top: 16px;">
                     <label class="lajifi-label">
                         Yksilömäärä
-                        <span class="lajifi-label-hint"> - Oletus on väh. 1 (ei nollahavaintoja mukaan). (Valinnainen)</span>
+                        <span class="lajifi-label-hint"> - Oletus on väh. 0. Nollahavainnot tallennetaan laskennasta pois suljettuina. (Valinnainen)</span>
                     </label>
                     <input type="number" id="lajifiIndividualCountMinInput" placeholder="esim. 0" class="lajifi-input" min="0" step="1">
                 </div>

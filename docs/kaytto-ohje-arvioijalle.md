@@ -71,7 +71,7 @@ Voit käsitellä useita havaintoja kerralla seuraavasti:
 
 ![valintatyökalun käyttämisen demonstraatio](image.png)
 
-Painikkeella **piilota nollahavainnot** voit poistaa laskennasta havainnot, joiden yksilömäärä on alle yksi.
+Painikkeella **näytä nollahavainnot** voit sisällyttää laskentaan pois suljetut havainnot, joiden yksilömäärä on alle yksi.
 
 Kartan **Karttavalinnat**-paneelissa voit vaihtaa taustakarttaa sekä näyttää eliömaakunnat ja uhanalaisuusarviointialueet. Paneelissa voit myös ottaa kokonaisen aineiston käyttöön tai pois käytöstä, avata sen taulukkona ja poistaa aineiston. Karttasymbolin väri kertoo koordinaattien tarkkuusluokan. Punainen havainto sisältyy analyysiin ja harmaa on poistettu analyysistä.
 
