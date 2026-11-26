@@ -59,7 +59,7 @@ def get_flask_config():
         'DEBUG': DEBUG,
         'SECRET_KEY': SECRET_KEY,
         'MAX_CONTENT_LENGTH': MAX_CONTENT_LENGTH,
-        'SESSION_COOKIE_SECURE': False,  # Set to True in production with HTTPS
+        'SESSION_COOKIE_SECURE': True,
         'SESSION_COOKIE_HTTPONLY': True,
         'SESSION_COOKIE_SAMESITE': 'Lax',
         'PERMANENT_SESSION_LIFETIME': 1209600,  # 2 weeks

@@ -118,6 +118,6 @@ objects:
         targetPort: 5000
       tls:
         termination: edge
-        insecureEdgeTerminationPolicy: Allow
+        insecureEdgeTerminationPolicy: Redirect
 
 objectsCount: 5
