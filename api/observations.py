@@ -7,7 +7,7 @@ from datetime import datetime
 from pathlib import Path
 from zipfile import BadZipFile
 from xml.etree.ElementTree import ParseError
-from flask import Blueprint, jsonify, request, make_response, current_app, session
+from flask import Blueprint, jsonify, request, make_response, current_app
 from openpyxl import load_workbook
 from openpyxl.utils.exceptions import InvalidFileException
 import xlrd
@@ -20,7 +20,7 @@ from utils.audit import record_audit_event
 from utils.helpers import generate_id, guess_delimeter
 from utils.taxon_service import get_or_create_taxon
 from auth.decorators import login_required
-from auth.token import check_user
+from auth.taxon_access import has_taxon_access, taxon_access_denied as taxon_access_denied
 from models import Taxon
 from config import USE_AUTHENTICATION
 
@@ -32,28 +32,21 @@ LON_COLUMNS = ['lon', 'lng', 'longitude', 'x', 'decimallongitude']
 SKIP_CSV_KEYS = LAT_COLUMNS + LON_COLUMNS + WKT_COLUMNS
 
 
-def _has_taxon_access(mx_id):
-    if not USE_AUTHENTICATION:
-        return True
-    try:
-        check_user(session.get('iucn_user_id'), session.get('lajiauth_user_id'))
-    except PermissionError:
-        return False
-    allowed_mx_ids = session.get('allowed_mx_ids')
-    return isinstance(allowed_mx_ids, dict) and bool(allowed_mx_ids.get(mx_id))
-
-
-def _taxon_access_denied():
-    return jsonify({"success": False, "error": "Not authorized for this taxon"}), 403
-
-
 def _observation_ids_authorized(db, ids):
     if not USE_AUTHENTICATION:
         return True
-    mx_ids = db.query(Taxon.mx_id).join(
-        Observation, Observation.taxon_id == Taxon.id
-    ).filter(Observation.id.in_(ids)).distinct().all()
-    return all(_has_taxon_access(row.mx_id) for row in mx_ids)
+
+    taxa = (
+        db.query(Taxon.mx_id)
+        .join(Observation, Observation.taxon_id == Taxon.id)
+        .filter(Observation.id.in_(ids))
+        .distinct()
+        .all()
+    )
+    for taxon in taxa:
+        if not has_taxon_access(taxon.mx_id):
+            return False
+    return True
 
 
 def is_zero_observation(properties):
@@ -71,8 +64,8 @@ def is_zero_observation(properties):
 @login_required
 def get_taxon(mx_id):
     """Return taxon metadata by MX identifier, creating/refreshing it from the laji.fi API if needed."""
-    if not _has_taxon_access(mx_id):
-        return _taxon_access_denied()
+    if not has_taxon_access(mx_id):
+        return taxon_access_denied()
     with Session() as db:
         taxon = get_or_create_taxon(db, mx_id)
         if not taxon:
@@ -93,8 +86,8 @@ def get_taxon(mx_id):
 @login_required
 def get_observations(mx_id):
     """Return paginated observations for a taxon."""
-    if not _has_taxon_access(mx_id):
-        return _taxon_access_denied()
+    if not has_taxon_access(mx_id):
+        return taxon_access_denied()
     try:
         page = request.args.get('page', 1, type=int)
         per_page = min(int(request.args.get('per_page', 1000)), 1000)
@@ -174,8 +167,8 @@ def save_observations():
 
         if not mx_id:
             return jsonify({"success": False, "error": "mx_id is required"}), 400
-        if not _has_taxon_access(mx_id):
-            return _taxon_access_denied()
+        if not has_taxon_access(mx_id):
+            return taxon_access_denied()
         if not features:
             return jsonify({"success": False, "error": "No features provided"}), 400
 
@@ -238,8 +231,8 @@ def add_point_observation(mx_id):
             or not isinstance(lat, (int, float)) or not isinstance(lng, (int, float))
             or not -90 <= lat <= 90 or not -180 <= lng <= 180):
         return jsonify({"success": False, "error": "Invalid coordinates"}), 400
-    if not _has_taxon_access(mx_id):
-        return _taxon_access_denied()
+    if not has_taxon_access(mx_id):
+        return taxon_access_denied()
 
     try:
         with Session() as db:
@@ -277,8 +270,8 @@ def add_point_observation(mx_id):
 @login_required
 def upload_csv(mx_id):
     """Upload CSV, TSV or Excel observations for the taxon."""
-    if not _has_taxon_access(mx_id):
-        return _taxon_access_denied()
+    if not has_taxon_access(mx_id):
+        return taxon_access_denied()
     try:
         if 'file' not in request.files:
             return jsonify({"success": False, "error": "No file provided"}), 400
@@ -461,8 +454,8 @@ def upload_csv(mx_id):
 @login_required
 def download_csv(mx_id):
     """Download observations for a taxon as CSV."""
-    if not _has_taxon_access(mx_id):
-        return _taxon_access_denied()
+    if not has_taxon_access(mx_id):
+        return taxon_access_denied()
     try:
         with Session() as db:
             taxon = db.query(Taxon).filter_by(mx_id=mx_id).first()
@@ -524,8 +517,8 @@ def download_csv(mx_id):
 @login_required
 def get_datasets(mx_id):
     """List datasets for a taxon grouped by dataset_id."""
-    if not _has_taxon_access(mx_id):
-        return _taxon_access_denied()
+    if not has_taxon_access(mx_id):
+        return taxon_access_denied()
     try:
         with Session() as db:
             taxon = db.query(Taxon).filter_by(mx_id=mx_id).first()
@@ -558,8 +551,8 @@ def get_datasets(mx_id):
 @login_required
 def delete_dataset(mx_id, dataset_id):
     """Delete all observations belonging to a dataset."""
-    if not _has_taxon_access(mx_id):
-        return _taxon_access_denied()
+    if not has_taxon_access(mx_id):
+        return taxon_access_denied()
     try:
         with Session() as db:
             taxon = db.query(Taxon).filter_by(mx_id=mx_id).first()
@@ -607,7 +600,7 @@ def set_observations_excluded():
         with Session() as db:
             try:
                 if not _observation_ids_authorized(db, ids):
-                    return _taxon_access_denied()
+                    return taxon_access_denied()
                 result = db.execute(text("""
                     WITH updated AS (
                         UPDATE observations
@@ -646,7 +639,7 @@ def convert_observations_to_points():
 
         with Session() as db:
             if not _observation_ids_authorized(db, ids):
-                return _taxon_access_denied()
+                return taxon_access_denied()
             result = db.execute(text("""
                 WITH updated AS (
                     UPDATE observations
@@ -681,8 +674,8 @@ def set_observation_excluded(obs_id):
             obs = db.query(Observation).get(obs_id)
             if not obs:
                 return jsonify({"success": False, "error": "Observation not found"}), 404
-            if not _has_taxon_access(obs.taxon.mx_id):
-                return _taxon_access_denied()
+            if not has_taxon_access(obs.taxon.mx_id):
+                return taxon_access_denied()
             props = dict(obs.properties or {})
             props['excluded'] = excluded
             obs.properties = props
@@ -713,8 +706,8 @@ def update_observation_geometry(obs_id):
             obs = db.query(Observation).get(obs_id)
             if not obs:
                 return jsonify({"success": False, "error": "Observation not found"}), 404
-            if not _has_taxon_access(obs.taxon.mx_id):
-                return _taxon_access_denied()
+            if not has_taxon_access(obs.taxon.mx_id):
+                return taxon_access_denied()
             # Retain the source location once. Assigning the current geometry
             # before replacing it works for point moves and polygon conversions.
             if obs.original_geometry is None:
@@ -735,8 +728,8 @@ def restore_observation_original_geometry(obs_id):
             obs = db.query(Observation).get(obs_id)
             if not obs:
                 return jsonify({"success": False, "error": "Observation not found"}), 404
-            if not _has_taxon_access(obs.taxon.mx_id):
-                return _taxon_access_denied()
+            if not has_taxon_access(obs.taxon.mx_id):
+                return taxon_access_denied()
             result = db.execute(text("""
                 UPDATE observations
                 SET geometry = original_geometry
@@ -757,8 +750,8 @@ def restore_observation_original_geometry(obs_id):
 @login_required
 def get_taxon_history(mx_id):
     """Return a paginated, UI-safe history for a species."""
-    if not _has_taxon_access(mx_id):
-        return _taxon_access_denied()
+    if not has_taxon_access(mx_id):
+        return taxon_access_denied()
     try:
         page = max(request.args.get('page', 1, type=int), 1)
         per_page = min(max(request.args.get('per_page', 50, type=int), 1), 100)
